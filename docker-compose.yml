@@ -1,0 +1,101 @@
+services:
+
+  backend:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - tooli-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no  # sin persistencia — sesiones son efímeras
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tooli-net
+
+  # Evolution API — instancia Baileys
+  evolution-api:
+    image: atendai/evolution-api:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - AUTHENTICATION_TYPE=apikey
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - WEBHOOK_GLOBAL_URL=http://backend:3000/webhook
+      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+    volumes:
+      - evolution-instances:/evolution/instances
+    networks:
+      - tooli-net
+
+  # Typebot — motor conversacional
+  typebot-builder:
+    image: baptistearno/typebot-builder:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file: .env.typebot
+    networks:
+      - tooli-net
+
+  typebot-viewer:
+    image: baptistearno/typebot-viewer:latest
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    env_file: .env.typebot
+    networks:
+      - tooli-net
+
+  # Chatwoot — handoff humano
+  chatwoot:
+    image: chatwoot/chatwoot:latest
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    env_file: .env.chatwoot
+    depends_on:
+      - chatwoot-postgres
+      - chatwoot-redis
+    command: bundle exec rails s -b 0.0.0.0
+    networks:
+      - tooli-net
+
+  chatwoot-postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_DB_PASSWORD}
+    volumes:
+      - chatwoot-pg-data:/var/lib/postgresql/data
+    networks:
+      - tooli-net
+
+  chatwoot-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - tooli-net
+
+volumes:
+  evolution-instances:
+  chatwoot-pg-data:
+
+networks:
+  tooli-net:
+    driver: bridge

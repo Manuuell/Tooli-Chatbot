@@ -8,9 +8,9 @@ export const webhookRouter = Router();
 const messaging = new EvolutionAPIAdapter();
 
 webhookRouter.post('/', async (req: Request, res: Response) => {
-  // Verificación de secret para evitar llamadas no autorizadas
-  const secret = req.headers['x-webhook-secret'];
-  if (secret !== config.webhookSecret) {
+  // Evolution API envía el apikey en el body JSON, no en headers
+  const apikey = req.body?.apikey;
+  if (apikey !== config.webhookSecret) {
     res.sendStatus(401);
     return;
   }

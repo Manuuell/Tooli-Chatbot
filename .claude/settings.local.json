@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(docker compose *)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist /FI \"PID eq 1436\" /FO LIST)",
+      "Bash(tasklist /FI \"PID eq 26204\" /FO LIST)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, LocalPort, OwningProcess | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; [PSCustomObject]@{Port=$_.LocalPort; PID=$_.OwningProcess; Process=$p.ProcessName} })",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(curl -s -X POST http://localhost:8081/webhook/set/tooli -H 'Content-Type: application/json' -H 'apikey: tooli_api_key_local' -d '{ *)",
+      "Bash(curl -s http://localhost:8081/)",
+      "Bash(curl -s http://localhost:8081/instance/connect/tooli -H 'apikey: tooli_api_key_local')",
+      "Bash(curl -s -X DELETE http://localhost:8081/instance/delete/tooli -H 'apikey: tooli_api_key_local')",
+      "Bash(curl -s -X POST http://localhost:8081/instance/create -H 'Content-Type: application/json' -H 'apikey: tooli_api_key_local' -d '{ *)",
+      "Bash(docker exec *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(curl -s -X POST http://localhost:8081/instance/create -H 'Content-Type: application/json' -H 'apikey: tooli_api_key_local' -d '{\"instanceName\":\"tooli\",\"integration\":\"WHATSAPP-BAILEYS\",\"qrcode\":true}')",
+      "Bash(curl -s \"http://localhost:8081/instance/connect/tooli\" -H \"apikey: tooli_api_key_local\")",
+      "Bash(docker pull *)",
+      "Bash(docker build *)",
+      "Bash(docker run *)",
+      "Bash(curl -s -X DELETE \"http://localhost:8081/instance/delete/tooli\" -H \"apikey: tooli_api_key_local\")",
+      "Bash(curl -s -X POST http://localhost:8081/instance/create -H \"Content-Type: application/json\" -H \"apikey: tooli_api_key_local\" -d '{\"instanceName\":\"tooli\",\"integration\":\"WHATSAPP-BAILEYS\",\"qrcode\":true}')"
+    ]
+  }
+}

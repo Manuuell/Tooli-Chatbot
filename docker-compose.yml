@@ -24,20 +24,52 @@ services:
     networks:
       - tooli-net
 
+  evolution-postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    volumes:
+      - evolution-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      tooli-net:
+        aliases:
+          - postgres
+
   # Evolution API — instancia Baileys
   evolution-api:
-    image: atendai/evolution-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.evolution
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/evolution
       - AUTHENTICATION_TYPE=apikey
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       - WEBHOOK_GLOBAL_URL=http://backend:3000/webhook
       - WEBHOOK_GLOBAL_ENABLED=true
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR=#000000
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821
     volumes:
       - evolution-instances:/evolution/instances
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
     networks:
       - tooli-net
 
@@ -94,6 +126,7 @@ services:
 
 volumes:
   evolution-instances:
+  evolution-pg-data:
   chatwoot-pg-data:
 
 networks:

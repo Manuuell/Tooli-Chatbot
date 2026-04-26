@@ -10,6 +10,8 @@ const EvolutionPayloadSchema = z.object({
       remoteJid: z.string(),
       id: z.string(),
       fromMe: z.boolean(),
+      // senderPn aparece cuando remoteJid usa formato @lid (nuevo WhatsApp)
+      senderPn: z.string().optional(),
     }),
     message: z.object({
       conversation: z.string().optional(),
@@ -37,8 +39,9 @@ export function parseEvolutionWebhook(body: unknown): InboundMessage | null {
 
   if (!text) return null; // audio, imagen, sticker — ignorar por ahora
 
-  // remoteJid tiene formato 573001234567@s.whatsapp.net
-  const from = data.key.remoteJid.split('@')[0];
+  // senderPn tiene el número real cuando remoteJid usa formato @lid
+  const jid = data.key.senderPn ?? data.key.remoteJid;
+  const from = jid.split('@')[0];
 
   return {
     from,

@@ -1,0 +1,9 @@
+FROM atendai/evolution-api:v2.2.3
+
+WORKDIR /evolution
+
+RUN apk add --no-cache git \
+    && npm install github:EvolutionAPI/Baileys --save --legacy-peer-deps \
+    && apk del git
+
+CMD ["./.docker/scripts/startup.sh"]

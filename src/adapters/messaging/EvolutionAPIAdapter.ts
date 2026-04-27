@@ -1,11 +1,13 @@
 import axios from 'axios';
-import { IMessagingAdapter, OutboundMessage } from './IMessagingAdapter';
+import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList } from './IMessagingAdapter';
 import { config } from '../../config';
 
 export class EvolutionAPIAdapter implements IMessagingAdapter {
   private readonly baseUrl: string;
   private readonly instance: string;
   private readonly apiKey: string;
+  // Cache en memoria: @lid → número E.164. El mapping no cambia para un usuario dado.
+  private readonly lidCache = new Map<string, string>();
 
   constructor() {
     this.baseUrl = config.evolutionApi.baseUrl;
@@ -13,17 +15,92 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
     this.apiKey = config.evolutionApi.apiKey;
   }
 
+  /**
+   * Si el JID es @lid, busca en el histórico de Evolution un mensaje con senderPn
+   * para resolver al número E.164 real. Cachea el resultado en memoria.
+   * Si no es @lid, lo devuelve tal cual.
+   */
+  async resolveSenderId(jid: string): Promise<string> {
+    if (!jid.endsWith('@lid')) return jid;
+
+    const cached = this.lidCache.get(jid);
+    if (cached) return cached;
+
+    try {
+      const res = await axios.post(
+        `${this.baseUrl}/chat/findMessages/${this.instance}`,
+        { where: { key: { remoteJid: jid } }, limit: 50 },
+        { headers: { apikey: this.apiKey }, timeout: 10_000 }
+      );
+      const records: Array<{ key?: { senderPn?: string } }> = res.data?.messages?.records ?? [];
+      const withPn = records.find(r => r.key?.senderPn);
+      const senderPn = withPn?.key?.senderPn;
+      if (senderPn) {
+        const phone = senderPn.split('@')[0];
+        this.lidCache.set(jid, phone);
+        return phone;
+      }
+    } catch (err: any) {
+      console.error('[resolveSenderId] error:', err?.response?.data ?? err?.message);
+    }
+
+    // Fallback: devolver el @lid (probablemente fallará el envío, pero al menos quedó logueado)
+    return jid;
+  }
+
   async sendText(msg: OutboundMessage): Promise<void> {
     await axios.post(
       `${this.baseUrl}/message/sendText/${this.instance}`,
+      { number: msg.to, text: msg.text },
+      { headers: { apikey: this.apiKey }, timeout: 10_000 }
+    );
+  }
+
+  async sendButtons(msg: OutboundButtons): Promise<void> {
+    await axios.post(
+      `${this.baseUrl}/message/sendButtons/${this.instance}`,
       {
         number: msg.to,
-        text: msg.text,
+        title: msg.title,
+        description: msg.description,
+        footer: msg.footer ?? '',
+        buttons: msg.buttons.map(b => ({
+          type: 'reply',
+          displayText: b.displayText,
+          id: b.id,
+        })),
       },
-      {
-        headers: { apikey: this.apiKey },
-        timeout: 10_000,
-      }
+      { headers: { apikey: this.apiKey }, timeout: 10_000 }
     );
+  }
+
+  async sendList(msg: OutboundList): Promise<void> {
+    const payload = {
+      number: msg.to,
+      title: msg.title,
+      description: msg.description,
+      footerText: msg.footer ?? ' ',
+      buttonText: msg.buttonText,
+      sections: msg.sections.map(s => ({
+        title: s.title,
+        rows: s.rows.map(r => ({
+          rowId: r.id,
+          title: r.title,
+          description: r.description ?? ' ',
+        })),
+      })),
+    };
+    console.log('[sendList] to:', msg.to);
+    try {
+      const res = await axios.post(
+        `${this.baseUrl}/message/sendList/${this.instance}`,
+        payload,
+        { headers: { apikey: this.apiKey }, timeout: 10_000 }
+      );
+      console.log('[sendList] status:', res.status);
+    } catch (err: any) {
+      console.error('[sendList] ERROR:', err?.response?.data ?? err?.message);
+      throw err;
+    }
   }
 }

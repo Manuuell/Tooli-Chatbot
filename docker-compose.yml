@@ -15,7 +15,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --save "" --appendonly no  # sin persistencia — sesiones son efímeras
+    command: redis-server --save "" --appendonly no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -34,7 +34,7 @@ services:
     volumes:
       - evolution-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      test: ["CMD-SHELL", "pg_isready -U user"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -43,7 +43,6 @@ services:
         aliases:
           - postgres
 
-  # Evolution API — instancia Baileys
   evolution-api:
     build:
       context: .
@@ -73,61 +72,9 @@ services:
     networks:
       - tooli-net
 
-  # Typebot — motor conversacional
-  typebot-builder:
-    image: baptistearno/typebot-builder:latest
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    env_file: .env.typebot
-    networks:
-      - tooli-net
-
-  typebot-viewer:
-    image: baptistearno/typebot-viewer:latest
-    restart: unless-stopped
-    ports:
-      - "3002:3000"
-    env_file: .env.typebot
-    networks:
-      - tooli-net
-
-  # Chatwoot — handoff humano
-  chatwoot:
-    image: chatwoot/chatwoot:latest
-    restart: unless-stopped
-    ports:
-      - "3003:3000"
-    env_file: .env.chatwoot
-    depends_on:
-      - chatwoot-postgres
-      - chatwoot-redis
-    command: bundle exec rails s -b 0.0.0.0
-    networks:
-      - tooli-net
-
-  chatwoot-postgres:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: chatwoot
-      POSTGRES_USER: chatwoot
-      POSTGRES_PASSWORD: ${CHATWOOT_DB_PASSWORD}
-    volumes:
-      - chatwoot-pg-data:/var/lib/postgresql/data
-    networks:
-      - tooli-net
-
-  chatwoot-redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    networks:
-      - tooli-net
-
 volumes:
   evolution-instances:
   evolution-pg-data:
-  chatwoot-pg-data:
 
 networks:
   tooli-net:

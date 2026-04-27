@@ -9,6 +9,8 @@ const schema = z.object({
   WEBHOOK_SECRET: z.string(),
   REDIS_URL: z.string().default('redis://redis:6379'),
   SESSION_TTL_SECONDS: z.string().default('3600'),
+  GOOGLE_SERVICE_ACCOUNT_JSON: z.string(),
+  OPENAI_API_KEY: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -31,5 +33,11 @@ export const config = {
   redis: {
     url: env.REDIS_URL,
     sessionTtl: parseInt(env.SESSION_TTL_SECONDS),
+  },
+  google: {
+    serviceAccount: JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON),
+  },
+  openai: {
+    apiKey: env.OPENAI_API_KEY,
   },
 };

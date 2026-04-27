@@ -12,7 +12,11 @@
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "googleapis": "^171.4.0",
     "ioredis": "^5.4.1",
+    "openai": "^4.73.0",
+    "playwright": "^1.50.0",
+    "tesseract.js": "^5.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

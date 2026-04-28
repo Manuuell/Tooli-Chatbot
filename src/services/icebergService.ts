@@ -12,6 +12,14 @@ const MAX_CAPTCHA_RETRIES = 5;
 export interface IcebergLoginResult {
   ok: boolean;
   error?: string;
+  /** Nombre del estudiante extraído del banner post-login (ej: "MANUEL ESTEBAN SEVERICHE PUELLO") */
+  nombre?: string;
+  /** Cédula extraída del banner post-login */
+  cedula?: string;
+  /** true si el login fue OK pero ningún menú tiene recibos pendientes */
+  noRecibos?: boolean;
+  /** Menú donde se encontró/intentó descargar el recibo */
+  menuUsado?: string;
   /** Buffer del PDF del recibo de matrícula, si llegamos a descargarlo */
   pdf?: Buffer;
   /** Captchas que se intentaron resolver (para debug) */
@@ -19,6 +27,13 @@ export interface IcebergLoginResult {
   /** Screenshots de cada paso (paths) cuando debug=true */
   debugFiles?: string[];
 }
+
+const MENUS_RECIBOS = [
+  'Derechos Académicos',
+  'Creditos Vigentes',
+  'Creditos Vencidos',
+  'Otros Pagos',
+];
 
 const openaiClient = config.openai.apiKey
   ? new OpenAI({ apiKey: config.openai.apiKey })
@@ -104,17 +119,44 @@ async function downloadCaptchaImage(page: Page): Promise<Buffer> {
 
 /**
  * Si hay un modal de error visible (ej: "Valores de Captcha Incorrectos!"),
- * lo cierra haciendo click en OK y devuelve true.
+ * lo cierra y devuelve true.
+ *
+ * El portal usa ZK framework que crea modales con .z-modal-mask de fondo
+ * y .z-window-modal o .z-messagebox. El botón puede ser OK/Aceptar/Cerrar.
  */
 async function dismissErrorModalIfPresent(page: Page): Promise<boolean> {
-  const okButton = page.locator('div.z-window-modal button:has-text("OK"), div[id*="modal"] button:has-text("OK")').first();
-  const isVisible = await okButton.isVisible().catch(() => false);
-  if (isVisible) {
-    await okButton.click().catch(() => {});
-    await page.waitForTimeout(500);
-    return true;
+  // Detectar si hay máscara de modal visible
+  const mask = page.locator('.z-modal-mask').first();
+  const maskVisible = await mask.isVisible().catch(() => false);
+
+  if (!maskVisible) return false;
+
+  // Intentar varios selectores de botón en orden de probabilidad
+  const buttonSelectors = [
+    '.z-messagebox button:visible',
+    '.z-window-modal button:visible',
+    'button:visible:has-text("OK")',
+    'button:visible:has-text("Aceptar")',
+    'button:visible:has-text("Cerrar")',
+    'button:visible:has-text("Close")',
+    '.z-window-modal .z-window-close',
+  ];
+
+  for (const sel of buttonSelectors) {
+    const btn = page.locator(sel).first();
+    if (await btn.isVisible().catch(() => false)) {
+      await btn.click({ timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(800);
+      // Verificar que la máscara desapareció
+      const stillVisible = await mask.isVisible().catch(() => false);
+      if (!stillVisible) return true;
+    }
   }
-  return false;
+
+  // Último recurso: presionar ESC
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(500);
+  return true;
 }
 
 /**
@@ -123,6 +165,96 @@ async function dismissErrorModalIfPresent(page: Page): Promise<boolean> {
 async function refreshCaptcha(page: Page): Promise<void> {
   await page.click('img[src*="recharge"]').catch(() => {});
   await page.waitForTimeout(1500); // dar tiempo a que el nuevo captcha cargue
+}
+
+/**
+ * Navega a un menú y verifica si tiene registros. Si los tiene, selecciona la primera
+ * fila y clickea "Generar Recibo", capturando el PDF de la pestaña nueva que se abre.
+ *
+ * Devuelve:
+ *  - { found: true, pdf }     si se descargó el PDF
+ *  - { found: false }         si no había registros en ese menú
+ *  - { found: true, error }   si había registros pero falló la descarga
+ */
+async function tryDownloadFromMenu(
+  page: Page,
+  menuName: string,
+  debug: boolean,
+  debugFiles: string[]
+): Promise<{ found: boolean; pdf?: Buffer; error?: string }> {
+  // Click en el item del menú lateral
+  await page.locator(`text="${menuName}"`).first().click().catch(() => {});
+  await page.waitForTimeout(2_000);
+
+  if (debug) {
+    const p = path.join(DEBUG_DIR, `06-menu-${menuName.replace(/\s+/g, '_')}.png`);
+    await page.screenshot({ path: p, fullPage: true });
+    debugFiles.push(p);
+  }
+
+  // Detectar si dice "No se han encontrado Registros"
+  const sinRegistros = await page
+    .locator('text=/No se han encontrado/i')
+    .first()
+    .isVisible()
+    .catch(() => false);
+
+  if (sinRegistros) {
+    return { found: false };
+  }
+
+  // Intentar marcar el primer checkbox de la columna "Selec."
+  const firstCheckbox = page.locator('input[type="checkbox"]').first();
+  const checkboxVisible = await firstCheckbox.isVisible().catch(() => false);
+  if (!checkboxVisible) {
+    return { found: false };
+  }
+  await firstCheckbox.check().catch(() => {});
+  await page.waitForTimeout(500);
+
+  // Click en "Generar Recibo" — abre pestaña nueva con el PDF
+  const context = page.context();
+  const newPagePromise = context.waitForEvent('page', { timeout: 15_000 });
+
+  await page.locator('text="Generar Recibo"').first().click().catch(() => {});
+
+  let pdfPage: Page;
+  try {
+    pdfPage = await newPagePromise;
+    await pdfPage.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+  } catch {
+    return { found: true, error: 'No se abrió la pestaña del recibo' };
+  }
+
+  // El PDF se carga en la pestaña nueva. Obtener su URL y descargar manteniendo cookies.
+  const pdfUrl = pdfPage.url();
+  if (debug) {
+    const p = path.join(DEBUG_DIR, `07-pdf-tab-${menuName.replace(/\s+/g, '_')}.png`);
+    await pdfPage.screenshot({ path: p, fullPage: true }).catch(() => {});
+    debugFiles.push(p);
+  }
+
+  try {
+    const pdfBytes = await pdfPage.evaluate(async (url: string) => {
+      const res = await fetch(url, { credentials: 'include' });
+      const buf = await res.arrayBuffer();
+      return Array.from(new Uint8Array(buf));
+    }, pdfUrl);
+
+    const pdfBuffer = Buffer.from(pdfBytes);
+    await pdfPage.close().catch(() => {});
+
+    if (debug) {
+      const p = path.join(DEBUG_DIR, `08-recibo-${menuName.replace(/\s+/g, '_')}.pdf`);
+      await fs.writeFile(p, pdfBuffer);
+      debugFiles.push(p);
+    }
+
+    return { found: true, pdf: pdfBuffer };
+  } catch (err: any) {
+    await pdfPage.close().catch(() => {});
+    return { found: true, error: `Error descargando PDF: ${err?.message ?? err}` };
+  }
 }
 
 /**
@@ -215,6 +347,14 @@ export async function loginAndDownloadReceipt(
       }
 
       // Detectar resultado
+      if (debug) {
+        const maskVisible = await page.locator('.z-modal-mask').first().isVisible().catch(() => false);
+        if (maskVisible) {
+          const p = path.join(DEBUG_DIR, `04b-modal-attempt-${attempt}.png`);
+          await page.screenshot({ path: p, fullPage: true });
+          debugFiles.push(p);
+        }
+      }
       const errorModalDismissed = await dismissErrorModalIfPresent(page);
       const stillSeesCaptcha = await page
         .locator('input[placeholder*="Captcha"]')
@@ -251,13 +391,50 @@ export async function loginAndDownloadReceipt(
       await fs.writeFile(path.join(DEBUG_DIR, '05-logged-in.html'), await page.content());
     }
 
-    // TODO: navegar a la sección de recibos y descargar el PDF de matrícula.
-    // Por ahora devolvemos OK al login.
-    return {
-      ok: true,
-      captchaAttempts,
-      debugFiles,
-    };
+    // Extraer "[CEDULA, NOMBRE COMPLETO]" del banner superior derecho
+    let nombre: string | undefined;
+    let cedulaExtraida: string | undefined;
+    try {
+      const bannerText = await page.locator('text=/\\[\\d+,\\s*[^\\]]+\\]/').first().textContent({ timeout: 5_000 });
+      const match = bannerText?.match(/\[(\d+),\s*([^\]]+)\]/);
+      if (match) {
+        cedulaExtraida = match[1].trim();
+        nombre = match[2].trim();
+      }
+    } catch {
+      // no crítico — seguimos sin nombre
+    }
+
+    // 5. Recorrer menús buscando recibos disponibles
+    let pdf: Buffer | undefined;
+    let menuUsado: string | undefined;
+    let downloadError: string | undefined;
+
+    for (const menu of MENUS_RECIBOS) {
+      console.log(`[iceberg] revisando menú: ${menu}`);
+      const r = await tryDownloadFromMenu(page, menu, debug, debugFiles);
+      if (r.pdf) {
+        pdf = r.pdf;
+        menuUsado = menu;
+        break;
+      }
+      if (r.found && r.error) {
+        downloadError = r.error;
+        menuUsado = menu;
+        break;
+      }
+    }
+
+    if (pdf) {
+      return { ok: true, nombre, cedula: cedulaExtraida, pdf, menuUsado, captchaAttempts, debugFiles };
+    }
+
+    if (downloadError) {
+      return { ok: false, error: downloadError, nombre, cedula: cedulaExtraida, menuUsado, captchaAttempts, debugFiles };
+    }
+
+    // No había registros en ningún menú
+    return { ok: true, nombre, cedula: cedulaExtraida, noRecibos: true, captchaAttempts, debugFiles };
   } catch (err: any) {
     return {
       ok: false,

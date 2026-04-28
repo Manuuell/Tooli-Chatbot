@@ -28,6 +28,10 @@ async function main() {
 
   console.log('[testIceberg] resultado:');
   console.log('  ok:', result.ok);
+  if (result.nombre) console.log('  nombre:', result.nombre);
+  if (result.cedula) console.log('  cedula:', result.cedula);
+  if (result.noRecibos) console.log('  noRecibos: true (sin recibos pendientes)');
+  if (result.menuUsado) console.log('  menuUsado:', result.menuUsado);
   if (result.error) console.log('  error:', result.error);
   if (result.captchaAttempts?.length) {
     console.log('  captcha intentos:', result.captchaAttempts);

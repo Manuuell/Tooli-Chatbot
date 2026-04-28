@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList } from './IMessagingAdapter';
+import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList, OutboundDocument } from './IMessagingAdapter';
 import { config } from '../../config';
 
 export class EvolutionAPIAdapter implements IMessagingAdapter {
@@ -71,6 +71,21 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
         })),
       },
       { headers: { apikey: this.apiKey }, timeout: 10_000 }
+    );
+  }
+
+  async sendDocument(msg: OutboundDocument): Promise<void> {
+    await axios.post(
+      `${this.baseUrl}/message/sendMedia/${this.instance}`,
+      {
+        number: msg.to,
+        mediatype: 'document',
+        mimetype: msg.mimetype,
+        media: msg.buffer.toString('base64'),
+        fileName: msg.fileName,
+        caption: msg.caption,
+      },
+      { headers: { apikey: this.apiKey }, timeout: 30_000 }
     );
   }
 

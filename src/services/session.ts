@@ -25,3 +25,12 @@ export async function setSession(phoneNumber: string, session: Session): Promise
 export async function deleteSession(phoneNumber: string): Promise<void> {
   await redis.del(`session:${phoneNumber}`);
 }
+
+/**
+ * Marca un messageId como procesado. Si ya estaba marcado, devuelve false
+ * (no lo proceses de nuevo). TTL de 5 minutos para evitar consumo infinito.
+ */
+export async function claimMessageId(messageId: string): Promise<boolean> {
+  const res = await redis.set(`msgproc:${messageId}`, '1', 'EX', 300, 'NX');
+  return res === 'OK';
+}

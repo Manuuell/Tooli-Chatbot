@@ -36,6 +36,17 @@ export interface OutboundList {
   sections: ListSection[];
 }
 
+export interface OutboundDocument {
+  to: string;
+  /** Buffer del archivo (PDF, imagen, etc) */
+  buffer: Buffer;
+  fileName: string;
+  /** mimetype, ej: "application/pdf" */
+  mimetype: string;
+  /** Caption opcional debajo del documento */
+  caption?: string;
+}
+
 export interface InboundMessage {
   from: string;
   messageId: string;
@@ -47,6 +58,7 @@ export interface IMessagingAdapter {
   sendText(msg: OutboundMessage): Promise<void>;
   sendButtons(msg: OutboundButtons): Promise<void>;
   sendList(msg: OutboundList): Promise<void>;
+  sendDocument(msg: OutboundDocument): Promise<void>;
   /** Resuelve un identificador de remitente (puede ser @lid) al número E.164 real. */
   resolveSenderId(jid: string): Promise<string>;
 }

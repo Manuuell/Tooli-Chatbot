@@ -3,3 +3,6 @@ dist/
 .env
 .env.typebot
 .env.chatwoot
+.claude/worktrees/
+tmp-iceberg/
+tmp/

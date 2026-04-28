@@ -57,7 +57,13 @@ services:
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       - WEBHOOK_GLOBAL_URL=http://backend:3000/webhook
       - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+      - WEBHOOK_GLOBAL_BY_EVENTS=false
+      - WEBHOOK_BY_EVENTS=false
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - LOG_LEVEL=ERROR,WARN,DEBUG,INFO,LOG,VERBOSE,DARK,WEBHOOKS
+      - LOG_COLOR=true
+      - LOG_BAILEYS=error
       - CACHE_REDIS_ENABLED=true
       - CACHE_REDIS_URI=redis://redis:6379
       - CACHE_REDIS_PREFIX_KEY=evolution
@@ -72,9 +78,79 @@ services:
     networks:
       - tooli-net
 
+  chatwoot-postgres:
+    image: postgres:13
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_DB_PASSWORD}
+    volumes:
+      - chatwoot-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatwoot"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tooli-net
+
+  chatwoot-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    networks:
+      - tooli-net
+
+  chatwoot-init:
+    image: chatwoot/chatwoot:v3.16.0
+    restart: "no"
+    env_file: .env.chatwoot
+    entrypoint: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+    networks:
+      - tooli-net
+
+  chatwoot-app:
+    image: chatwoot/chatwoot:v3.16.0
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file: .env.chatwoot
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_started
+      chatwoot-init:
+        condition: service_completed_successfully
+    networks:
+      - tooli-net
+
+  chatwoot-worker:
+    image: chatwoot/chatwoot:v3.16.0
+    restart: unless-stopped
+    env_file: .env.chatwoot
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_started
+      chatwoot-init:
+        condition: service_completed_successfully
+    networks:
+      - tooli-net
+
 volumes:
   evolution-instances:
   evolution-pg-data:
+  chatwoot-pg-data:
 
 networks:
   tooli-net:

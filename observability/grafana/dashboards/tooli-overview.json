@@ -1,0 +1,160 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Mensajes (1h)",
+      "id": 1,
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "(sum(increase(tooli_events_total{event=\"menu_shown\"}[1h])) or vector(0)) + (sum(increase(tooli_events_total{event=\"ai_request\"}[1h])) or vector(0)) + (sum(increase(tooli_events_total{event=\"turno_consultado\"}[1h])) or vector(0)) + (sum(increase(tooli_events_total{event=\"recibo_descargado\"}[1h])) or vector(0))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "type": "stat",
+      "title": "Tasa resolución IA (%)",
+      "id": 2,
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [
+        {
+          "expr": "clamp_max(100 * (sum(increase(tooli_events_total{event=\"ai_resolved\"}[1h])) or vector(0)) / clamp_min((sum(increase(tooli_events_total{event=\"ai_request\"}[1h])) or vector(0)), 1), 100)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 60 }, { "color": "green", "value": 80 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "type": "stat",
+      "title": "Handoffs (1h)",
+      "id": 3,
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "targets": [
+        { "expr": "sum(increase(tooli_events_total{event=\"agent_handoff\"}[1h])) or vector(0)", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "type": "stat",
+      "title": "Rate-limited (1h)",
+      "id": 4,
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum(increase(tooli_events_total{event=\"rate_limited\"}[1h])) or vector(0)", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 20 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "type": "stat",
+      "title": "Recibos descargados (1h)",
+      "id": 5,
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "targets": [
+        { "expr": "sum(increase(tooli_events_total{event=\"recibo_descargado\"}[1h])) or vector(0)", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "type": "stat",
+      "title": "Turnos consultados (1h)",
+      "id": 6,
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "targets": [
+        { "expr": "sum(increase(tooli_events_total{event=\"turno_consultado\"}[1h])) or vector(0)", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Eventos por minuto",
+      "id": 10,
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum by (event) (rate(tooli_events_total{event=~\"menu_shown|ai_request|agent_handoff|recibo_descargado|turno_consultado\"}[5m]) * 60)", "legendFormat": "{{event}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "type": "piechart",
+      "title": "Preguntas IA por área",
+      "id": 11,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "targets": [
+        { "expr": "sum by (area) (increase(tooli_events_total{event=\"ai_request\", area!=\"\"}[24h]))", "legendFormat": "{{area}}", "refId": "A" }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "pieType": "donut" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latencia IA (p50, p95)",
+      "id": 12,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, area) (rate(tooli_ai_latency_seconds_bucket[5m])))", "legendFormat": "p50 {{area}}", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le, area) (rate(tooli_ai_latency_seconds_bucket[5m])))", "legendFormat": "p95 {{area}}", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 2 } } }
+    },
+    {
+      "type": "barchart",
+      "title": "Plataformas TI consultadas (24h)",
+      "id": 13,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "sum by (plataforma) (increase(tooli_events_total{event=\"ai_request\", plataforma!=\"\"}[24h])) or vector(0)", "legendFormat": "{{plataforma}}", "refId": "A" }
+      ],
+      "options": { "legend": { "displayMode": "hidden" }, "orientation": "horizontal" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Errores",
+      "id": 14,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "sum by (event) (rate(tooli_events_total{event=~\"ai_failed|recibo_error|recibo_login_failed|turno_no_encontrado\"}[5m]) * 60) or vector(0)", "legendFormat": "{{event}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Embudo IA → Asesor",
+      "id": 15,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        { "expr": "sum(rate(tooli_events_total{event=\"ai_request\"}[5m]) * 60)", "legendFormat": "Preguntas IA", "refId": "A" },
+        { "expr": "sum(rate(tooli_events_total{event=\"ai_resolved\"}[5m]) * 60)", "legendFormat": "Resueltas IA", "refId": "B" },
+        { "expr": "sum(rate(tooli_events_total{event=\"ai_escalated_to_agent\"}[5m]) * 60)", "legendFormat": "Pidió humano", "refId": "C" },
+        { "expr": "sum(rate(tooli_events_total{event=\"agent_handoff\"}[5m]) * 60)", "legendFormat": "Handoff total", "refId": "D" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10 } } }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["tooli", "chatbot"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Tooli Chatbot — Overview",
+  "uid": "tooli-overview",
+  "version": 1,
+  "weekStart": ""
+}

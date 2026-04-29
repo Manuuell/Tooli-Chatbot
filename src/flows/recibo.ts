@@ -1,0 +1,103 @@
+import { setSession } from '../services/session';
+import { loginAndDownloadReceipt } from '../services/icebergService';
+import { track } from '../services/metrics';
+import { FlowContext, messaging, sendMenu, isMenuCommand, CODIGO_REGEX, CEDULA_REGEX } from './shared';
+
+export async function handleReciboCodigo(ctx: FlowContext): Promise<void> {
+  const { from, text } = ctx;
+  const input = text.trim().toUpperCase();
+
+  if (isMenuCommand(input)) {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
+  if (!CODIGO_REGEX.test(input)) {
+    await messaging.sendText({
+      to: from,
+      text: 'El código no es válido. Debe tener el formato T seguido de 8 dígitos.\nEjemplo: T000XXXXX\n\nInténtalo de nuevo o escribe *menu*:',
+    });
+    return;
+  }
+
+  await setSession(from, { step: 'recibo_cedula', data: { codigo: input } });
+  await messaging.sendText({
+    to: from,
+    text: 'Ahora escribe tu *número de cédula* (solo dígitos, sin puntos ni guiones).',
+  });
+}
+
+export async function handleReciboCedula(ctx: FlowContext): Promise<void> {
+  const { from, text, session } = ctx;
+  const input = text.trim();
+
+  if (isMenuCommand(input)) {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
+  if (!CEDULA_REGEX.test(input)) {
+    await messaging.sendText({
+      to: from,
+      text: 'La cédula no es válida. Debe tener entre 6 y 12 dígitos.\n\nInténtalo de nuevo o escribe *menu*:',
+    });
+    return;
+  }
+
+  const codigo = session?.data.codigo;
+  if (!codigo) {
+    await setSession(from, { step: 'menu', data: {} });
+    await messaging.sendText({ to: from, text: 'Sesión expirada. Por favor inicia de nuevo escribiendo *menu*.' });
+    return;
+  }
+
+  await messaging.sendText({
+    to: from,
+    text: '🔄 Estoy descargando tu recibo del portal. Esto puede tardar 30-60 segundos…',
+  });
+
+  try {
+    const result = await loginAndDownloadReceipt(codigo, input);
+
+    if (!result.ok) {
+      await track('recibo_login_failed');
+      await messaging.sendText({
+        to: from,
+        text: `No pude completar el proceso. ${result.error?.includes('Login falló') ? 'Verifica que el código y la cédula sean correctos.' : 'Intenta más tarde.'}\n\nEscribe *menu* para volver al inicio.`,
+      });
+    } else if (result.noRecibos) {
+      await track('recibo_no_pendientes');
+      const saludo = result.nombre ? `Hola *${result.nombre}*. ` : '';
+      await messaging.sendText({
+        to: from,
+        text: `${saludo}No tienes recibos pendientes en el portal en este momento.\n\nEscribe *menu* para volver al inicio.`,
+      });
+    } else if (result.pdf) {
+      await track('recibo_descargado');
+      await messaging.sendDocument({
+        to: from,
+        buffer: result.pdf,
+        fileName: `recibo-${codigo}.pdf`,
+        mimetype: 'application/pdf',
+        caption: `🧾 Recibo de matrícula${result.nombre ? ` — ${result.nombre}` : ''}`,
+      });
+      await messaging.sendText({ to: from, text: 'Listo. Escribe *menu* para volver al inicio.' });
+    } else {
+      await messaging.sendText({
+        to: from,
+        text: 'No pude descargar el recibo. Por favor intenta más tarde o escribe *menu*.',
+      });
+    }
+  } catch (err) {
+    console.error('[recibo] error:', err);
+    await track('recibo_error');
+    await messaging.sendText({
+      to: from,
+      text: 'Ocurrió un error inesperado. Intenta más tarde o escribe *menu*.',
+    });
+  }
+
+  await setSession(from, { step: 'menu', data: {} });
+}

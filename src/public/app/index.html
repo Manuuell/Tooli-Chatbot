@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tooli Asesores · UTB</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo-wrap">
+      <img src="https://www.utb.edu.co/wp-content/uploads/2020/09/logo.svg" alt="UTB">
+      <div class="product">Tooli · Asesores</div>
+    </div>
+
+    <nav id="nav">
+      <a data-route="home" class="active"><span class="icon">🏠</span>Inicio</a>
+      <a data-route="turno"><span class="icon">📋</span>Consultar turno</a>
+      <a data-route="recibo"><span class="icon">🧾</span>Descargar recibo</a>
+      <a data-route="metricas"><span class="icon">📊</span>Métricas</a>
+      <a data-route="botusers"><span class="icon">📱</span>Usuarios del bot</a>
+      <a data-route="health"><span class="icon">❤️</span>Estado del sistema</a>
+      <a data-route="usuarios" id="navUsuarios" class="hidden"><span class="icon">👥</span>Asesores</a>
+    </nav>
+
+    <div class="user-block">
+      <div class="name" id="userName">…</div>
+      <div class="role" id="userRole"></div>
+      <button id="logoutBtn">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+let currentUser = null;
+let publicUrls = { chatwoot: '#', grafana: '#' };
+let capabilities = { chatwootSso: false };
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { credentials: 'same-origin', ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  if (res.status === 401) { window.location.href = '/app/login.html'; return; }
+  return res;
+}
+
+async function init() {
+  const r = await api('/api/auth/me');
+  if (!r) return;
+  const data = await r.json();
+  currentUser = data.user;
+  if (data.urls) publicUrls = data.urls;
+  if (data.capabilities) capabilities = data.capabilities;
+  $('#userName').textContent = currentUser.fullName;
+  $('#userRole').textContent = currentUser.role === 'admin' ? 'Administrador' : 'Asesor';
+  if (currentUser.role === 'admin') $('#navUsuarios').classList.remove('hidden');
+
+  $$('#nav a').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    navigate(a.dataset.route);
+  }));
+
+  $('#logoutBtn').addEventListener('click', async () => {
+    await api('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/app/login.html';
+  });
+
+  navigate(location.hash.slice(1) || 'home');
+  window.addEventListener('hashchange', () => navigate(location.hash.slice(1) || 'home'));
+}
+
+function navigate(route) {
+  $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
+  location.hash = route;
+  const main = $('#main');
+  if (route === 'home') return renderHome(main);
+  if (route === 'turno') return renderTurno(main);
+  if (route === 'recibo') return renderRecibo(main);
+  if (route === 'metricas') return renderMetricas(main);
+  if (route === 'botusers') return renderBotUsers(main);
+  if (route === 'health') return renderHealth(main);
+  if (route === 'usuarios') return renderUsuarios(main);
+  main.innerHTML = '<div class="card">Página no encontrada</div>';
+}
+
+/* ============= INICIO ============= */
+async function renderHome(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1>Hola, ${currentUser.fullName.split(' ')[0]} 👋</h1>
+        <div class="subtitle">Centro de servicios — accesos rápidos a todas las herramientas</div>
+      </div>
+    </div>
+
+    <div class="section-title">Plataformas principales</div>
+    <div class="hero-grid">
+      <button class="hero-tile chatwoot" id="openChatwoot">
+        <div class="hero-icon">💬</div>
+        <div class="hero-info">
+          <h2>Abrir Chatwoot ${capabilities.chatwootSso ? '<span style="font-size: 11px; background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">SSO</span>' : ''}</h2>
+          <p>Atiende conversaciones activas, responde a estudiantes y gestiona casos escalados desde el bot.</p>
+        </div>
+      </button>
+      <a class="hero-tile grafana" href="${publicUrls.grafana}" target="_blank" rel="noopener">
+        <div class="hero-icon">📈</div>
+        <div class="hero-info">
+          <h2>Abrir Grafana</h2>
+          <p>Visualiza métricas en vivo, latencia, errores y embudo del bot.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="section-title">Resumen del día</div>
+    <div class="stats-grid" id="stats">
+      <div class="stat-card"><div class="label">Mensajes hoy</div><div class="value" data-stat="msgs">…</div></div>
+      <div class="stat-card"><div class="label">Preguntas IA</div><div class="value" data-stat="ai">…</div></div>
+      <div class="stat-card"><div class="label">Recibos descargados</div><div class="value" data-stat="recibos">…</div></div>
+      <div class="stat-card"><div class="label">Casos a asesor</div><div class="value" data-stat="handoffs">…</div></div>
+    </div>
+
+    <div class="section-title">Herramientas del bot</div>
+    <div class="tools-grid">
+      <button class="tool-card" data-go="turno">
+        <div class="tool-icon">📋</div>
+        <h3>Consultar turno</h3>
+        <p>Busca el turno de matrícula de un estudiante.</p>
+      </button>
+      <button class="tool-card" data-go="recibo">
+        <div class="tool-icon accent">🧾</div>
+        <h3>Descargar recibo</h3>
+        <p>Genera el PDF del recibo desde Iceberg.</p>
+      </button>
+      <button class="tool-card" data-go="metricas">
+        <div class="tool-icon">📊</div>
+        <h3>Métricas (resumen)</h3>
+        <p>Tabla de eventos de los últimos 7 días.</p>
+      </button>
+    </div>
+  `;
+
+  $$('button.tool-card').forEach(b => b.addEventListener('click', () => navigate(b.dataset.go)));
+
+  $('#openChatwoot')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const btn = e.currentTarget;
+    btn.style.opacity = '0.7';
+    try {
+      const r = await api('/api/auth/chatwoot-sso');
+      const { url } = await r.json();
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      window.open(publicUrls.chatwoot, '_blank', 'noopener');
+    } finally {
+      btn.style.opacity = '1';
+    }
+  });
+
+  try {
+    const r = await api('/api/tools/metrics/today');
+    const { metrics: m } = await r.json();
+    const num = (k) => parseInt(m[k] ?? '0') || 0;
+    const totalMsgs = num('menu_shown') + num('ai_request') + num('turno_consultado') + num('recibo_descargado');
+    document.querySelector('[data-stat="msgs"]').textContent = totalMsgs;
+    document.querySelector('[data-stat="ai"]').textContent = num('ai_request');
+    document.querySelector('[data-stat="recibos"]').textContent = num('recibo_descargado');
+    document.querySelector('[data-stat="handoffs"]').textContent = num('agent_handoff');
+  } catch {}
+}
+
+/* ============= TURNO ============= */
+function renderTurno(main) {
+  main.innerHTML = `
+    <button class="back-link" onclick="navigate('home')">← Volver al inicio</button>
+    <div class="tool-panel">
+      <h2>📋 Consultar turno de matrícula</h2>
+      <p class="desc">Ingresa el código estudiantil para buscar la información del turno.</p>
+
+      <form id="turnoForm">
+        <div class="field">
+          <label for="codigo">Código estudiantil</label>
+          <input type="text" id="codigo" placeholder="T00012345" autofocus required>
+          <div class="field-help">Formato: T seguido de 8 dígitos</div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="turnoBtn">Buscar</button>
+      </form>
+
+      <div id="turnoAlert"></div>
+      <div id="turnoResult"></div>
+    </div>
+  `;
+
+  $('#turnoForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const codigo = $('#codigo').value.trim().toUpperCase();
+    const btn = $('#turnoBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Buscando…';
+    $('#turnoAlert').innerHTML = '';
+    $('#turnoResult').innerHTML = '';
+    try {
+      const r = await api(`/api/tools/turno/${encodeURIComponent(codigo)}`);
+      if (!r.ok) {
+        const err = await r.json();
+        const msg = err.error === 'no_encontrado' ? `No se encontró información para ${codigo}.` :
+                    err.error === 'codigo_invalido' ? 'Formato de código inválido.' : 'Error consultando el turno.';
+        $('#turnoAlert').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+        return;
+      }
+      const { turno } = await r.json();
+      $('#turnoResult').innerHTML = `
+        <div class="result-block">
+          <div class="row"><span class="label">Estudiante</span><span class="value">${turno.nombre} ${turno.apellido}</span></div>
+          <div class="row"><span class="label">Programa</span><span class="value">${turno.programa}</span></div>
+          <div class="row"><span class="label">Turno</span><span class="value">${turno.turno}</span></div>
+          <div class="row"><span class="label">Fecha</span><span class="value">${turno.fecha}</span></div>
+          <div class="row"><span class="label">Hora</span><span class="value">${turno.hora}</span></div>
+        </div>
+      `;
+    } catch {
+      $('#turnoAlert').innerHTML = `<div class="alert alert-error">Error de conexión.</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Buscar';
+    }
+  });
+}
+
+/* ============= RECIBO ============= */
+function renderRecibo(main) {
+  main.innerHTML = `
+    <button class="back-link" onclick="navigate('home')">← Volver al inicio</button>
+    <div class="tool-panel">
+      <h2>🧾 Descargar recibo de matrícula</h2>
+      <p class="desc">Tooli ingresará al portal con las credenciales del estudiante y descargará el recibo.</p>
+
+      <form id="reciboForm">
+        <div class="field">
+          <label>Código estudiantil</label>
+          <input type="text" id="rCodigo" placeholder="T00012345" required>
+        </div>
+        <div class="field">
+          <label>Cédula</label>
+          <input type="text" id="rCedula" placeholder="1001234567" required>
+          <div class="field-help">Solo dígitos, sin puntos ni guiones</div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="reciboBtn">Descargar PDF</button>
+      </form>
+
+      <div id="reciboAlert"></div>
+    </div>
+  `;
+
+  $('#reciboForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const codigo = $('#rCodigo').value.trim().toUpperCase();
+    const cedula = $('#rCedula').value.trim();
+    const btn = $('#reciboBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Descargando… (30-60s)';
+    $('#reciboAlert').innerHTML = '<div class="alert alert-info">El portal Iceberg puede tardar hasta un minuto. No cierres esta pestaña.</div>';
+    try {
+      const res = await fetch('/api/tools/recibo', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo, cedula }),
+      });
+      if (res.status === 401) { window.location.href = '/app/login.html'; return; }
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/pdf')) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `recibo-${codigo}.pdf`; a.click();
+        URL.revokeObjectURL(url);
+        $('#reciboAlert').innerHTML = '<div class="alert alert-success">✅ PDF descargado correctamente.</div>';
+      } else {
+        const err = await res.json();
+        const msg = err.noRecibos ? `No hay recibos pendientes${err.nombre ? ` para ${err.nombre}` : ''}.` :
+                    err.error === 'login_failed' ? 'Las credenciales no son válidas. Verifica el código y la cédula.' :
+                    err.error === 'codigo_invalido' ? 'Formato de código inválido.' :
+                    err.error === 'cedula_invalida' ? 'Formato de cédula inválido.' :
+                    'No se pudo descargar el recibo.';
+        $('#reciboAlert').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+      }
+    } catch {
+      $('#reciboAlert').innerHTML = '<div class="alert alert-error">Error de conexión.</div>';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Descargar PDF';
+    }
+  });
+}
+
+/* ============= MÉTRICAS ============= */
+async function renderMetricas(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>📊 Métricas del bot</h1><div class="subtitle">Actividad de los últimos 7 días</div></div>
+    </div>
+    <div id="metricsContent" class="card"><span class="spinner"></span> Cargando…</div>
+  `;
+  try {
+    const r = await api('/api/tools/metrics/range?days=7');
+    const { days } = await r.json();
+    const totals = {};
+    for (const day of Object.values(days)) {
+      for (const [k, v] of Object.entries(day)) {
+        if (k.includes(':')) continue;
+        totals[k] = (totals[k] ?? 0) + (parseInt(v) || 0);
+      }
+    }
+    const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    $('#metricsContent').innerHTML = `
+      <table>
+        <thead><tr><th>Evento</th><th style="text-align: right">Total 7 días</th></tr></thead>
+        <tbody>
+          ${rows.map(([k, v]) => `<tr><td>${k}</td><td style="text-align: right; font-weight: 600">${v}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      <p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+        Para gráficas detalladas y series temporales, abre <a href="${publicUrls.grafana}" target="_blank">Grafana</a>.
+      </p>
+    `;
+  } catch {
+    $('#metricsContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar las métricas.</div>';
+  }
+}
+
+/* ============= USUARIOS (admin) ============= */
+async function renderUsuarios(main) {
+  if (currentUser.role !== 'admin') { navigate('home'); return; }
+
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>👥 Gestión de usuarios</h1><div class="subtitle">Administra los asesores con acceso al sistema</div></div>
+      <button class="btn btn-primary" id="newUserBtn">+ Nuevo usuario</button>
+    </div>
+
+    <div id="newUserPanel" class="hidden tool-panel" style="margin-bottom: 24px;">
+      <h2>Crear nuevo usuario</h2>
+      <form id="newUserForm">
+        <div class="field"><label>Usuario</label><input type="text" id="nUsername" required></div>
+        <div class="field"><label>Nombre completo</label><input type="text" id="nFullName" required></div>
+        <div class="field"><label>Email (opcional)</label><input type="email" id="nEmail"></div>
+        <div class="field"><label>Contraseña inicial</label><input type="password" id="nPassword" minlength="6" required></div>
+        <div class="field"><label>Rol</label>
+          <select id="nRole"><option value="asesor">Asesor</option><option value="admin">Administrador</option></select>
+        </div>
+        <div class="field"><label>Área</label>
+          <select id="nArea">
+            <option value="all">Todas</option>
+            <option value="ti">TI</option>
+            <option value="admisiones">Admisiones</option>
+          </select>
+        </div>
+        <div id="newUserAlert"></div>
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" class="btn btn-primary">Crear usuario</button>
+          <button type="button" class="btn btn-ghost" id="cancelNewUser">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="usersTable"></div>
+  `;
+
+  async function loadUsers() {
+    const r = await api('/api/auth/users');
+    const { users } = await r.json();
+    $('#usersTable').innerHTML = `
+      <table>
+        <thead><tr><th>Usuario</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Área</th><th></th></tr></thead>
+        <tbody>
+          ${users.map(u => `
+            <tr>
+              <td><strong>${u.username}</strong></td>
+              <td>${u.fullName}</td>
+              <td>${u.email ?? '—'}</td>
+              <td><span class="badge ${u.role}">${u.role}</span></td>
+              <td>${u.area ?? 'all'}</td>
+              <td style="text-align: right;">
+                ${u.username !== currentUser.username
+                  ? `<button class="btn btn-ghost" data-del="${u.username}" style="color: var(--danger);">Eliminar</button>`
+                  : '<span style="font-size: 12px; color: var(--text-muted);">Tú</span>'}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    $$('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm(`¿Eliminar usuario "${b.dataset.del}"?`)) return;
+      await api(`/api/auth/users/${b.dataset.del}`, { method: 'DELETE' });
+      loadUsers();
+    }));
+  }
+
+  $('#newUserBtn').addEventListener('click', () => $('#newUserPanel').classList.remove('hidden'));
+  $('#cancelNewUser').addEventListener('click', () => $('#newUserPanel').classList.add('hidden'));
+
+  $('#newUserForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#newUserAlert').innerHTML = '';
+    const r = await api('/api/auth/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: $('#nUsername').value,
+        fullName: $('#nFullName').value,
+        email: $('#nEmail').value || undefined,
+        password: $('#nPassword').value,
+        role: $('#nRole').value,
+        area: $('#nArea').value,
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      $('#newUserAlert').innerHTML = `<div class="alert alert-error">${err.error || 'No se pudo crear el usuario'}</div>`;
+      return;
+    }
+    $('#newUserPanel').classList.add('hidden');
+    $('#newUserForm').reset();
+    loadUsers();
+  });
+
+  loadUsers();
+}
+
+/* ============= USUARIOS DEL BOT ============= */
+async function renderBotUsers(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>📱 Usuarios del bot</h1><div class="subtitle">Busca un número de WhatsApp para ver su sesión, historial y bloquearlo si es necesario.</div></div>
+    </div>
+
+    <div class="tool-panel" style="margin-bottom: 24px;">
+      <form id="searchForm">
+        <div class="field">
+          <label>Número de WhatsApp</label>
+          <input type="text" id="searchPhone" placeholder="573215640735" autofocus>
+          <div class="field-help">Solo dígitos, formato internacional (sin +)</div>
+        </div>
+        <button type="submit" class="btn btn-primary">Buscar</button>
+      </form>
+    </div>
+
+    <div id="botUserResult"></div>
+
+    <div class="card" style="margin-top: 20px;">
+      <h2 style="font-size: 16px;">Usuarios activos recientes</h2>
+      <p class="desc" style="font-size: 13px;">Últimos 100 que han interactuado con el bot.</p>
+      <div id="activeUsers"><span class="spinner"></span> Cargando…</div>
+    </div>
+  `;
+
+  $('#searchForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await loadBotUser($('#searchPhone').value.trim().replace(/\D/g, ''));
+  });
+
+  try {
+    const r = await api('/api/tools/bot-users');
+    const { phones } = await r.json();
+    if (!phones.length) {
+      $('#activeUsers').innerHTML = '<p style="font-size: 13px; color: var(--text-muted);">Aún no hay usuarios con actividad.</p>';
+    } else {
+      $('#activeUsers').innerHTML = `
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          ${phones.map(p => `<button class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;" data-phone="${p}">+${p}</button>`).join('')}
+        </div>
+      `;
+      $$('[data-phone]').forEach(b => b.addEventListener('click', () => {
+        $('#searchPhone').value = b.dataset.phone;
+        loadBotUser(b.dataset.phone);
+      }));
+    }
+  } catch {
+    $('#activeUsers').innerHTML = '<div class="alert alert-error">No se pudo cargar la lista.</div>';
+  }
+}
+
+async function loadBotUser(phone) {
+  if (!phone) return;
+  const out = $('#botUserResult');
+  out.innerHTML = '<div class="card"><span class="spinner"></span> Cargando…</div>';
+  try {
+    const r = await api(`/api/tools/bot-users/${phone}`);
+    const info = await r.json();
+    const last = info.recentMessages[0];
+    const lastSeen = last ? new Date(last.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+
+    out.innerHTML = `
+      <div class="tool-panel">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+          <div>
+            <h2>📱 +${info.phone}</h2>
+            <p class="desc">Última actividad: ${lastSeen}${info.banned ? ' · <span style="color: var(--danger); font-weight: 600;">⛔ BANEADO</span>' : ''}</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" id="resetBtn">Resetear sesión</button>
+            ${info.banned
+              ? `<button class="btn btn-secondary" id="unbanBtn">Desbanear</button>`
+              : `<button class="btn btn-danger" id="banBtn">Banear</button>`}
+          </div>
+        </div>
+
+        <div class="result-block" style="border-left-color: var(--utb-blue);">
+          <div class="row"><span class="label">Estado actual</span><span class="value">${info.session?.step ?? '<em>sin sesión</em>'}</span></div>
+          ${info.session?.data && Object.keys(info.session.data).length
+            ? Object.entries(info.session.data)
+                .filter(([k]) => !['aiHistory', 'aiAnswer'].includes(k))
+                .map(([k, v]) => `<div class="row"><span class="label">${k}</span><span class="value">${String(v).slice(0, 60)}</span></div>`).join('')
+            : ''}
+        </div>
+
+        <h3 style="font-size: 14px; margin-top: 24px; margin-bottom: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Últimos mensajes</h3>
+        <div style="max-height: 360px; overflow-y: auto;">
+          ${info.recentMessages.length === 0
+            ? '<p style="color: var(--text-muted); font-size: 13px;">No hay mensajes registrados.</p>'
+            : info.recentMessages.map(m => `
+                <div style="padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; background: ${m.direction === 'in' ? '#f0f9ff' : '#f9fafb'}; border-left: 3px solid ${m.direction === 'in' ? 'var(--utb-blue-light)' : 'var(--utb-accent-dark)'};">
+                  <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">${m.direction === 'in' ? '👤 Usuario' : '🤖 Bot'} · ${new Date(m.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                  <div style="font-size: 14px; white-space: pre-wrap;">${escapeHtml(m.text)}</div>
+                </div>
+              `).join('')}
+        </div>
+      </div>
+    `;
+
+    $('#resetBtn')?.addEventListener('click', async () => {
+      if (!confirm('¿Resetear la sesión de este usuario? Volverá al menú principal.')) return;
+      await api(`/api/tools/bot-users/${phone}/reset-session`, { method: 'POST' });
+      loadBotUser(phone);
+    });
+    $('#banBtn')?.addEventListener('click', async () => {
+      const reason = prompt('Razón del baneo (opcional):') ?? 'Baneado por asesor';
+      await api(`/api/tools/bot-users/${phone}/ban`, { method: 'POST', body: JSON.stringify({ reason }) });
+      loadBotUser(phone);
+    });
+    $('#unbanBtn')?.addEventListener('click', async () => {
+      await api(`/api/tools/bot-users/${phone}/unban`, { method: 'POST' });
+      loadBotUser(phone);
+    });
+  } catch {
+    out.innerHTML = '<div class="alert alert-error">Error consultando el usuario.</div>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* ============= ESTADO DEL SISTEMA ============= */
+async function renderHealth(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>❤️ Estado del sistema</h1><div class="subtitle">Verifica que todos los servicios externos estén respondiendo.</div></div>
+      <button class="btn btn-secondary" id="refreshHealth">🔄 Actualizar</button>
+    </div>
+    <div id="healthContent"><div class="card"><span class="spinner"></span> Verificando…</div></div>
+  `;
+  const load = async () => {
+    $('#healthContent').innerHTML = '<div class="card"><span class="spinner"></span> Verificando…</div>';
+    try {
+      const r = await fetch('/health/deep', { credentials: 'same-origin' });
+      const data = await r.json();
+      const dot = (s) => ({
+        ok: '🟢', degraded: '🟡', down: '🔴', skipped: '⚪',
+      }[s] ?? '❓');
+      $('#healthContent').innerHTML = `
+        <div class="card">
+          <h2 style="font-size: 16px; margin-bottom: 16px;">Estado general: ${dot(data.status)} <span style="font-weight: 400; text-transform: uppercase; font-size: 13px; color: var(--text-muted);">${data.status}</span></h2>
+          <table>
+            <thead><tr><th>Servicio</th><th>Estado</th><th>Latencia</th><th>Detalle</th></tr></thead>
+            <tbody>
+              ${Object.entries(data.checks).map(([name, c]) => `
+                <tr>
+                  <td><strong>${name.replace(/_/g, ' ')}</strong></td>
+                  <td>${dot(c.status)} ${c.status}</td>
+                  <td>${c.latencyMs ? c.latencyMs + 'ms' : '—'}</td>
+                  <td style="font-size: 12px; color: var(--text-muted);">${c.detail ?? ''}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">Última verificación: ${new Date(data.timestamp).toLocaleString('es-CO')}</p>
+        </div>
+      `;
+    } catch {
+      $('#healthContent').innerHTML = '<div class="alert alert-error">No se pudo verificar el estado.</div>';
+    }
+  };
+  $('#refreshHealth').addEventListener('click', load);
+  load();
+}
+
+init();
+</script>
+
+</body>
+</html>

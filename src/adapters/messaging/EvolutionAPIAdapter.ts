@@ -1,6 +1,7 @@
 import axios from 'axios';
-import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList, OutboundDocument } from './IMessagingAdapter';
+import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList, OutboundDocument, OutboundMediaUrl } from './IMessagingAdapter';
 import { config } from '../../config';
+import { recordActivity } from '../../services/botUserService';
 
 export class EvolutionAPIAdapter implements IMessagingAdapter {
   private readonly baseUrl: string;
@@ -54,6 +55,7 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
       { number: msg.to, text: msg.text },
       { headers: { apikey: this.apiKey }, timeout: 10_000 }
     );
+    if (msg.text) recordActivity(msg.to, 'out', msg.text).catch(() => {});
   }
 
   async sendButtons(msg: OutboundButtons): Promise<void> {
@@ -71,6 +73,30 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
         })),
       },
       { headers: { apikey: this.apiKey }, timeout: 10_000 }
+    );
+  }
+
+  async sendMediaFromUrl(msg: OutboundMediaUrl): Promise<void> {
+    if (msg.kind === 'audio') {
+      await axios.post(
+        `${this.baseUrl}/message/sendWhatsAppAudio/${this.instance}`,
+        { number: msg.to, audio: msg.url },
+        { headers: { apikey: this.apiKey }, timeout: 30_000 }
+      );
+      return;
+    }
+
+    await axios.post(
+      `${this.baseUrl}/message/sendMedia/${this.instance}`,
+      {
+        number: msg.to,
+        mediatype: msg.kind,
+        mimetype: msg.mimetype,
+        media: msg.url,
+        fileName: msg.fileName,
+        caption: msg.caption,
+      },
+      { headers: { apikey: this.apiKey }, timeout: 30_000 }
     );
   }
 

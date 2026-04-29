@@ -1,0 +1,48 @@
+import { setSession } from '../services/session';
+import { consultarTurno } from '../services/turnosService';
+import { track } from '../services/metrics';
+import { FlowContext, messaging, sendMenu, isMenuCommand, CODIGO_REGEX } from './shared';
+
+export async function handleEsperandoCodigo(ctx: FlowContext): Promise<void> {
+  const { from, text } = ctx;
+  const input = text.trim().toUpperCase();
+
+  if (isMenuCommand(input)) {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
+  if (!CODIGO_REGEX.test(input)) {
+    await messaging.sendText({
+      to: from,
+      text: 'El código no es válido. Debe tener el formato T seguido de 8 dígitos.\nEjemplo: T000XXXXX\n\nInténtalo de nuevo:',
+    });
+    return;
+  }
+
+  try {
+    const turno = await consultarTurno(input);
+
+    if (!turno) {
+      await track('turno_no_encontrado');
+      await messaging.sendText({
+        to: from,
+        text: `No encontré información para el código *${input}*.\n\nVerifica que sea correcto o escribe *menu* para volver al inicio.`,
+      });
+    } else {
+      await track('turno_consultado');
+      await messaging.sendText({
+        to: from,
+        text: `📋 *Turno de matrícula*\n\n👤 ${turno.nombre} ${turno.apellido}\n🎓 ${turno.programa}\n🔢 Turno: *${turno.turno}*\n📅 Fecha: ${turno.fecha}\n⏰ Hora: ${turno.hora}\n\nEscribe *menu* para volver al inicio.`,
+      });
+    }
+  } catch {
+    await messaging.sendText({
+      to: from,
+      text: 'Ocurrió un error consultando tu turno. Por favor intenta más tarde o escribe *menu* para volver al inicio.',
+    });
+  }
+
+  await setSession(from, { step: 'menu', data: {} });
+}

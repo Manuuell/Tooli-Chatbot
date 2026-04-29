@@ -1,0 +1,57 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "__SMTP_HOST__"
+  smtp_from: "__ALERT_EMAIL_FROM__"
+  smtp_auth_username: "__SMTP_USER__"
+  smtp_auth_password: "__SMTP_PASSWORD__"
+  smtp_require_tls: true
+
+route:
+  receiver: default
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: critical
+      repeat_interval: 1h
+
+receivers:
+  - name: default
+    slack_configs:
+      - api_url: "__SLACK_WEBHOOK_URL__"
+        channel: "#tooli-alerts"
+        send_resolved: true
+        title: "{{ .Status | toUpper }} — {{ .GroupLabels.alertname }}"
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          _Severity: {{ .Labels.severity }}_
+          {{ end }}
+
+  - name: critical
+    slack_configs:
+      - api_url: "__SLACK_WEBHOOK_URL__"
+        channel: "#tooli-alerts"
+        send_resolved: true
+        title: "🚨 CRITICAL — {{ .GroupLabels.alertname }}"
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+    email_configs:
+      - to: "__ALERT_EMAIL_TO__"
+        send_resolved: true
+        headers:
+          Subject: "[Tooli CRITICAL] {{ .GroupLabels.alertname }}"
+
+inhibit_rules:
+  - source_matchers:
+      - alertname = "BotCaido"
+    target_matchers:
+      - service =~ "ai|iceberg|backend"
+    equal: [service]

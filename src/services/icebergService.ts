@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { config } from '../config';
+import { observeReciboLatency } from './promMetrics';
 
 const PORTAL_URL = 'https://iceberg-niif.utb.edu.co/iceberg-pf/';
 const DEBUG_DIR = '/tmp/iceberg';
@@ -261,6 +262,27 @@ async function tryDownloadFromMenu(
  * Intenta hacer login en el portal Iceberg.
  */
 export async function loginAndDownloadReceipt(
+  codigo: string,
+  cedula: string,
+  options: { debug?: boolean; headless?: boolean } = {}
+): Promise<IcebergLoginResult> {
+  const start = Date.now();
+  try {
+    const result = await loginAndDownloadReceiptInternal(codigo, cedula, options);
+    const outcome: 'success' | 'error' | 'no_recibos' = !result.ok
+      ? 'error'
+      : result.noRecibos
+        ? 'no_recibos'
+        : 'success';
+    observeReciboLatency(outcome, (Date.now() - start) / 1000);
+    return result;
+  } catch (err) {
+    observeReciboLatency('error', (Date.now() - start) / 1000);
+    throw err;
+  }
+}
+
+async function loginAndDownloadReceiptInternal(
   codigo: string,
   cedula: string,
   options: { debug?: boolean; headless?: boolean } = {}

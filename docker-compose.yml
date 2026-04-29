@@ -147,10 +147,65 @@ services:
     networks:
       - tooli-net
 
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml.tpl:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    entrypoint:
+      - /bin/sh
+      - -c
+      - sed "s|__TOKEN__|${WEBHOOK_SECRET}|" /etc/prometheus/prometheus.yml.tpl > /tmp/prometheus.yml && exec /bin/prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=30d --web.enable-lifecycle
+    depends_on:
+      - alertmanager
+    networks:
+      - tooli-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
+      - alertmanager-data:/alertmanager
+    entrypoint:
+      - /bin/sh
+      - -c
+      - sed -e "s|__SLACK_WEBHOOK_URL__|${SLACK_WEBHOOK_URL:-}|" -e "s|__ALERT_EMAIL_TO__|${ALERT_EMAIL_TO:-}|" -e "s|__ALERT_EMAIL_FROM__|${ALERT_EMAIL_FROM:-}|" -e "s|__SMTP_HOST__|${SMTP_HOST:-}|" -e "s|__SMTP_USER__|${SMTP_USER:-}|" -e "s|__SMTP_PASSWORD__|${SMTP_PASSWORD:-}|" /etc/alertmanager/alertmanager.yml.tpl > /tmp/alertmanager.yml && exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
+    networks:
+      - tooli-net
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - tooli-net
+
 volumes:
   evolution-instances:
   evolution-pg-data:
   chatwoot-pg-data:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
 
 networks:
   tooli-net:

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tooli Asesores · UTB</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-side">
+    <img src="https://www.utb.edu.co/wp-content/uploads/2020/09/logo.svg" alt="UTB" class="logo">
+
+    <div>
+      <h1>Tooli <span>Asesores</span></h1>
+      <p>Centro de servicios para asesores UTB. Consulta turnos, descarga recibos y gestiona casos en un solo lugar.</p>
+    </div>
+
+    <p class="footer-text">Universidad Tecnológica de Bolívar · Centro de Servicios</p>
+  </div>
+
+  <div class="login-form-wrap">
+    <form class="login-form" id="loginForm">
+      <h2>Iniciar sesión</h2>
+      <p class="subtitle">Accede con tu cuenta de asesor</p>
+
+      <div id="alert" class="alert alert-error hidden"></div>
+
+      <div class="field">
+        <label for="username">Usuario</label>
+        <input type="text" id="username" autocomplete="username" autofocus required>
+      </div>
+
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="submitBtn" style="width: 100%; justify-content: center;">
+        <span id="btnText">Entrar</span>
+        <span id="btnSpinner" class="spinner hidden"></span>
+      </button>
+
+      <p style="margin-top: 24px; font-size: 12px; color: var(--text-muted); text-align: center;">
+        ¿Problemas para entrar? Contacta al administrador.
+      </p>
+    </form>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById('loginForm');
+const alertBox = document.getElementById('alert');
+const btn = document.getElementById('submitBtn');
+const btnText = document.getElementById('btnText');
+const btnSpinner = document.getElementById('btnSpinner');
+
+function showError(msg) {
+  alertBox.textContent = msg;
+  alertBox.classList.remove('hidden');
+}
+
+function setLoading(loading) {
+  btn.disabled = loading;
+  btnText.classList.toggle('hidden', loading);
+  btnSpinner.classList.toggle('hidden', !loading);
+}
+
+(async () => {
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    if (r.ok) window.location.href = '/app/';
+  } catch {}
+})();
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  alertBox.classList.add('hidden');
+  setLoading(true);
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showError(err.error === 'invalid_credentials' ? 'Usuario o contraseña incorrectos.' : 'No se pudo iniciar sesión. Intenta de nuevo.');
+      setLoading(false);
+      return;
+    }
+    window.location.href = '/app/';
+  } catch {
+    showError('Error de conexión. Verifica tu red.');
+    setLoading(false);
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Tooli Chatbot — Métricas</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--panel-2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  header .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  select, button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--panel-2);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--panel-2); }
+  main {
+    padding: 24px 32px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid var(--panel-2);
+  }
+  .kpi .label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .kpi .value {
+    font-size: 32px;
+    font-weight: 700;
+  }
+  .kpi .sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .chart-card { grid-column: span 2; }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-card h3 {
+    margin: 0 0 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  canvas { max-height: 300px; }
+  .loading, .error {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    grid-column: 1 / -1;
+  }
+  .error { color: var(--red); }
+  @media (max-width: 720px) {
+    .chart-card { grid-column: 1 / -1; }
+    main { padding: 16px; }
+    header { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Tooli Chatbot — Métricas</h1>
+  <div class="controls">
+    <select id="rangeSelect">
+      <option value="1">Hoy</option>
+      <option value="7" selected>Últimos 7 días</option>
+      <option value="14">Últimos 14 días</option>
+      <option value="30">Últimos 30 días</option>
+    </select>
+    <button id="refreshBtn">🔄 Actualizar</button>
+  </div>
+</header>
+
+<main id="dashboard">
+  <div class="loading">Cargando métricas…</div>
+</main>
+
+<script>
+const TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+
+const COLORS = {
+  blue: '#38bdf8',
+  green: '#22c55e',
+  red: '#ef4444',
+  yellow: '#eab308',
+  purple: '#a855f7',
+  pink: '#ec4899',
+  cyan: '#06b6d4',
+  orange: '#f97316',
+};
+
+let charts = [];
+
+function destroyCharts() {
+  charts.forEach(c => c.destroy());
+  charts = [];
+}
+
+function num(v) { return parseInt(v ?? '0') || 0; }
+
+function sumAcross(series, event) {
+  return Object.values(series).reduce((acc, day) => acc + num(day[event]), 0);
+}
+
+function dailyTotals(series, days, event) {
+  return days.map(d => num(series[d]?.[event]));
+}
+
+function pickByPrefix(series, prefix) {
+  const totals = {};
+  for (const day of Object.values(series)) {
+    for (const [k, v] of Object.entries(day)) {
+      if (k.startsWith(prefix)) {
+        const subkey = k.slice(prefix.length);
+        totals[subkey] = (totals[subkey] ?? 0) + num(v);
+      }
+    }
+  }
+  return totals;
+}
+
+function fmtDay(d) {
+  return d.slice(5);
+}
+
+async function load() {
+  const days = document.getElementById('rangeSelect').value;
+  const dashboard = document.getElementById('dashboard');
+  dashboard.innerHTML = '<div class="loading">Cargando métricas…</div>';
+  destroyCharts();
+
+  try {
+    const res = await fetch(`/dashboard/data?days=${days}&token=${encodeURIComponent(TOKEN)}`);
+    if (!res.ok) {
+      dashboard.innerHTML = `<div class="error">Error ${res.status}: ${res.statusText}<br>¿Token correcto en la URL?</div>`;
+      return;
+    }
+    const data = await res.json();
+    render(data);
+  } catch (err) {
+    dashboard.innerHTML = `<div class="error">Error: ${err.message}</div>`;
+  }
+}
+
+function render({ days, series }) {
+  const dashboard = document.getElementById('dashboard');
+
+  const totalMessages = sumAcross(series, 'menu_shown')
+    + sumAcross(series, 'turno_consultado')
+    + sumAcross(series, 'recibo_descargado')
+    + sumAcross(series, 'ai_request');
+
+  const aiRequests = sumAcross(series, 'ai_request');
+  const aiResolved = sumAcross(series, 'ai_resolved');
+  const aiFailed = sumAcross(series, 'ai_failed');
+  const aiEscalated = sumAcross(series, 'ai_escalated_to_agent');
+  const handoffs = sumAcross(series, 'agent_handoff');
+  const rateLimited = sumAcross(series, 'rate_limited');
+  const turnos = sumAcross(series, 'turno_consultado');
+  const turnosNo = sumAcross(series, 'turno_no_encontrado');
+  const recibos = sumAcross(series, 'recibo_descargado');
+  const recibosFail = sumAcross(series, 'recibo_login_failed') + sumAcross(series, 'recibo_error');
+  const outsideHours = sumAcross(series, 'agent_outside_hours');
+
+  const aiResolveRate = aiRequests > 0 ? Math.round((aiResolved / aiRequests) * 100) : 0;
+  const turnoSuccessRate = (turnos + turnosNo) > 0 ? Math.round((turnos / (turnos + turnosNo)) * 100) : 0;
+
+  const platformByEvent = pickByPrefix(series, 'ai_request:plataforma:');
+  const areaAI = pickByPrefix(series, 'ai_request:area:');
+  const handoffReasons = pickByPrefix(series, 'agent_handoff:area:');
+
+  dashboard.innerHTML = `
+    <div class="card kpi">
+      <div class="label">Interacciones</div>
+      <div class="value">${totalMessages}</div>
+      <div class="sub">eventos totales en el período</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Preguntas a IA</div>
+      <div class="value">${aiRequests}</div>
+      <div class="sub">${aiResolveRate}% resueltas (${aiResolved}/${aiRequests})</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Casos a asesor</div>
+      <div class="value">${handoffs}</div>
+      <div class="sub">${aiEscalated} pidieron humano · ${aiFailed} fallos IA</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Recibos / Turnos</div>
+      <div class="value">${recibos + turnos}</div>
+      <div class="sub">${recibos} recibos · ${turnos} turnos · ${recibosFail + turnosNo} fallidos</div>
+    </div>
+
+    <div class="card chart-card wide">
+      <h3>Actividad diaria</h3>
+      <canvas id="chartDaily"></canvas>
+    </div>
+
+    <div class="card chart-card">
+      <h3>Distribución por área (IA)</h3>
+      <canvas id="chartArea"></canvas>
+    </div>
+
+    <div class="card chart-card">
+      <h3>Plataformas TI consultadas</h3>
+      <canvas id="chartPlatforms"></canvas>
+    </div>
+
+    <div class="card chart-card">
+      <h3>Embudo: solicitudes vs IA vs handoff</h3>
+      <canvas id="chartFunnel"></canvas>
+    </div>
+
+    <div class="card chart-card">
+      <h3>Errores e incidencias</h3>
+      <canvas id="chartErrors"></canvas>
+    </div>
+  `;
+
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+    },
+    scales: {
+      x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' }, beginAtZero: true },
+    },
+  };
+
+  charts.push(new Chart(document.getElementById('chartDaily'), {
+    type: 'line',
+    data: {
+      labels: days.map(fmtDay),
+      datasets: [
+        { label: 'Menú mostrado', data: dailyTotals(series, days, 'menu_shown'), borderColor: COLORS.blue, backgroundColor: COLORS.blue + '33', tension: 0.3 },
+        { label: 'Preguntas IA', data: dailyTotals(series, days, 'ai_request'), borderColor: COLORS.purple, backgroundColor: COLORS.purple + '33', tension: 0.3 },
+        { label: 'Handoffs', data: dailyTotals(series, days, 'agent_handoff'), borderColor: COLORS.orange, backgroundColor: COLORS.orange + '33', tension: 0.3 },
+        { label: 'Recibos', data: dailyTotals(series, days, 'recibo_descargado'), borderColor: COLORS.green, backgroundColor: COLORS.green + '33', tension: 0.3 },
+      ],
+    },
+    options: baseOpts,
+  }));
+
+  charts.push(new Chart(document.getElementById('chartArea'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(areaAI).length ? Object.keys(areaAI) : ['Sin datos'],
+      datasets: [{
+        data: Object.keys(areaAI).length ? Object.values(areaAI) : [1],
+        backgroundColor: [COLORS.blue, COLORS.green, COLORS.yellow],
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    },
+  }));
+
+  charts.push(new Chart(document.getElementById('chartPlatforms'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(platformByEvent).length ? Object.keys(platformByEvent) : ['Sin datos'],
+      datasets: [{
+        label: 'Consultas',
+        data: Object.keys(platformByEvent).length ? Object.values(platformByEvent) : [0],
+        backgroundColor: COLORS.cyan,
+      }],
+    },
+    options: { ...baseOpts, plugins: { legend: { display: false } } },
+  }));
+
+  charts.push(new Chart(document.getElementById('chartFunnel'), {
+    type: 'bar',
+    data: {
+      labels: ['Preguntas IA', 'Resueltas IA', 'Pidió humano', 'Handoff total'],
+      datasets: [{
+        data: [aiRequests, aiResolved, aiEscalated, handoffs],
+        backgroundColor: [COLORS.purple, COLORS.green, COLORS.yellow, COLORS.orange],
+      }],
+    },
+    options: { ...baseOpts, plugins: { legend: { display: false } } },
+  }));
+
+  charts.push(new Chart(document.getElementById('chartErrors'), {
+    type: 'bar',
+    data: {
+      labels: ['IA falló', 'Recibo error', 'Login falló', 'Turno no encontrado', 'Rate limited', 'Fuera horario'],
+      datasets: [{
+        data: [aiFailed, sumAcross(series, 'recibo_error'), sumAcross(series, 'recibo_login_failed'), turnosNo, rateLimited, outsideHours],
+        backgroundColor: [COLORS.red, COLORS.red, COLORS.red, COLORS.yellow, COLORS.yellow, COLORS.yellow],
+      }],
+    },
+    options: { ...baseOpts, plugins: { legend: { display: false } } },
+  }));
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+document.getElementById('rangeSelect').addEventListener('change', load);
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

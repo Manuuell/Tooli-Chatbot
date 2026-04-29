@@ -80,6 +80,10 @@ export interface CreateConversationOpts {
   customAttributes?: Record<string, string>;
   /** Etiquetas (labels) para clasificar */
   labels?: string[];
+  /** Prioridad: low | medium | high | urgent */
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  /** Nota privada inicial (solo visible para asesores, no para el usuario) */
+  privateNote?: string;
 }
 
 /**
@@ -107,7 +111,38 @@ export async function createConversation(opts: CreateConversationOpts): Promise<
     await cw().post(`/conversations/${conversationId}/labels`, { labels: opts.labels }).catch(() => {});
   }
 
+  // Setear priority si aplica
+  if (opts.priority) {
+    await cw()
+      .post(`/conversations/${conversationId}/toggle_priority`, { priority: opts.priority })
+      .catch(() => {});
+  }
+
+  // Agregar nota privada con el contexto del AI si aplica
+  if (opts.privateNote) {
+    await cw()
+      .post(`/conversations/${conversationId}/messages`, {
+        content: opts.privateNote,
+        message_type: 'outgoing',
+        private: true,
+      })
+      .catch(() => {});
+  }
+
   return conversationId;
+}
+
+/**
+ * Agrega una nota privada (solo visible para asesores) a una conversación existente.
+ */
+export async function addPrivateNote(conversationId: number, content: string): Promise<void> {
+  await cw()
+    .post(`/conversations/${conversationId}/messages`, {
+      content,
+      message_type: 'outgoing',
+      private: true,
+    })
+    .catch(() => {});
 }
 
 /**

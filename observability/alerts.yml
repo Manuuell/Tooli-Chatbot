@@ -1,0 +1,106 @@
+groups:
+  - name: tooli-availability
+    rules:
+      - alert: BotCaido
+        expr: up{job="tooli-bot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Backend de Tooli no responde"
+          description: "El job tooli-bot está down desde hace más de 2 minutos. Revisa `docker compose logs backend`."
+
+      - alert: PrometheusSinTargets
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Target {{ $labels.job }} fuera de servicio"
+          description: "Prometheus no logra hacer scraping a {{ $labels.instance }} ({{ $labels.job }})."
+
+  - name: tooli-ai
+    rules:
+      - alert: IATasaFallosAlta
+        expr: |
+          sum(rate(tooli_events_total{event="ai_failed"}[10m]))
+            /
+          clamp_min(sum(rate(tooli_events_total{event="ai_request"}[10m])), 0.01) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "Más del 20% de las preguntas a la IA están fallando"
+          description: "Tasa de fallo actual: {{ $value | humanizePercentage }}. Posibles causas: OpenAI caído, API key inválida, rate limit de OpenAI."
+
+      - alert: IALatenciaP95Alta
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(tooli_ai_latency_seconds_bucket[10m]))) > 15
+        for: 10m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "Latencia p95 de la IA es muy alta"
+          description: "p95 actual: {{ $value }}s. La experiencia del usuario está degradada."
+
+      - alert: IAEscaladaMasiva
+        expr: |
+          sum(rate(tooli_events_total{event="ai_escalated_to_agent"}[15m])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "Muchos usuarios están pidiendo asesor humano"
+          description: "Más de 30 escalaciones en 15 min. La IA puede estar dando respuestas inútiles."
+
+  - name: tooli-recibos
+    rules:
+      - alert: IcebergScraperFallando
+        expr: |
+          sum(rate(tooli_events_total{event="recibo_error"}[15m]))
+            /
+          clamp_min(sum(rate(tooli_events_total{event=~"recibo_descargado|recibo_error|recibo_login_failed"}[15m])), 0.01) > 0.5
+        for: 15m
+        labels:
+          severity: critical
+          service: iceberg
+        annotations:
+          summary: "El scraper de Iceberg está fallando masivamente"
+          description: "Más del 50% de los intentos terminan en error. Probablemente UTB cambió el portal o el captcha."
+
+      - alert: ReciboLatenciaAlta
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(tooli_recibo_descarga_seconds_bucket[15m]))) > 90
+        for: 15m
+        labels:
+          severity: warning
+          service: iceberg
+        annotations:
+          summary: "Descarga de recibos muy lenta"
+          description: "p95 actual: {{ $value }}s. Iceberg puede estar lento o el captcha requiere muchos reintentos."
+
+  - name: tooli-abuso
+    rules:
+      - alert: RateLimitExcesivo
+        expr: sum(rate(tooli_events_total{event="rate_limited"}[5m]) * 60) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Muchos usuarios están siendo rate-limited"
+          description: "{{ $value }} mensajes/min bloqueados. Posible spam o un bug en loop."
+
+      - alert: MemoriaBackendAlta
+        expr: process_resident_memory_bytes{job="tooli-bot"} > 500 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Backend usando mucha memoria"
+          description: "RAM actual: {{ $value | humanize1024 }}B. Puede haber leak."

@@ -47,6 +47,18 @@ export interface OutboundDocument {
   caption?: string;
 }
 
+export type MediaKind = 'image' | 'video' | 'audio' | 'document';
+
+export interface OutboundMediaUrl {
+  to: string;
+  /** URL pública desde donde Evolution descargará el archivo */
+  url: string;
+  kind: MediaKind;
+  fileName?: string;
+  mimetype?: string;
+  caption?: string;
+}
+
 export interface InboundMessage {
   from: string;
   messageId: string;
@@ -59,6 +71,8 @@ export interface IMessagingAdapter {
   sendButtons(msg: OutboundButtons): Promise<void>;
   sendList(msg: OutboundList): Promise<void>;
   sendDocument(msg: OutboundDocument): Promise<void>;
+  /** Envía un media descargándolo desde una URL pública (imágenes, audio, video, documentos). */
+  sendMediaFromUrl(msg: OutboundMediaUrl): Promise<void>;
   /** Resuelve un identificador de remitente (puede ser @lid) al número E.164 real. */
   resolveSenderId(jid: string): Promise<string>;
 }

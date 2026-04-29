@@ -59,7 +59,8 @@
       "Bash(curl -s -X POST \"http://localhost:8081/message/sendText/tooli\" -H \"apikey: tooli_api_key_local\" -H \"Content-Type: application/json\" -d '{\"number\":\"171867914690701@lid\",\"text\":\"test2\",\"options\":{\"checkExists\":false}}')",
       "Bash(curl -s -X POST \"http://localhost:8081/chat/findChats/tooli\" -H \"apikey: tooli_api_key_local\")",
       "PowerShell(docker compose exec evolution-api sh -c \"grep -rln 'whatsappNumber\\\\|isOnWhatsapp\\\\|onWhatsApp' /evolution/dist/api/integrations/channel/whatsapp/ 2>/dev/null | head -5\")",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "Bash(git remote *)"
     ]
   }
 }

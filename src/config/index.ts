@@ -19,6 +19,12 @@ const schema = z.object({
   CHATWOOT_INBOX_IDENTIFIER: z.string().optional(),
   CHATWOOT_TEAM_TI_ID: z.string().optional(),
   CHATWOOT_TEAM_ADMISIONES_ID: z.string().optional(),
+  CHATWOOT_PLATFORM_TOKEN: z.string().optional(),
+  JWT_SECRET: z.string().min(16).default('cambia-este-secreto-largo-para-jwt-tooli-2026'),
+  ADMIN_USER: z.string().default('admin'),
+  ADMIN_PASSWORD: z.string().default('admin'),
+  PUBLIC_CHATWOOT_URL: z.string().default('http://localhost:3001'),
+  PUBLIC_GRAFANA_URL: z.string().default('http://localhost:3002'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -57,5 +63,15 @@ export const config = {
     inboxIdentifier: env.CHATWOOT_INBOX_IDENTIFIER ?? '',
     teamTiId: env.CHATWOOT_TEAM_TI_ID ?? '',
     teamAdmisionesId: env.CHATWOOT_TEAM_ADMISIONES_ID ?? '',
+    platformToken: env.CHATWOOT_PLATFORM_TOKEN ?? '',
+  },
+  auth: {
+    jwtSecret: env.JWT_SECRET,
+    adminUser: env.ADMIN_USER,
+    adminPassword: env.ADMIN_PASSWORD,
+  },
+  publicUrls: {
+    chatwoot: env.PUBLIC_CHATWOOT_URL,
+    grafana: env.PUBLIC_GRAFANA_URL,
   },
 };

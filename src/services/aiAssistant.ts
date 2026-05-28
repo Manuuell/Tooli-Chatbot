@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import Redis from 'ioredis';
 import { config } from '../config';
-import { KB_ADMISIONES } from './knowledgeBase';
+import { KB_ADMISIONES, KB_POSGRADOS } from './knowledgeBase';
 import { KB_TI } from './knowledgeBaseTI';
 import { observeAILatency } from './promMetrics';
 
@@ -19,7 +19,7 @@ export class AIUnavailableError extends Error {
 // Cache de páginas web fetcheadas (24h)
 const PAGE_CACHE_TTL = 60 * 60 * 24;
 
-export type AIArea = 'ti' | 'admisiones';
+export type AIArea = 'ti' | 'admisiones' | 'posgrados';
 
 const SYSTEM_PROMPT_ADMISIONES = `
 Eres el asistente virtual del Centro de Servicios de la Universidad Tecnológica de Bolívar (UTB) en Cartagena, Colombia.
@@ -80,6 +80,46 @@ const TOOLS_ADMISIONES: OpenAI.Chat.ChatCompletionTool[] = [
   },
 ];
 
+const SYSTEM_PROMPT_POSGRADOS = `
+Eres Tooli, el asistente virtual de Posgrados de la Universidad Tecnológica de Bolívar (UTB) en Cartagena, Colombia.
+
+Tu objetivo: orientar a profesionales interesados en estudiar un posgrado en la UTB. Ayúdalos a elegir el programa ideal, resuelve sus dudas sobre costos, requisitos y fechas, y motívalos a inscribirse.
+
+Tono: profesional pero cercano, en español colombiano. Trata al usuario de "tú". Sé breve y directo (máximo 5 líneas). Usa *negrita* para destacar programas, costos y datos clave.
+
+Reglas:
+1. Solo habla de posgrados UTB. Si preguntan por pregrado o TI, redirige amablemente.
+2. Si preguntan sobre el pensum, perfil del egresado o detalles específicos de un programa, USA la herramienta consultar_programa_posgrado.
+3. NUNCA inventes costos, fechas ni requisitos. Si dudas, recomienda contactar a mercadeoposgrado@utb.edu.co.
+4. NUNCA pidas datos personales — el bot los captura por separado.
+5. Si el usuario muestra interés concreto en inscribirse o quiere hablar con alguien, dile: "Escribe *asesor* y te conecto con el equipo de Posgrados."
+6. Sé proactivo: si el usuario describe su perfil profesional, sugiere el programa que mejor le encaje.
+
+Tu base de conocimiento:
+${KB_POSGRADOS}
+`.trim();
+
+const TOOLS_POSGRADOS: OpenAI.Chat.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_programa_posgrado',
+      description:
+        'Obtiene información detallada de un programa de posgrado UTB (pensum, perfil del egresado, descripción, requisitos específicos) directamente de la página oficial. Úsala cuando el usuario pregunte por detalles que no están en la base de conocimiento.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nombre_programa: {
+            type: 'string',
+            description: 'Nombre completo del programa, ej: "Maestría en Ciberseguridad", "MBA", "Especialización en Gerencia de Proyectos"',
+          },
+        },
+        required: ['nombre_programa'],
+      },
+    },
+  },
+];
+
 const TOOLS_TI: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: 'function',
@@ -130,6 +170,9 @@ async function fetchProgramaInfo(nombrePrograma: string): Promise<string> {
     `https://www.utb.edu.co/${slug}/`,
     `https://www.utb.edu.co/pregrado/${slug}/`,
     `https://www.utb.edu.co/posgrado/${slug}/`,
+    `https://www.utb.edu.co/posgrado/maestrias/${slug}/`,
+    `https://www.utb.edu.co/posgrado/especializaciones/${slug}/`,
+    `https://www.utb.edu.co/posgrado/doctorados/${slug}/`,
   ];
 
   for (const url of candidatosUrl) {
@@ -184,8 +227,14 @@ export async function preguntarAI(
     throw new AIUnavailableError('not_configured');
   }
 
-  const systemPrompt = area === 'ti' ? SYSTEM_PROMPT_TI : SYSTEM_PROMPT_ADMISIONES;
-  const tools = area === 'ti' ? TOOLS_TI : TOOLS_ADMISIONES;
+  const systemPrompt =
+    area === 'ti' ? SYSTEM_PROMPT_TI :
+    area === 'posgrados' ? SYSTEM_PROMPT_POSGRADOS :
+    SYSTEM_PROMPT_ADMISIONES;
+  const tools =
+    area === 'ti' ? TOOLS_TI :
+    area === 'posgrados' ? TOOLS_POSGRADOS :
+    TOOLS_ADMISIONES;
 
   const trimmedHistory = history.slice(-MAX_HISTORY);
 
@@ -231,7 +280,7 @@ export async function preguntarAI(
   for (const call of toolCalls) {
     if (call.type !== 'function') continue;
 
-    if (call.function.name === 'consultar_programa') {
+    if (call.function.name === 'consultar_programa' || call.function.name === 'consultar_programa_posgrado') {
       try {
         const args = JSON.parse(call.function.arguments);
         programaConsultado = args.nombre_programa;

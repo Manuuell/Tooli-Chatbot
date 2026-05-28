@@ -6,3 +6,5 @@ dist/
 .claude/worktrees/
 tmp-iceberg/
 tmp/
+*.key
+*.pem

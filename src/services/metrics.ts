@@ -23,10 +23,18 @@ export type MetricEvent =
   | 'agent_handoff'
   | 'agent_outside_hours'
   | 'rate_limited'
-  | 'duplicate_message';
+  | 'duplicate_message'
+  // Posgrados
+  | 'prospecto_iniciado'
+  | 'prospecto_completado'
+  | 'programas_especializaciones'
+  | 'programas_maestrias'
+  | 'programas_doctorados'
+  | 'registro_iniciado'
+  | 'registro_completado';
 
 export interface MetricProps {
-  area?: 'ti' | 'admisiones';
+  area?: 'ti' | 'admisiones' | 'posgrados';
   plataforma?: string;
   nivel?: string;
   reason?: string;

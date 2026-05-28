@@ -104,6 +104,7 @@ services:
 
   chatwoot-init:
     image: chatwoot/chatwoot:v3.16.0
+    platform: linux/amd64
     restart: "no"
     env_file: .env.chatwoot
     entrypoint: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
@@ -115,6 +116,7 @@ services:
 
   chatwoot-app:
     image: chatwoot/chatwoot:v3.16.0
+    platform: linux/amd64
     restart: unless-stopped
     ports:
       - "3001:3000"
@@ -133,6 +135,7 @@ services:
 
   chatwoot-worker:
     image: chatwoot/chatwoot:v3.16.0
+    platform: linux/amd64
     restart: unless-stopped
     env_file: .env.chatwoot
     entrypoint: docker/entrypoints/rails.sh

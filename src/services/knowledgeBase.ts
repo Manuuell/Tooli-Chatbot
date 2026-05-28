@@ -175,3 +175,63 @@ Transformación Digital: Ciencia de Datos, Ingeniería de Sistemas y Computació
 - Calendario: https://www.utb.edu.co/la-utb/directivas/secretaria-general/registro-academico/calendario-academico/
 - Costos detallados: https://www.utb.edu.co/la-utb/derechos-pecuniarios/
 `.trim();
+
+/**
+ * Base de conocimiento enfocada en Posgrados UTB.
+ * Inyectada en el system prompt del AI assistant para el bot Tooli Posgrados.
+ */
+export const KB_POSGRADOS = `
+# UNIVERSIDAD TECNOLÓGICA DE BOLÍVAR (UTB) — Posgrados
+
+## ESPECIALIZACIONES (2 semestres)
+- Telecomunicaciones y Redes: $10.200.000/sem
+- Logística del Transporte: $9.800.000/sem
+- Gestión Ambiental Sostenible: $9.800.000/sem
+- Sistemas Energéticos Sostenibles: $11.200.000/sem
+- Automatización Industrial: $11.200.000/sem
+- Gerencia de Proyectos: $12.500.000/sem
+- Análisis y Diseño Estructural: $13.000.000/sem
+- Ingeniería de Software (virtual): $8.300.000/sem
+- Gerencia de Servicios de Salud (virtual): $7.950.000/sem
+- Educación Mediada por TIC (virtual): $6.950.000/sem
+
+## MAESTRÍAS (3-4 semestres)
+- Maestría en Gestión de la Innovación: $9.800.000/sem — 4 semestres
+- Maestría en Ingeniería: $10.950.000/sem — 4 semestres
+- Maestría en Gerencia de Proyectos: $13.400.000/sem — 4 semestres
+- MBA (Maestría en Administración de Empresas): $17.900.000/sem — 3 semestres
+- Maestría en Gerencia Tributaria: $10.950.000/sem — 3 semestres
+- Maestría en Ciberseguridad: $13.000.000/sem — 3 semestres
+- Maestría en Educación Mediada por TIC (virtual): $6.950.000/sem — 3 semestres
+
+## DOCTORADOS (8 semestres)
+- Doctorado en Ingeniería: 8 SMMLV/semestre
+- Doctorado en Desarrollo Regional y Local: $15.127.000/sem
+- Doctorado en Sostenibilidad: $12.281.000/sem
+
+## COSTOS DE INSCRIPCIÓN
+- Especialización: $247.000
+- Maestría: $284.000
+- Doctorado Sostenibilidad: $265.400
+
+## REQUISITOS GENERALES
+- Título profesional universitario
+- Hoja de vida actualizada
+- Carta de motivación
+- Dos cartas de referencia (maestrías y doctorados)
+- Entrevista con director del programa (según programa)
+- Para doctorados: título de maestría o pregrado con alto promedio
+
+## FINANCIACIÓN
+- Crédito ICETEX para posgrado
+- Planes de pago directos con la UTB
+- Descuentos para egresados UTB (consultar condiciones)
+
+## CONTACTO POSGRADOS UTB
+- Email: mercadeoposgrado@utb.edu.co
+- Teléfonos: 311 3405776 / 310 6508107 / 321 6085653
+- Web: https://www.utb.edu.co/posgrados/
+- Maestrías: https://www.utb.edu.co/posgrado/maestrias/
+- Especializaciones: https://www.utb.edu.co/posgrado/especializaciones/
+- Doctorados: https://www.utb.edu.co/posgrado/doctorados/
+`.trim();

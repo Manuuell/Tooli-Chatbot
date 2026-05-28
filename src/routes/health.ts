@@ -31,18 +31,23 @@ async function checkRedis(): Promise<CheckResult> {
   }
 }
 
-async function checkEvolution(): Promise<CheckResult> {
+async function checkMetaCloud(): Promise<CheckResult> {
+  if (!config.metaCloud.token || !config.metaCloud.phoneNumberId) {
+    return { status: 'skipped', detail: 'WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID no configurados' };
+  }
   try {
-    const { latencyMs } = await timed(() =>
-      axios.get(`${config.evolutionApi.baseUrl}/instance/connectionState/${config.evolutionApi.instance}`, {
-        headers: { apikey: config.evolutionApi.apiKey },
+    const { latencyMs, value } = await timed(() =>
+      axios.get(`https://graph.facebook.com/v20.0/${config.metaCloud.phoneNumberId}`, {
+        params: { fields: 'display_phone_number,verified_name,quality_rating', access_token: config.metaCloud.token },
         timeout: 5_000,
       })
     );
-    return { status: 'ok', latencyMs };
+    const phone = value.data?.display_phone_number ?? '';
+    const quality = value.data?.quality_rating ?? '';
+    return { status: 'ok', latencyMs, detail: `${phone} · calidad: ${quality}` };
   } catch (err: any) {
-    const msg = err?.response?.status ? `HTTP ${err.response.status}` : err?.code ?? err?.message;
-    return { status: 'down', detail: msg };
+    const detail = err?.response?.data?.error?.message ?? err?.code ?? err?.message;
+    return { status: 'down', detail };
   }
 }
 
@@ -97,9 +102,9 @@ healthRouter.get('/', async (_req, res) => {
 });
 
 healthRouter.get('/deep', async (_req, res) => {
-  const [redisR, evolutionR, openaiR, chatwootR, sheetsR] = await Promise.all([
+  const [redisR, metaR, openaiR, chatwootR, sheetsR] = await Promise.all([
     checkRedis(),
-    checkEvolution(),
+    checkMetaCloud(),
     checkOpenAI(),
     checkChatwoot(),
     checkGoogleSheets(),
@@ -107,7 +112,7 @@ healthRouter.get('/deep', async (_req, res) => {
 
   const checks = {
     redis: redisR,
-    evolution_api: evolutionR,
+    meta_whatsapp: metaR,
     openai: openaiR,
     chatwoot: chatwootR,
     google_sheets: sheetsR,

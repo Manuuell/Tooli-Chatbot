@@ -64,6 +64,7 @@ export interface InboundMessage {
   messageId: string;
   text: string;  // para botones/lista: llega el id de la opción seleccionada
   timestamp: number;
+  phoneNumberId: string; // ID del número que recibió el mensaje (routing multi-bot)
 }
 
 export interface IMessagingAdapter {

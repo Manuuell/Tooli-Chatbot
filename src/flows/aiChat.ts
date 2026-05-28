@@ -33,10 +33,11 @@ export async function handleChattingWithAI(ctx: FlowContext): Promise<void> {
 
   const history: ChatTurn[] = JSON.parse(session?.data.aiHistory ?? '[]');
   const turnCount = parseInt(session?.data.aiTurnCount ?? '0');
-  const area = (session?.data.area === 'ti' ? 'ti' : 'admisiones') as 'ti' | 'admisiones';
-  const tituloAsistente = area === 'ti' ? '🤖 *Asistente TI*' : '🤖 *Asistente UTB*';
+  const areaRaw = session?.data.area ?? 'posgrados';
+  const area = (['ti', 'admisiones', 'posgrados'].includes(areaRaw) ? areaRaw : 'posgrados') as 'ti' | 'admisiones' | 'posgrados';
+  const tituloAsistente = area === 'ti' ? '🤖 *Asistente TI*' : '🤖 *Asistente Posgrados UTB*';
 
-  await track('ai_request', { area });
+  await track('ai_request', { area: area as 'ti' | 'admisiones' | 'posgrados' });
 
   try {
     const ai = await preguntarAI(area, text.trim(), history);

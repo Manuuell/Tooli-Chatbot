@@ -1,0 +1,100 @@
+import { z } from 'zod';
+import { InboundMessage } from '../adapters/messaging/IMessagingAdapter';
+
+// ── Esquemas Zod ──────────────────────────────────────────────────────────────
+
+const MetaTextMessageSchema = z.object({
+  type: z.literal('text'),
+  text: z.object({ body: z.string() }),
+});
+
+const MetaInteractiveSchema = z.object({
+  type: z.literal('interactive'),
+  interactive: z.union([
+    z.object({
+      type: z.literal('button_reply'),
+      button_reply: z.object({ id: z.string(), title: z.string() }),
+    }),
+    z.object({
+      type: z.literal('list_reply'),
+      list_reply: z.object({ id: z.string(), title: z.string() }),
+    }),
+  ]),
+});
+
+const MetaMessageSchema = z.union([MetaTextMessageSchema, MetaInteractiveSchema]).and(
+  z.object({
+    from: z.string(),
+    id: z.string(),
+    timestamp: z.string(),
+  })
+);
+
+const MetaWebhookSchema = z.object({
+  object: z.literal('whatsapp_business_account'),
+  entry: z.array(
+    z.object({
+      id: z.string(),
+      changes: z.array(
+        z.object({
+          value: z.object({
+            messaging_product: z.literal('whatsapp'),
+            metadata: z.object({
+              display_phone_number: z.string(),
+              phone_number_id: z.string(),
+            }),
+            messages: z.array(MetaMessageSchema).optional(),
+            statuses: z.array(z.unknown()).optional(),
+          }),
+          field: z.string(),
+        })
+      ),
+    })
+  ),
+});
+
+export type MetaWebhookPayload = z.infer<typeof MetaWebhookSchema>;
+
+// ── Parser ────────────────────────────────────────────────────────────────────
+
+/**
+ * Parsea el body de un webhook de Meta WhatsApp Cloud API.
+ * Devuelve el primer mensaje de texto/interactivo encontrado, o null si no aplica.
+ */
+export function parseMetaCloudWebhook(body: unknown): InboundMessage | null {
+  const result = MetaWebhookSchema.safeParse(body);
+  if (!result.success) return null;
+
+  for (const entry of result.data.entry) {
+    for (const change of entry.changes) {
+      if (change.field !== 'messages') continue;
+      const messages = change.value.messages ?? [];
+
+      for (const msg of messages) {
+        let text: string | undefined;
+
+        if (msg.type === 'text') {
+          text = msg.text.body;
+        } else if (msg.type === 'interactive') {
+          if (msg.interactive.type === 'button_reply') {
+            text = msg.interactive.button_reply.id;
+          } else if (msg.interactive.type === 'list_reply') {
+            text = msg.interactive.list_reply.id;
+          }
+        }
+
+        if (!text) continue; // audio, imagen, sticker — ignorar
+
+        return {
+          from: msg.from,           // número E.164 sin + (ej: 573001234567)
+          messageId: msg.id,        // wamid.xxx
+          text,
+          timestamp: parseInt(msg.timestamp, 10),
+          phoneNumberId: change.value.metadata.phone_number_id,
+        };
+      }
+    }
+  }
+
+  return null;
+}

@@ -200,24 +200,32 @@ function render({ days, series }) {
     + sumAcross(series, 'recibo_descargado')
     + sumAcross(series, 'ai_request');
 
-  const aiRequests = sumAcross(series, 'ai_request');
-  const aiResolved = sumAcross(series, 'ai_resolved');
-  const aiFailed = sumAcross(series, 'ai_failed');
-  const aiEscalated = sumAcross(series, 'ai_escalated_to_agent');
-  const handoffs = sumAcross(series, 'agent_handoff');
-  const rateLimited = sumAcross(series, 'rate_limited');
-  const turnos = sumAcross(series, 'turno_consultado');
-  const turnosNo = sumAcross(series, 'turno_no_encontrado');
-  const recibos = sumAcross(series, 'recibo_descargado');
-  const recibosFail = sumAcross(series, 'recibo_login_failed') + sumAcross(series, 'recibo_error');
+  const aiRequests   = sumAcross(series, 'ai_request');
+  const aiResolved   = sumAcross(series, 'ai_resolved');
+  const aiFailed     = sumAcross(series, 'ai_failed');
+  const aiEscalated  = sumAcross(series, 'ai_escalated_to_agent');
+  const handoffs     = sumAcross(series, 'agent_handoff');
+  const rateLimited  = sumAcross(series, 'rate_limited');
+  const turnos       = sumAcross(series, 'turno_consultado');
+  const turnosNo     = sumAcross(series, 'turno_no_encontrado');
+  const recibos      = sumAcross(series, 'recibo_descargado');
+  const recibosFail  = sumAcross(series, 'recibo_login_failed') + sumAcross(series, 'recibo_error');
   const outsideHours = sumAcross(series, 'agent_outside_hours');
 
-  const aiResolveRate = aiRequests > 0 ? Math.round((aiResolved / aiRequests) * 100) : 0;
-  const turnoSuccessRate = (turnos + turnosNo) > 0 ? Math.round((turnos / (turnos + turnosNo)) * 100) : 0;
+  // ── Posgrados ────────────────────────────────────────────────────
+  const prospectos       = sumAcross(series, 'prospecto_completado');
+  const prospectoInicio  = sumAcross(series, 'prospecto_iniciado');
+  const registros        = sumAcross(series, 'registro_completado');
+  const registroInicio   = sumAcross(series, 'registro_iniciado');
+  const especs           = sumAcross(series, 'programas_especializaciones');
+  const maestrias        = sumAcross(series, 'programas_maestrias');
+  const doctorados       = sumAcross(series, 'programas_doctorados');
 
-  const platformByEvent = pickByPrefix(series, 'ai_request:plataforma:');
-  const areaAI = pickByPrefix(series, 'ai_request:area:');
-  const handoffReasons = pickByPrefix(series, 'agent_handoff:area:');
+  const aiResolveRate    = aiRequests > 0 ? Math.round((aiResolved / aiRequests) * 100) : 0;
+  const prospectoConv    = prospectoInicio > 0 ? Math.round((prospectos / prospectoInicio) * 100) : 0;
+
+  const platformByEvent  = pickByPrefix(series, 'ai_request:plataforma:');
+  const areaAI           = pickByPrefix(series, 'ai_request:area:');
 
   dashboard.innerHTML = `
     <div class="card kpi">
@@ -229,6 +237,16 @@ function render({ days, series }) {
       <div class="label">Preguntas a IA</div>
       <div class="value">${aiRequests}</div>
       <div class="sub">${aiResolveRate}% resueltas (${aiResolved}/${aiRequests})</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Prospectos</div>
+      <div class="value">${prospectos}</div>
+      <div class="sub">${prospectoConv}% conversión (${prospectos}/${prospectoInicio} iniciados)</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Registros BD</div>
+      <div class="value">${registros}</div>
+      <div class="sub">${registroInicio} iniciados · ${registros} completados</div>
     </div>
     <div class="card kpi">
       <div class="label">Casos a asesor</div>
@@ -247,12 +265,22 @@ function render({ days, series }) {
     </div>
 
     <div class="card chart-card">
+      <h3>🎓 Posgrados — programas consultados</h3>
+      <canvas id="chartProgramas"></canvas>
+    </div>
+
+    <div class="card chart-card">
+      <h3>🎓 Posgrados — embudo prospectos</h3>
+      <canvas id="chartPosgradoFunnel"></canvas>
+    </div>
+
+    <div class="card chart-card">
       <h3>Distribución por área (IA)</h3>
       <canvas id="chartArea"></canvas>
     </div>
 
     <div class="card chart-card">
-      <h3>Plataformas TI consultadas</h3>
+      <h3>Consultas por plataforma</h3>
       <canvas id="chartPlatforms"></canvas>
     </div>
 
@@ -284,13 +312,38 @@ function render({ days, series }) {
     data: {
       labels: days.map(fmtDay),
       datasets: [
-        { label: 'Menú mostrado', data: dailyTotals(series, days, 'menu_shown'), borderColor: COLORS.blue, backgroundColor: COLORS.blue + '33', tension: 0.3 },
-        { label: 'Preguntas IA', data: dailyTotals(series, days, 'ai_request'), borderColor: COLORS.purple, backgroundColor: COLORS.purple + '33', tension: 0.3 },
-        { label: 'Handoffs', data: dailyTotals(series, days, 'agent_handoff'), borderColor: COLORS.orange, backgroundColor: COLORS.orange + '33', tension: 0.3 },
-        { label: 'Recibos', data: dailyTotals(series, days, 'recibo_descargado'), borderColor: COLORS.green, backgroundColor: COLORS.green + '33', tension: 0.3 },
+        { label: 'Menú mostrado',    data: dailyTotals(series, days, 'menu_shown'),           borderColor: COLORS.blue,   backgroundColor: COLORS.blue   + '33', tension: 0.3 },
+        { label: 'Preguntas IA',     data: dailyTotals(series, days, 'ai_request'),            borderColor: COLORS.purple, backgroundColor: COLORS.purple + '33', tension: 0.3 },
+        { label: 'Prospectos',       data: dailyTotals(series, days, 'prospecto_completado'),  borderColor: COLORS.green,  backgroundColor: COLORS.green  + '33', tension: 0.3 },
+        { label: 'Registros BD',     data: dailyTotals(series, days, 'registro_completado'),   borderColor: COLORS.cyan,   backgroundColor: COLORS.cyan   + '33', tension: 0.3 },
+        { label: 'Handoffs asesor',  data: dailyTotals(series, days, 'agent_handoff'),         borderColor: COLORS.orange, backgroundColor: COLORS.orange + '33', tension: 0.3 },
       ],
     },
     options: baseOpts,
+  }));
+
+  charts.push(new Chart(document.getElementById('chartProgramas'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Especializaciones', 'Maestrías', 'Doctorados'],
+      datasets: [{
+        data: [especs, maestrias, doctorados],
+        backgroundColor: [COLORS.blue, COLORS.purple, COLORS.pink],
+      }],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0' } } } },
+  }));
+
+  charts.push(new Chart(document.getElementById('chartPosgradoFunnel'), {
+    type: 'bar',
+    data: {
+      labels: ['Prosp. iniciados', 'Prosp. completados', 'Reg. iniciados', 'Reg. completados'],
+      datasets: [{
+        data: [prospectoInicio, prospectos, registroInicio, registros],
+        backgroundColor: [COLORS.blue, COLORS.green, COLORS.yellow, COLORS.cyan],
+      }],
+    },
+    options: { ...baseOpts, plugins: { legend: { display: false } } },
   }));
 
   charts.push(new Chart(document.getElementById('chartArea'), {

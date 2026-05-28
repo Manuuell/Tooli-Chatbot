@@ -82,5 +82,6 @@ export function parseEvolutionWebhook(body: unknown): InboundMessage | null {
     messageId: data.key.id,
     text,
     timestamp: data.messageTimestamp,
+    phoneNumberId: '',  // Evolution API no usa phone_number_id
   };
 }

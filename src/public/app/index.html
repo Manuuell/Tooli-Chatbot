@@ -22,6 +22,8 @@
       <a data-route="recibo"><span class="icon">🧾</span>Descargar recibo</a>
       <a data-route="metricas"><span class="icon">📊</span>Métricas</a>
       <a data-route="botusers"><span class="icon">📱</span>Usuarios del bot</a>
+      <a data-route="posgrados"><span class="icon">🎓</span>Posgrados</a>
+      <a data-route="registros"><span class="icon">📝</span>Registros BD</a>
       <a data-route="health"><span class="icon">❤️</span>Estado del sistema</a>
       <a data-route="usuarios" id="navUsuarios" class="hidden"><span class="icon">👥</span>Asesores</a>
     </nav>
@@ -84,6 +86,8 @@ function navigate(route) {
   if (route === 'recibo') return renderRecibo(main);
   if (route === 'metricas') return renderMetricas(main);
   if (route === 'botusers') return renderBotUsers(main);
+  if (route === 'posgrados') return renderPosgrados(main);
+  if (route === 'registros') return renderRegistros(main);
   if (route === 'health') return renderHealth(main);
   if (route === 'usuarios') return renderUsuarios(main);
   main.innerHTML = '<div class="card">Página no encontrada</div>';
@@ -106,6 +110,7 @@ async function renderHome(main) {
         <div class="hero-info">
           <h2>Abrir Chatwoot ${capabilities.chatwootSso ? '<span style="font-size: 11px; background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">SSO</span>' : ''}</h2>
           <p>Atiende conversaciones activas, responde a estudiantes y gestiona casos escalados desde el bot.</p>
+          <p style="margin-top:6px;font-size:12px;opacity:0.8;">🎓 <a href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;" onclick="event.stopPropagation()">Ver prospectos posgrado →</a></p>
         </div>
       </button>
       <a class="hero-tile grafana" href="${publicUrls.grafana}" target="_blank" rel="noopener">
@@ -121,8 +126,10 @@ async function renderHome(main) {
     <div class="stats-grid" id="stats">
       <div class="stat-card"><div class="label">Mensajes hoy</div><div class="value" data-stat="msgs">…</div></div>
       <div class="stat-card"><div class="label">Preguntas IA</div><div class="value" data-stat="ai">…</div></div>
-      <div class="stat-card"><div class="label">Recibos descargados</div><div class="value" data-stat="recibos">…</div></div>
+      <div class="stat-card"><div class="label">Prospectos</div><div class="value" data-stat="prospectos">…</div></div>
+      <div class="stat-card"><div class="label">Registros BD</div><div class="value" data-stat="registros">…</div></div>
       <div class="stat-card"><div class="label">Casos a asesor</div><div class="value" data-stat="handoffs">…</div></div>
+      <div class="stat-card"><div class="label">Recibos / Turnos</div><div class="value" data-stat="recibos">…</div></div>
     </div>
 
     <div class="section-title">Herramientas del bot</div>
@@ -141,6 +148,16 @@ async function renderHome(main) {
         <div class="tool-icon">📊</div>
         <h3>Métricas (resumen)</h3>
         <p>Tabla de eventos de los últimos 7 días.</p>
+      </button>
+      <button class="tool-card" data-go="posgrados">
+        <div class="tool-icon">🎓</div>
+        <h3>Posgrados</h3>
+        <p>Gráficas de prospectos, registros y programas.</p>
+      </button>
+      <button class="tool-card" data-go="registros">
+        <div class="tool-icon accent">📝</div>
+        <h3>Registros BD</h3>
+        <p>Tabla completa de prospectos en Google Sheets.</p>
       </button>
     </div>
   `;
@@ -169,8 +186,10 @@ async function renderHome(main) {
     const totalMsgs = num('menu_shown') + num('ai_request') + num('turno_consultado') + num('recibo_descargado');
     document.querySelector('[data-stat="msgs"]').textContent = totalMsgs;
     document.querySelector('[data-stat="ai"]').textContent = num('ai_request');
-    document.querySelector('[data-stat="recibos"]').textContent = num('recibo_descargado');
+    document.querySelector('[data-stat="prospectos"]').textContent = num('prospecto_completado');
+    document.querySelector('[data-stat="registros"]').textContent = num('registro_completado');
     document.querySelector('[data-stat="handoffs"]').textContent = num('agent_handoff');
+    document.querySelector('[data-stat="recibos"]').textContent = num('recibo_descargado') + num('turno_consultado');
   } catch {}
 }
 
@@ -595,6 +614,230 @@ async function renderHealth(main) {
   };
   $('#refreshHealth').addEventListener('click', load);
   load();
+}
+
+/* ============= POSGRADOS ============= */
+let pgCharts = [];
+
+function destroyPgCharts() {
+  pgCharts.forEach(c => c.destroy());
+  pgCharts = [];
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function renderPosgrados(main) {
+  destroyPgCharts();
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>🎓 Posgrados</h1><div class="subtitle">Métricas de prospectos, registros y programas consultados</div></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a class="btn btn-secondary" href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener">💬 Ver prospectos</a>
+        <select id="pgRange" style="background:var(--bg-subtle,#f1f5f9);color:var(--text-base,#1e293b);border:1px solid var(--border,#e2e8f0);padding:8px 12px;border-radius:6px;font-size:14px;cursor:pointer;">
+          <option value="7" selected>7 días</option>
+          <option value="14">14 días</option>
+          <option value="30">30 días</option>
+        </select>
+      </div>
+    </div>
+    <div id="pgContent"><div class="card"><span class="spinner"></span> Cargando…</div></div>
+  `;
+
+  async function loadPg() {
+    destroyPgCharts();
+    const days = $('#pgRange').value;
+    $('#pgContent').innerHTML = '<div class="card"><span class="spinner"></span> Cargando…</div>';
+    try {
+      const r = await api(`/api/tools/metrics/range?days=${days}`);
+      const { days: series } = await r.json();
+      const dateKeys = Object.keys(series).sort();
+
+      const numv = (obj, k) => parseInt(obj?.[k] ?? '0') || 0;
+      const sumAll = (ev) => dateKeys.reduce((a, d) => a + numv(series[d], ev), 0);
+      const daily  = (ev) => dateKeys.map(d => numv(series[d], ev));
+      const fmtDay = d => d.slice(5);
+
+      const prospectos  = sumAll('prospecto_completado');
+      const prospInicio = sumAll('prospecto_iniciado');
+      const registros   = sumAll('registro_completado');
+      const regInicio   = sumAll('registro_iniciado');
+      const especs      = sumAll('programas_especializaciones');
+      const maestrias   = sumAll('programas_maestrias');
+      const doctorados  = sumAll('programas_doctorados');
+      const conv = prospInicio > 0 ? Math.round(prospectos / prospInicio * 100) : 0;
+      const regConv = regInicio > 0 ? Math.round(registros / regInicio * 100) : 0;
+
+      $('#pgContent').innerHTML = `
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="label">Prospectos</div>
+            <div class="value">${prospectos}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${conv}% conversión · ${prospInicio} iniciados</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Registros BD</div>
+            <div class="value">${registros}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${regConv}% conversión · ${regInicio} iniciados</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Especializaciones</div>
+            <div class="value">${especs}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Maestrías</div>
+            <div class="value">${maestrias}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Doctorados</div>
+            <div class="value">${doctorados}</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Actividad diaria — posgrados</h3>
+          <div style="position:relative;height:240px;"><canvas id="pgChartDaily"></canvas></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="card">
+            <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Programas consultados</h3>
+            <div style="position:relative;height:200px;"><canvas id="pgChartProgramas"></canvas></div>
+          </div>
+          <div class="card">
+            <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Embudo prospectos</h3>
+            <div style="position:relative;height:200px;"><canvas id="pgChartFunnel"></canvas></div>
+          </div>
+        </div>
+      `;
+
+      await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js');
+
+      const ticks = { color: '#94a3b8' };
+      const grid  = { color: '#e2e8f0' };
+      const base  = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#64748b' } } },
+        scales: { x: { ticks, grid }, y: { ticks, grid, beginAtZero: true } },
+      };
+
+      pgCharts.push(new Chart(document.getElementById('pgChartDaily'), {
+        type: 'line',
+        data: {
+          labels: dateKeys.map(fmtDay),
+          datasets: [
+            { label: 'Prosp. iniciados',  data: daily('prospecto_iniciado'),   borderColor: '#38bdf8', backgroundColor: '#38bdf833', tension: 0.3, fill: true },
+            { label: 'Prosp. completados',data: daily('prospecto_completado'), borderColor: '#22c55e', backgroundColor: '#22c55e33', tension: 0.3, fill: true },
+            { label: 'Registros BD',      data: daily('registro_completado'),  borderColor: '#a855f7', backgroundColor: '#a855f733', tension: 0.3, fill: true },
+          ],
+        },
+        options: base,
+      }));
+
+      pgCharts.push(new Chart(document.getElementById('pgChartProgramas'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Especializaciones', 'Maestrías', 'Doctorados'],
+          datasets: [{ data: [especs, maestrias, doctorados], backgroundColor: ['#38bdf8', '#a855f7', '#ec4899'] }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#64748b' } } } },
+      }));
+
+      pgCharts.push(new Chart(document.getElementById('pgChartFunnel'), {
+        type: 'bar',
+        data: {
+          labels: ['Prosp. iniciados', 'Prosp. completados', 'Reg. iniciados', 'Reg. completados'],
+          datasets: [{
+            data: [prospInicio, prospectos, regInicio, registros],
+            backgroundColor: ['#38bdf8', '#22c55e', '#eab308', '#a855f7'],
+          }],
+        },
+        options: { ...base, plugins: { legend: { display: false } } },
+      }));
+
+    } catch (err) {
+      console.error(err);
+      $('#pgContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar las métricas de posgrados.</div>';
+    }
+  }
+
+  $('#pgRange').addEventListener('change', loadPg);
+  loadPg();
+}
+
+/* ============= REGISTROS BD ============= */
+async function renderRegistros(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>📝 Registros BD — Posgrados</h1><div class="subtitle">Prospectos que completaron el formulario de registro vía WhatsApp</div></div>
+      <button class="btn btn-secondary" id="refreshReg">🔄 Actualizar</button>
+    </div>
+    <div id="regContent"><div class="card"><span class="spinner"></span> Cargando…</div></div>
+  `;
+
+  async function loadReg() {
+    $('#regContent').innerHTML = '<div class="card"><span class="spinner"></span> Cargando…</div>';
+    try {
+      const r = await api('/api/tools/registros-posgrado');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const { rows } = await r.json();
+      if (!rows || !rows.length) {
+        $('#regContent').innerHTML = `
+          <div class="card">
+            <p style="color:var(--text-muted);text-align:center;padding:24px 0;">
+              No hay registros aún. Cuando un prospecto complete el formulario del bot, aparecerá aquí.
+            </p>
+          </div>`;
+        return;
+      }
+      $('#regContent').innerHTML = `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0;">${rows.length} prospecto${rows.length !== 1 ? 's' : ''} registrado${rows.length !== 1 ? 's' : ''}</p>
+            <a class="btn btn-secondary" href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener" style="font-size:13px;">💬 Ver en Chatwoot</a>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Nombre</th>
+                  <th>Email</th>
+                  <th>WhatsApp</th>
+                  <th>Programa</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(row => `
+                  <tr>
+                    <td style="white-space:nowrap;font-size:12px;color:var(--text-muted);">${escapeHtml(row[0] ?? '')}</td>
+                    <td style="font-weight:500;">${escapeHtml(row[1] ?? '—')}</td>
+                    <td><a href="mailto:${escapeHtml(row[2] ?? '')}" style="color:var(--utb-blue);">${escapeHtml(row[2] ?? '—')}</a></td>
+                    <td style="font-size:13px;">${escapeHtml(row[3] ?? '—')}</td>
+                    <td>
+                      ${row[4] ? `<span class="badge asesor" style="font-size:11px;background:rgba(56,189,248,.15);color:#0284c7;border:1px solid rgba(56,189,248,.3);">${escapeHtml(row[4])}</span>` : '<span style="color:var(--text-muted);font-size:12px;">—</span>'}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } catch (err) {
+      console.error(err);
+      $('#regContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar los registros. Verifica que el Sheet esté configurado.</div>';
+    }
+  }
+
+  $('#refreshReg').addEventListener('click', loadReg);
+  loadReg();
 }
 
 init();

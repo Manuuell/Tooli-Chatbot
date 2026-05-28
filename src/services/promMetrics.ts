@@ -38,7 +38,7 @@ export function recordEvent(event: MetricEvent, props: MetricProps = {}): void {
   });
 }
 
-export function observeAILatency(area: 'ti' | 'admisiones', outcome: 'success' | 'error', seconds: number): void {
+export function observeAILatency(area: 'ti' | 'admisiones' | 'posgrados', outcome: 'success' | 'error', seconds: number): void {
   aiLatency.observe({ area, outcome }, seconds);
 }
 

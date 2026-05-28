@@ -1,11 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { EvolutionAPIAdapter } from '../adapters/messaging/EvolutionAPIAdapter';
 import { MediaKind } from '../adapters/messaging/IMessagingAdapter';
 import { getSession, setSession } from '../services/session';
+import { messaging } from '../flows/shared';
 
 export const chatwootWebhookRouter = Router();
-
-const messaging = new EvolutionAPIAdapter();
 
 interface ChatwootAttachment {
   file_type?: string;

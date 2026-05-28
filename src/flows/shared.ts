@@ -1,7 +1,13 @@
 import { EvolutionAPIAdapter } from '../adapters/messaging/EvolutionAPIAdapter';
+import { MetaCloudAdapter } from '../adapters/messaging/MetaCloudAdapter';
+import { IMessagingAdapter } from '../adapters/messaging/IMessagingAdapter';
+import { config } from '../config';
 import { Session } from '../services/session';
 
-export const messaging = new EvolutionAPIAdapter();
+export const messaging: IMessagingAdapter =
+  config.messagingAdapter === 'meta'
+    ? new MetaCloudAdapter()
+    : new EvolutionAPIAdapter();
 
 export const CODIGO_REGEX = /^T\d{8}$/i;
 export const CEDULA_REGEX = /^\d{6,12}$/;
@@ -58,29 +64,37 @@ export async function sendAiHint(to: string): Promise<void> {
 }
 
 export async function sendAreaPrompt(to: string): Promise<void> {
-  await messaging.sendText({
+  await messaging.sendButtons({
     to,
-    text:
-      '🧑‍💼 *Hablar con un asesor*\n\n¿En qué área necesitas ayuda?\n\n' +
-      '*1.* 🖥️ Soporte TI / Plataformas\n' +
-      '*2.* 📝 Soporte Admisiones\n\n' +
-      'Escribe *menu* para volver al inicio.',
+    title: '🧑‍💼 Hablar con un asesor',
+    description: '¿En qué área necesitas ayuda?',
+    footer: 'Escribe menu para volver al inicio',
+    buttons: [
+      { id: '1', displayText: '🖥️ Soporte TI' },
+      { id: '2', displayText: '📝 Admisiones' },
+    ],
   });
 }
 
 export async function sendMenu(to: string): Promise<void> {
-  await messaging.sendText({
+  await messaging.sendList({
     to,
-    text:
-      '*Centro de Servicios UTB* 🎓\n' +
-      '_Universidad Tecnológica de Bolívar_\n\n' +
-      'Hola 👋 Soy el asistente virtual del Centro de Servicios.\n\n' +
-      'Responde con el *número* de la opción que necesitas:\n\n' +
-      '*1.* 📋 Turno de matrícula\n' +
-      '     _Consulta tu turno y fecha asignada_\n\n' +
-      '*2.* 🧾 Recibo de matrícula\n' +
-      '     _Descarga el PDF de tu recibo_\n\n' +
-      '*3.* 🧑‍💼 Hablar con un agente\n' +
-      '     _Lunes a viernes 8am–8pm_',
+    title: '🎓 Tooli Posgrados UTB',
+    description: 'Hola 👋 Soy el asistente virtual de Posgrados UTB.\n\n¿En qué te puedo ayudar hoy?',
+    footer: 'Universidad Tecnológica de Bolívar',
+    buttonText: 'Ver opciones',
+    sections: [
+      {
+        title: 'Menú principal',
+        rows: [
+          { id: '1', title: '🎓 Ver programas',       description: 'Especializaciones, maestrías y doctorados' },
+          { id: '2', title: '🤖 Asistente IA',         description: 'Costos, requisitos, diferencias de programas' },
+          { id: '3', title: '📬 Registrarme',           description: 'Recibe novedades de posgrados por WhatsApp' },
+          { id: '4', title: '📋 Turno matrícula',       description: 'Consulta tu turno y fecha asignada' },
+          { id: '5', title: '🧾 Recibo matrícula',      description: 'Descarga el PDF de tu recibo de pago' },
+          { id: '6', title: '👤 Hablar con asesor',     description: 'Conecta con el equipo de admisiones' },
+        ],
+      },
+    ],
   });
 }

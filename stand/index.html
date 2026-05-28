@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tooli Posgrado — UTB</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --utb-navy:   #002060;
+    --utb-blue:   #003DA5;
+    --utb-light:  #1a6bbf;
+    --accent:     #00BFFF;
+    --accent2:    #38bdf8;
+    --green:      #22c55e;
+    --white:      #ffffff;
+    --glass:      rgba(255,255,255,0.07);
+    --glass-border: rgba(255,255,255,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--utb-navy);
+    color: var(--white);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    cursor: none;
+  }
+
+  /* ── FONDO ANIMADO ───────────────────────────────── */
+  .bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: linear-gradient(135deg, #001440 0%, #002060 40%, #003DA5 70%, #001440 100%);
+    background-size: 400% 400%;
+    animation: bgShift 12s ease infinite;
+  }
+  @keyframes bgShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Orbes decorativos */
+  .orb {
+    position: fixed; border-radius: 50%;
+    filter: blur(80px); opacity: 0.25; z-index: 0;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  .orb1 { width: 500px; height: 500px; background: #003DA5; top: -150px; right: -100px; animation-delay: 0s; }
+  .orb2 { width: 350px; height: 350px; background: #00BFFF; bottom: -100px; left: -80px; animation-delay: -3s; }
+  .orb3 { width: 250px; height: 250px; background: #22c55e; bottom: 100px; right: 200px; animation-delay: -5s; }
+  @keyframes orbFloat {
+    0%,100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-30px) scale(1.05); }
+  }
+
+  /* ── SLIDES ──────────────────────────────────────── */
+  .slide {
+    position: absolute; inset: 0; z-index: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 48px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  /* ── HEADER LOGOS (compartido) ───────────────────── */
+  .header-logos {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 48px;
+    background: rgba(0,32,96,0.6);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .header-logos img { height: 40px; }
+  .etd-logo { height: 44px; }
+  .tooli-logo-header { height: 48px; border-radius: 10px; }
+
+  /* ── BARRA DE PROGRESO ───────────────────────────── */
+  .progress-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    height: 4px; background: rgba(255,255,255,0.1);
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--green));
+    width: 0%; transition: width linear;
+  }
+
+  /* Indicadores de slide */
+  .dots {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 11;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    transition: all 0.3s ease;
+  }
+  .dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
+
+  /* ─────────────────────────────────────────────────── */
+  /* SLIDE 1 — PORTADA                                  */
+  /* ─────────────────────────────────────────────────── */
+  .s1-title {
+    font-size: 90px; font-weight: 800; line-height: 1;
+    background: linear-gradient(135deg, #fff 30%, var(--accent2) 70%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: -3px;
+    animation: fadeUp 0.8s ease both;
+  }
+  .s1-sub {
+    font-size: 26px; font-weight: 400; color: rgba(255,255,255,0.75);
+    margin-top: 16px; letter-spacing: 0.5px;
+    animation: fadeUp 0.8s 0.2s ease both;
+  }
+  .s1-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 32px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 32px; padding: 10px 24px;
+    font-size: 15px; font-weight: 500; color: var(--accent);
+    animation: fadeUp 0.8s 0.4s ease both;
+  }
+  .s1-features {
+    display: flex; gap: 16px; margin-top: 48px; flex-wrap: wrap; justify-content: center;
+    animation: fadeUp 0.8s 0.5s ease both;
+  }
+  .s1-chip {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 12px 20px;
+    font-size: 14px; font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ─────────────────────────────────────────────────── */
+  /* SLIDE 2 — QR                                       */
+  /* ─────────────────────────────────────────────────── */
+  .s2-layout {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 64px; align-items: center; width: 100%; max-width: 1100px;
+  }
+  .s2-left { text-align: left; }
+  .s2-title {
+    font-size: 56px; font-weight: 800; line-height: 1.1;
+    animation: fadeLeft 0.8s ease both;
+  }
+  .s2-title span { color: var(--accent2); }
+  .s2-desc {
+    font-size: 20px; color: rgba(255,255,255,0.7); margin-top: 20px; line-height: 1.6;
+    animation: fadeLeft 0.8s 0.2s ease both;
+  }
+  .s2-steps { margin-top: 32px; display: flex; flex-direction: column; gap: 16px; animation: fadeLeft 0.8s 0.3s ease both; }
+  .s2-step {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 14px 20px;
+    font-size: 16px; font-weight: 500;
+  }
+  .s2-step-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--utb-blue); border: 2px solid var(--accent2);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .s2-right { display: flex; flex-direction: column; align-items: center; gap: 20px; animation: fadeRight 0.8s 0.2s ease both; }
+  .qr-frame {
+    background: white; border-radius: 20px; padding: 20px;
+    box-shadow: 0 0 60px rgba(0,191,255,0.3), 0 0 120px rgba(0,191,255,0.1);
+    animation: qrPulse 3s ease-in-out infinite;
+  }
+  .qr-frame img { width: 260px; height: 260px; display: block; }
+  @keyframes qrPulse {
+    0%,100% { box-shadow: 0 0 40px rgba(0,191,255,0.3), 0 0 80px rgba(0,191,255,0.1); }
+    50%      { box-shadow: 0 0 80px rgba(0,191,255,0.5), 0 0 160px rgba(0,191,255,0.2); }
+  }
+  .s2-phone {
+    font-size: 22px; font-weight: 700; color: var(--accent2);
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 12px 28px;
+  }
+
+  /* ─────────────────────────────────────────────────── */
+  /* SLIDE 3 — FUNCIONALIDADES                          */
+  /* ─────────────────────────────────────────────────── */
+  .s3-title {
+    font-size: 48px; font-weight: 800; text-align: center; margin-bottom: 40px;
+    animation: fadeUp 0.8s ease both;
+  }
+  .s3-title span { color: var(--accent2); }
+  .s3-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 20px; width: 100%; max-width: 1100px;
+  }
+  .s3-card {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 28px 24px;
+    transition: transform 0.3s ease;
+    animation: fadeUp 0.8s ease both;
+  }
+  .s3-card:nth-child(2) { animation-delay: 0.1s; }
+  .s3-card:nth-child(3) { animation-delay: 0.2s; }
+  .s3-card:nth-child(4) { animation-delay: 0.3s; }
+  .s3-card:nth-child(5) { animation-delay: 0.4s; }
+  .s3-card:nth-child(6) { animation-delay: 0.5s; }
+  .s3-icon { font-size: 40px; margin-bottom: 14px; }
+  .s3-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .s3-card p { font-size: 14px; color: rgba(255,255,255,0.65); line-height: 1.5; }
+
+  /* ─────────────────────────────────────────────────── */
+  /* SLIDE 4 — TECNOLOGÍAS                              */
+  /* ─────────────────────────────────────────────────── */
+  .s4-title {
+    font-size: 48px; font-weight: 800; text-align: center; margin-bottom: 48px;
+    animation: fadeUp 0.8s ease both;
+  }
+  .s4-title span { color: var(--accent2); }
+  .s4-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 20px; width: 100%; max-width: 1000px;
+  }
+  .s4-tech {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 28px 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    animation: fadeUp 0.8s ease both;
+  }
+  .s4-tech:nth-child(2) { animation-delay: 0.1s; }
+  .s4-tech:nth-child(3) { animation-delay: 0.2s; }
+  .s4-tech:nth-child(4) { animation-delay: 0.3s; }
+  .s4-tech:nth-child(5) { animation-delay: 0.4s; }
+  .s4-tech:nth-child(6) { animation-delay: 0.5s; }
+  .s4-tech:nth-child(7) { animation-delay: 0.6s; }
+  .s4-tech:nth-child(8) { animation-delay: 0.7s; }
+  .s4-tech-icon { font-size: 44px; }
+  .s4-tech-name { font-size: 15px; font-weight: 700; text-align: center; }
+  .s4-tech-desc { font-size: 12px; color: rgba(255,255,255,0.55); text-align: center; }
+
+  /* ── ANIMACIONES COMUNES ────────────────────────── */
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeLeft { from { opacity:0; transform:translateX(-30px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes fadeRight{ from { opacity:0; transform:translateX(30px);  } to { opacity:1; transform:translateX(0); } }
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<!-- HEADER -->
+<div class="header-logos">
+  <img src="https://www.utb.edu.co/wp-content/uploads/2020/09/logo.svg" alt="UTB" onerror="this.style.display='none'">
+  <img class="tooli-logo-header" src="./tooli.jpg" alt="Tooli" onerror="this.style.display='none'">
+  <img class="etd-logo" src="./logoescuela.png" alt="Escuela de Transformación Digital">
+</div>
+
+<!-- ── SLIDE 1: PORTADA ───────────────────────────── -->
+<div class="slide active" id="s1">
+  <img src="./tooli.jpg" alt="Tooli" style="height:120px;border-radius:20px;margin-bottom:24px;box-shadow:0 0 40px rgba(0,191,255,0.4);animation:fadeUp 0.8s ease both;">
+  <div class="s1-title">Tooli Posgrado</div>
+  <div class="s1-sub">Asistente Virtual de Posgrados · Universidad Tecnológica de Bolívar</div>
+  <div class="s1-tag">
+    <span>🤖</span> Inteligencia Artificial + WhatsApp Business API
+  </div>
+  <div class="s1-features">
+    <div class="s1-chip">🎓 Programas de posgrado</div>
+    <div class="s1-chip">🤖 IA generativa (GPT-4)</div>
+    <div class="s1-chip">📬 Registro de prospectos</div>
+    <div class="s1-chip">💬 Atención humana integrada</div>
+    <div class="s1-chip">📊 Métricas en tiempo real</div>
+  </div>
+</div>
+
+<!-- ── SLIDE 2: QR ────────────────────────────────── -->
+<div class="slide" id="s2">
+  <div class="s2-layout">
+    <div class="s2-left">
+      <div class="s2-title">¡Pruébalo<br><span>ahora mismo!</span></div>
+      <div class="s2-desc">
+        Escanea el código QR con la cámara de tu celular y chatea con el asistente virtual de Posgrados UTB.
+      </div>
+      <div class="s2-steps">
+        <div class="s2-step">
+          <div class="s2-step-num">1</div>
+          Abre la cámara de tu teléfono
+        </div>
+        <div class="s2-step">
+          <div class="s2-step-num">2</div>
+          Apunta al código QR
+        </div>
+        <div class="s2-step">
+          <div class="s2-step-num">3</div>
+          Toca la notificación para abrir WhatsApp
+        </div>
+        <div class="s2-step">
+          <div class="s2-step-num">4</div>
+          ¡Escribe "Hola" y comienza!
+        </div>
+      </div>
+    </div>
+    <div class="s2-right">
+      <div class="qr-frame">
+        <img src="./qr.png" alt="QR Tooli" onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=https://wa.me/573012821925?text=Hola'">
+      </div>
+      <div class="s2-phone">+57 301 2821925</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SLIDE 3: FUNCIONALIDADES ──────────────────── -->
+<div class="slide" id="s3">
+  <div class="s3-title">¿Qué puede hacer <span>Tooli</span>?</div>
+  <div class="s3-grid">
+    <div class="s3-card">
+      <div class="s3-icon">🎓</div>
+      <h3>Programas de Posgrado</h3>
+      <p>Presenta especializaciones, maestrías y doctorados con costos y requisitos actualizados.</p>
+    </div>
+    <div class="s3-card">
+      <div class="s3-icon">🤖</div>
+      <h3>Asistente con IA</h3>
+      <p>Responde preguntas complejas con GPT-4 entrenado con la base de conocimiento de la UTB.</p>
+    </div>
+    <div class="s3-card">
+      <div class="s3-icon">📬</div>
+      <h3>Captación de Prospectos</h3>
+      <p>Registra nombre, correo, WhatsApp y programa de interés directamente en Google Sheets.</p>
+    </div>
+    <div class="s3-card">
+      <div class="s3-icon">📋</div>
+      <h3>Turnos de Matrícula</h3>
+      <p>Consulta el turno y fecha de matrícula asignados al código estudiantil.</p>
+    </div>
+    <div class="s3-card">
+      <div class="s3-icon">🧾</div>
+      <h3>Recibos de Pago</h3>
+      <p>Descarga el PDF del recibo desde el portal Iceberg de forma automatizada.</p>
+    </div>
+    <div class="s3-card">
+      <div class="s3-icon">👤</div>
+      <h3>Escalado a Asesor</h3>
+      <p>Transfiere la conversación a un asesor humano en Chatwoot con el contexto completo.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── SLIDE 4: TECNOLOGÍAS ──────────────────────── -->
+<div class="slide" id="s4">
+  <div class="s4-title">Arquitectura <span>Tecnológica</span></div>
+  <div class="s4-grid">
+    <div class="s4-tech">
+      <div class="s4-tech-icon">💬</div>
+      <div class="s4-tech-name">WhatsApp Business API</div>
+      <div class="s4-tech-desc">Meta Cloud API · Mensajes interactivos</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">🟢</div>
+      <div class="s4-tech-name">Node.js + TypeScript</div>
+      <div class="s4-tech-desc">Backend · Express · REST API</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">🧠</div>
+      <div class="s4-tech-name">OpenAI GPT-4</div>
+      <div class="s4-tech-desc">IA generativa · Contexto UTB</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">⚡</div>
+      <div class="s4-tech-name">Redis</div>
+      <div class="s4-tech-desc">Sesiones · Rate limiting · Caché</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">📊</div>
+      <div class="s4-tech-name">Google Sheets</div>
+      <div class="s4-tech-desc">Base de datos de prospectos</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">💼</div>
+      <div class="s4-tech-name">Chatwoot</div>
+      <div class="s4-tech-desc">CRM · Gestión de conversaciones</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">🐳</div>
+      <div class="s4-tech-name">Docker</div>
+      <div class="s4-tech-desc">Oracle ARM VPS · Producción</div>
+    </div>
+    <div class="s4-tech">
+      <div class="s4-tech-icon">📈</div>
+      <div class="s4-tech-name">Grafana + Prometheus</div>
+      <div class="s4-tech-desc">Métricas · Monitoreo en tiempo real</div>
+    </div>
+  </div>
+</div>
+
+<!-- DOTS -->
+<div class="dots">
+  <div class="dot active" data-i="0"></div>
+  <div class="dot" data-i="1"></div>
+  <div class="dot" data-i="2"></div>
+  <div class="dot" data-i="3"></div>
+</div>
+
+<!-- PROGRESS BAR -->
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+<script>
+const slides  = document.querySelectorAll('.slide');
+const dots    = document.querySelectorAll('.dot');
+const fill    = document.getElementById('progressFill');
+const DELAY   = 8000; // 8 segundos por slide
+let current   = 0;
+let timer     = null;
+let startTime = null;
+let animFrame = null;
+
+function goTo(idx) {
+  slides[current].classList.remove('active');
+  dots[current].classList.remove('active');
+  current = (idx + slides.length) % slides.length;
+  slides[current].classList.add('active');
+  dots[current].classList.add('active');
+  resetProgress();
+}
+
+function resetProgress() {
+  cancelAnimationFrame(animFrame);
+  clearTimeout(timer);
+  startTime = performance.now();
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(tick);
+  });
+}
+
+function tick(now) {
+  const elapsed = now - startTime;
+  const pct = Math.min((elapsed / DELAY) * 100, 100);
+  fill.style.width = pct + '%';
+  if (pct < 100) {
+    animFrame = requestAnimationFrame(tick);
+  } else {
+    timer = setTimeout(() => goTo(current + 1), 200);
+  }
+}
+
+// Iniciar
+resetProgress();
+
+// Click en dots
+dots.forEach(d => d.addEventListener('click', () => goTo(parseInt(d.dataset.i))));
+
+// Teclado
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') goTo(current + 1);
+  if (e.key === 'ArrowLeft')  goTo(current - 1);
+  if (e.key === 'f' || e.key === 'F') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+});
+
+// Click en la pantalla avanza
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dot') && !e.target.closest('.header-logos')) goTo(current + 1);
+});
+</script>
+</body>
+</html>

@@ -52,7 +52,7 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
   async sendText(msg: OutboundMessage): Promise<void> {
     await axios.post(
       `${this.baseUrl}/message/sendText/${this.instance}`,
-      { number: msg.to, text: msg.text },
+      { number: msg.to, text: msg.text, delay: 0 },
       { headers: { apikey: this.apiKey }, timeout: 10_000 }
     );
     if (msg.text) recordActivity(msg.to, 'out', msg.text).catch(() => {});

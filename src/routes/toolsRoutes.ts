@@ -11,8 +11,61 @@ import {
   unbanUser,
   listActiveUsers,
 } from '../services/botUserService';
+import { leerRegistrosPosgrado } from '../services/registroService';
+import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSheets';
 
 export const toolsRouter = Router();
+
+// ── Rutas PÚBLICAS de NutriA (sin autenticación) ──────────────────────────────
+
+toolsRouter.get('/nutria/encuestas', async (_req, res) => {
+  try {
+    const rows = await leerEncuestasNutria();
+    res.json({ rows });
+  } catch (err: any) {
+    console.error('[tools/nutria/encuestas] error:', err);
+    res.status(500).json({ error: 'internal_error', message: err?.message });
+  }
+});
+
+toolsRouter.post('/nutria/encuestas/seed', async (req, res) => {
+  const { key } = req.body ?? {};
+  if (key !== 'nutria-seed-2024') {
+    res.status(403).json({ error: 'forbidden' });
+    return;
+  }
+  try {
+    await guardarEncuestaNutria({
+      whatsapp:           'seed-test',
+      edad:               '20 años',
+      genero:             'Femenino',
+      tiempoCelular:      'Entre 4 y 6 horas',
+      verificarMetricas:  'Sí',
+      tiempoRedes:        'Entre 1 y 3 horas',
+      redPrincipal:       'Instagram',
+      sabeUltraprocesado: 'No',
+      vioPublicidad:      'Sí',
+      redPublicidad:      'Instagram',
+      publicidadMotivo:   'Sí',
+      consumoBebidas:     '2 veces',
+      consumoPanaderia:   '1 vez',
+      consumoPostres:     '2 veces',
+      consumoMecatos:     '3 veces',
+      comproDespues:      'Sí',
+      sellos:             'A veces',
+      consumiriaSello:    'Sí',
+      motivacion:         'Me dio antojo',
+      comoEntero:         'Por un amigo',
+      contacto:           'Sí',
+    });
+    res.json({ ok: true, message: 'Fila de prueba guardada en Google Sheets ✅' });
+  } catch (err: any) {
+    console.error('[tools/nutria/seed] error:', err);
+    res.status(500).json({ error: 'internal_error', message: err?.message });
+  }
+});
+
+// ── Rutas PROTEGIDAS (requieren sesión) ───────────────────────────────────────
 
 toolsRouter.use(requireAuth);
 
@@ -146,3 +199,16 @@ toolsRouter.post('/bot-users/:phone/unban', async (req: AuthedRequest, res: Resp
   console.log(`[asesor] ${req.user?.username} desbaneó ${phone.slice(-4)}`);
   res.json({ ok: true });
 });
+
+/* ===== Registros de prospectos de posgrado (Google Sheets) ===== */
+
+toolsRouter.get('/registros-posgrado', async (_req, res) => {
+  try {
+    const rows = await leerRegistrosPosgrado();
+    res.json({ rows });
+  } catch (err: any) {
+    console.error('[tools/registros-posgrado] error:', err);
+    res.status(500).json({ error: 'internal_error', message: err?.message });
+  }
+});
+

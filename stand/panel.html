@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tooli Posgrado — Panel & Herramientas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --navy:   #002060;
+    --blue:   #003DA5;
+    --accent: #00BFFF;
+    --green:  #22c55e;
+    --yellow: #eab308;
+    --purple: #a855f7;
+    --white:  #ffffff;
+    --glass:  rgba(255,255,255,0.07);
+    --gb:     rgba(255,255,255,0.13);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #001440;
+    color: var(--white);
+    width: 100vw; height: 100vh;
+    overflow: hidden; cursor: none;
+  }
+
+  /* BG */
+  .bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: linear-gradient(135deg, #001440 0%, #002060 50%, #001440 100%);
+    background-size: 300% 300%;
+    animation: bgS 14s ease infinite;
+  }
+  @keyframes bgS { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+  .orb { position:fixed; border-radius:50%; filter:blur(70px); opacity:.2; z-index:0; animation:orbF 9s ease-in-out infinite; }
+  .o1  { width:400px;height:400px;background:#003DA5;top:-100px;left:-80px; }
+  .o2  { width:300px;height:300px;background:#00BFFF;bottom:-80px;right:-60px;animation-delay:-4s; }
+  @keyframes orbF { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-25px)} }
+
+  /* HEADER */
+  .hdr {
+    position:fixed;top:0;left:0;right:0;z-index:10;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 40px;
+    background:rgba(0,32,96,.65);backdrop-filter:blur(14px);
+    border-bottom:1px solid rgba(255,255,255,.12);
+  }
+  .hdr img  { height:38px; }
+  .hdr-mid  { display:flex;align-items:center;gap:12px; }
+  .hdr-mid img { height:42px;border-radius:8px; }
+  .hdr-title { font-size:17px;font-weight:700;color:var(--accent); }
+
+  /* SLIDES */
+  .slide { position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:90px 48px 40px;opacity:0;pointer-events:none;transition:opacity .7s ease; }
+  .slide.active { opacity:1;pointer-events:auto; }
+
+  /* PROGRESS */
+  .prog { position:fixed;bottom:0;left:0;right:0;height:4px;background:rgba(255,255,255,.1);z-index:10; }
+  .prog-fill { height:100%;background:linear-gradient(90deg,var(--accent),var(--green));width:0%; }
+  .dots { position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:11; }
+  .dot  { width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .3s; }
+  .dot.active { background:var(--accent);width:24px;border-radius:4px; }
+
+  /* ANIMACIONES */
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(28px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeLeft { from{opacity:0;transform:translateX(-28px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes fadeRight{ from{opacity:0;transform:translateX(28px)}  to{opacity:1;transform:translateX(0)} }
+
+  /* ── SLIDE 1: PANEL ASESORES ─────────────────── */
+  .s1-layout { display:grid;grid-template-columns:260px 1fr;gap:0;width:100%;max-width:1150px;height:520px;border-radius:16px;overflow:hidden;box-shadow:0 0 60px rgba(0,191,255,.2);animation:fadeUp .8s ease both; }
+
+  /* Sidebar mockup */
+  .mock-sidebar { background:#0f1e3d;border-right:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;padding:0; }
+  .mock-logo    { padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px; }
+  .mock-logo img { height:32px; }
+  .mock-logo span { font-size:13px;font-weight:600;color:rgba(255,255,255,.6); }
+  .mock-nav a   { display:flex;align-items:center;gap:10px;padding:11px 20px;font-size:13px;font-weight:500;color:rgba(255,255,255,.55);border-left:3px solid transparent;transition:all .2s; }
+  .mock-nav a.active { background:rgba(0,191,255,.1);border-left-color:var(--accent);color:var(--white); }
+  .mock-nav .icon { font-size:16px; }
+
+  /* Main mockup */
+  .mock-main { background:#0a1628;padding:24px;overflow:hidden;position:relative; }
+  .mock-h1   { font-size:20px;font-weight:700;margin-bottom:4px; }
+  .mock-sub  { font-size:12px;color:rgba(255,255,255,.45);margin-bottom:18px; }
+
+  /* Stat cards */
+  .mock-stats { display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px; }
+  .mstat { background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 10px; }
+  .mstat .lbl { font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);margin-bottom:4px; }
+  .mstat .val { font-size:22px;font-weight:700; }
+  .mstat .sub { font-size:9px;color:rgba(255,255,255,.35);margin-top:2px; }
+
+  /* Tool cards */
+  .mock-tools { display:grid;grid-template-columns:repeat(4,1fr);gap:10px; }
+  .mtool { background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 12px;display:flex;align-items:center;gap:10px; }
+  .mtool-icon { font-size:22px; }
+  .mtool-text h4 { font-size:12px;font-weight:600;margin-bottom:2px; }
+  .mtool-text p  { font-size:10px;color:rgba(255,255,255,.4); }
+
+  /* Hero tiles */
+  .mock-hero { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px; }
+  .mhero { border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px; }
+  .mhero.chat { background:linear-gradient(135deg,#1a3a8f,#2563eb); }
+  .mhero.graf { background:linear-gradient(135deg,#0d7377,#14a085); }
+  .mhero-icon { font-size:28px; }
+  .mhero-text h3 { font-size:13px;font-weight:700; }
+  .mhero-text p  { font-size:10px;color:rgba(255,255,255,.65);margin-top:2px; }
+
+  /* ── SLIDE 2: POSGRADOS + MÉTRICAS ──────────── */
+  .s2-layout { display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:1150px; }
+  .s2-panel { background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;animation:fadeLeft .8s ease both; }
+  .s2-panel.right { animation:fadeRight .8s .15s ease both; }
+  .panel-title { font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5);margin-bottom:16px; }
+
+  /* KPIs posgrado */
+  .pg-kpis { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px; }
+  .pgk { background:rgba(255,255,255,.05);border-radius:10px;padding:14px; }
+  .pgk .lbl { font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);margin-bottom:4px; }
+  .pgk .val { font-size:28px;font-weight:800; }
+  .pgk .sub { font-size:10px;color:rgba(255,255,255,.35);margin-top:2px; }
+
+  /* Bar chart mockup */
+  .bar-chart { display:flex;align-items:flex-end;gap:8px;height:100px;margin-top:8px; }
+  .bar { flex:1;border-radius:4px 4px 0 0;min-width:20px;transition:height .5s ease; }
+  .bar-lbl { font-size:9px;color:rgba(255,255,255,.35);text-align:center;margin-top:4px; }
+  .bar-wrap { flex:1;display:flex;flex-direction:column;align-items:center; }
+
+  /* Donut mockup */
+  .donut-wrap { display:flex;align-items:center;justify-content:center;gap:20px;margin-top:8px; }
+  .donut { width:100px;height:100px;border-radius:50%;background:conic-gradient(#38bdf8 0deg 180deg,#a855f7 180deg 270deg,#ec4899 270deg 360deg);position:relative; }
+  .donut::after { content:'';position:absolute;inset:22px;border-radius:50%;background:#0a1628; }
+  .donut-legend { display:flex;flex-direction:column;gap:6px; }
+  .dl-item { display:flex;align-items:center;gap:6px;font-size:11px; }
+  .dl-dot  { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
+
+  /* Registros tabla */
+  .reg-table { width:100%;border-collapse:collapse;font-size:11px; }
+  .reg-table th { text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.07); }
+  .reg-table td { padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.04); }
+  .reg-badge { background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:2px 8px;font-size:10px; }
+
+  /* ── SLIDE 3: GRAFANA ────────────────────────── */
+  .s3-layout { display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:1150px;align-items:center; }
+  .s3-left { animation:fadeLeft .8s ease both; }
+  .s3-right { animation:fadeRight .8s .15s ease both; }
+  .s3-title { font-size:48px;font-weight:800;line-height:1.1;margin-bottom:16px; }
+  .s3-title span { color:var(--accent); }
+  .s3-desc { font-size:16px;color:rgba(255,255,255,.65);line-height:1.6;margin-bottom:24px; }
+  .s3-metrics { display:flex;flex-direction:column;gap:12px; }
+  .s3-metric { background:var(--glass);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px; }
+  .s3-metric-icon { font-size:24px; }
+  .s3-metric-text h4 { font-size:14px;font-weight:600; }
+  .s3-metric-text p  { font-size:12px;color:rgba(255,255,255,.45); }
+
+  /* Grafana panel mockup */
+  .grafana-mock { background:#111827;border-radius:16px;overflow:hidden;box-shadow:0 0 40px rgba(0,191,255,.15); }
+  .gm-header { background:#1f2937;padding:10px 16px;display:flex;align-items:center;justify-content:space-between; }
+  .gm-logo   { display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#f97316; }
+  .gm-logo-icon { width:20px;height:20px;background:#f97316;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px; }
+  .gm-time   { font-size:10px;color:rgba(255,255,255,.4); }
+  .gm-panels { display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#374151; }
+  .gm-panel  { background:#1f2937;padding:12px; }
+  .gm-panel-title { font-size:10px;color:rgba(255,255,255,.45);margin-bottom:8px; }
+  .gm-stat   { font-size:26px;font-weight:800; }
+  .gm-sparkline { height:40px;display:flex;align-items:flex-end;gap:2px;margin-top:6px; }
+  .gm-bar    { flex:1;border-radius:2px 2px 0 0;background:#38bdf8;opacity:.7; }
+
+  /* ── SLIDE 4: QR GRANDE ──────────────────────── */
+  .s4-layout { display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;width:100%;max-width:1100px; }
+  .s4-left   { animation:fadeLeft .8s ease both; }
+  .s4-right  { display:flex;flex-direction:column;align-items:center;gap:20px;animation:fadeRight .8s .15s ease both; }
+  .s4-big-title { font-size:60px;font-weight:800;line-height:1.1;margin-bottom:16px; }
+  .s4-big-title span { color:var(--accent); }
+  .s4-url    { background:var(--glass);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 20px;font-size:14px;color:rgba(255,255,255,.6);margin-bottom:24px;font-family:monospace; }
+  .s4-links  { display:flex;flex-direction:column;gap:10px;width:100%; }
+  .s4-link   { background:var(--glass);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;font-size:14px;font-weight:500; }
+  .s4-link-icon { font-size:20px; }
+  .qr-frame  { background:white;border-radius:20px;padding:18px;box-shadow:0 0 60px rgba(0,191,255,.35);animation:qrPulse 3s ease-in-out infinite; }
+  .qr-frame img { width:240px;height:240px;display:block; }
+  @keyframes qrPulse { 0%,100%{box-shadow:0 0 40px rgba(0,191,255,.3)} 50%{box-shadow:0 0 80px rgba(0,191,255,.55)} }
+  .s4-phone  { font-size:20px;font-weight:700;color:var(--accent);background:var(--glass);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 24px; }
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="orb o1"></div>
+<div class="orb o2"></div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <img src="https://www.utb.edu.co/wp-content/uploads/2020/09/logo.svg" alt="UTB" onerror="this.style.display='none'">
+  <div class="hdr-mid">
+    <img src="./tooli.jpg" alt="Tooli" onerror="this.style.display='none'">
+    <div class="hdr-title">Tooli Posgrado — Panel de Asesores</div>
+  </div>
+  <img class="etd-logo" src="./logoescuela.png" alt="ETD" style="height:40px;" onerror="this.style.display='none'">
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- SLIDE 1 — PANEL DE ASESORES                   -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="slide active" id="s1">
+  <div style="font-size:13px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;animation:fadeUp .6s ease both;">Panel de Asesores · tooli-utb.duckdns.org/app</div>
+  <div class="s1-layout">
+    <!-- Sidebar -->
+    <div class="mock-sidebar">
+      <div class="mock-logo">
+        <img src="./tooli.jpg" alt="Tooli" style="height:28px;border-radius:6px;" onerror="this.style.display='none'">
+        <span>Tooli · Asesores</span>
+      </div>
+      <nav class="mock-nav">
+        <a class="active"><span class="icon">🏠</span>Inicio</a>
+        <a><span class="icon">📋</span>Consultar turno</a>
+        <a><span class="icon">🧾</span>Descargar recibo</a>
+        <a><span class="icon">📊</span>Métricas</a>
+        <a><span class="icon">📱</span>Usuarios del bot</a>
+        <a><span class="icon">🎓</span>Posgrados</a>
+        <a><span class="icon">📝</span>Registros BD</a>
+        <a><span class="icon">❤️</span>Estado del sistema</a>
+        <a><span class="icon">👥</span>Asesores</a>
+      </nav>
+    </div>
+    <!-- Main -->
+    <div class="mock-main">
+      <div class="mock-h1">Hola, Administrador 👋</div>
+      <div class="mock-sub">Centro de servicios — accesos rápidos a todas las herramientas</div>
+      <div class="mock-hero">
+        <div class="mhero chat">
+          <div class="mhero-icon">💬</div>
+          <div class="mhero-text"><h3>Abrir Chatwoot</h3><p>Atiende conversaciones activas</p><p style="margin-top:4px;font-size:9px;opacity:.7;">🎓 Ver prospectos posgrado →</p></div>
+        </div>
+        <div class="mhero graf">
+          <div class="mhero-icon">📈</div>
+          <div class="mhero-text"><h3>Abrir Grafana</h3><p>Métricas en vivo y latencia</p></div>
+        </div>
+      </div>
+      <div class="mock-stats">
+        <div class="mstat"><div class="lbl">Mensajes</div><div class="val" style="color:#38bdf8;">30</div><div class="sub">hoy</div></div>
+        <div class="mstat"><div class="lbl">IA</div><div class="val" style="color:#a855f7;">2</div><div class="sub">preguntas</div></div>
+        <div class="mstat"><div class="lbl">Prospectos</div><div class="val" style="color:#22c55e;">2</div><div class="sub">completados</div></div>
+        <div class="mstat"><div class="lbl">Registros</div><div class="val" style="color:#06b6d4;">3</div><div class="sub">en BD</div></div>
+        <div class="mstat"><div class="lbl">Asesores</div><div class="val" style="color:#eab308;">0</div><div class="sub">escalados</div></div>
+        <div class="mstat"><div class="lbl">Recibos</div><div class="val" style="color:#f97316;">3</div><div class="sub">+ turnos</div></div>
+      </div>
+      <div class="mock-tools">
+        <div class="mtool"><div class="mtool-icon">📋</div><div class="mtool-text"><h4>Consultar turno</h4><p>Busca el turno de un estudiante</p></div></div>
+        <div class="mtool"><div class="mtool-icon">🧾</div><div class="mtool-text"><h4>Descargar recibo</h4><p>PDF desde portal Iceberg</p></div></div>
+        <div class="mtool"><div class="mtool-icon">🎓</div><div class="mtool-text"><h4>Posgrados</h4><p>Gráficas de prospectos</p></div></div>
+        <div class="mtool"><div class="mtool-icon">📝</div><div class="mtool-text"><h4>Registros BD</h4><p>Tabla de Google Sheets</p></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- SLIDE 2 — POSGRADOS + REGISTROS               -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div style="font-size:13px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;animation:fadeUp .6s ease both;">Sección Posgrados · Métricas y Registros BD</div>
+  <div class="s2-layout">
+    <!-- Posgrados -->
+    <div class="s2-panel">
+      <div class="panel-title">🎓 Posgrados — últimos 7 días</div>
+      <div class="pg-kpis">
+        <div class="pgk"><div class="lbl">Prospectos</div><div class="val" style="color:#22c55e;">2</div><div class="sub">100% conversión</div></div>
+        <div class="pgk"><div class="lbl">Registros BD</div><div class="val" style="color:#38bdf8;">3</div><div class="sub">3 iniciados</div></div>
+        <div class="pgk"><div class="lbl">Especializaciones</div><div class="val" style="color:#a855f7;">1</div></div>
+        <div class="pgk"><div class="lbl">Maestrías</div><div class="val" style="color:#ec4899;">2</div></div>
+      </div>
+      <div class="panel-title" style="margin-top:8px;">Programas consultados</div>
+      <div class="donut-wrap">
+        <div class="donut"></div>
+        <div class="donut-legend">
+          <div class="dl-item"><div class="dl-dot" style="background:#38bdf8"></div>Especializaciones 33%</div>
+          <div class="dl-item"><div class="dl-dot" style="background:#a855f7"></div>Maestrías 50%</div>
+          <div class="dl-item"><div class="dl-dot" style="background:#ec4899"></div>Doctorados 17%</div>
+        </div>
+      </div>
+    </div>
+    <!-- Registros -->
+    <div class="s2-panel right">
+      <div class="panel-title">📝 Registros BD — Google Sheets</div>
+      <table class="reg-table">
+        <thead>
+          <tr><th>Fecha</th><th>Nombre</th><th>Email</th><th>Programa</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:rgba(255,255,255,.4);">22/05 9:01</td>
+            <td style="font-weight:600;">Carlos Pérez</td>
+            <td style="color:#38bdf8;">cperez@gmail.com</td>
+            <td><span class="reg-badge">Maestría</span></td>
+          </tr>
+          <tr>
+            <td style="color:rgba(255,255,255,.4);">22/05 9:14</td>
+            <td style="font-weight:600;">Laura Gómez</td>
+            <td style="color:#38bdf8;">lgomez@utb.edu.co</td>
+            <td><span class="reg-badge">Especialización</span></td>
+          </tr>
+          <tr>
+            <td style="color:rgba(255,255,255,.4);">22/05 9:31</td>
+            <td style="font-weight:600;">Andrés Torres</td>
+            <td style="color:#38bdf8;">atorres@gmail.com</td>
+            <td><span class="reg-badge">Maestría</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:20px;">
+        <div class="panel-title">Embudo prospectos</div>
+        <div class="bar-chart">
+          <div class="bar-wrap"><div class="bar" style="height:85px;background:#38bdf8;"></div><div class="bar-lbl">Iniciados</div></div>
+          <div class="bar-wrap"><div class="bar" style="height:70px;background:#22c55e;"></div><div class="bar-lbl">Completos</div></div>
+          <div class="bar-wrap"><div class="bar" style="height:60px;background:#eab308;"></div><div class="bar-lbl">Reg. inic.</div></div>
+          <div class="bar-wrap"><div class="bar" style="height:55px;background:#a855f7;"></div><div class="bar-lbl">Reg. comp.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- SLIDE 3 — GRAFANA                             -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="s3-layout">
+    <div class="s3-left">
+      <div class="s3-title">Monitoreo<br><span>en tiempo real</span></div>
+      <div class="s3-desc">Grafana + Prometheus capturan cada evento del bot: latencia, errores, mensajes por segundo y estado de todos los servicios.</div>
+      <div class="s3-metrics">
+        <div class="s3-metric">
+          <div class="s3-metric-icon">⚡</div>
+          <div class="s3-metric-text"><h4>Latencia promedio del bot</h4><p>Tiempo de respuesta por mensaje procesado</p></div>
+        </div>
+        <div class="s3-metric">
+          <div class="s3-metric-icon">📊</div>
+          <div class="s3-metric-text"><h4>Eventos por tipo</h4><p>IA, prospectos, registros, turnos, recibos</p></div>
+        </div>
+        <div class="s3-metric">
+          <div class="s3-metric-icon">❤️</div>
+          <div class="s3-metric-text"><h4>Health checks</h4><p>WhatsApp API · Redis · OpenAI · Chatwoot · Sheets</p></div>
+        </div>
+        <div class="s3-metric">
+          <div class="s3-metric-icon">🔔</div>
+          <div class="s3-metric-text"><h4>Alertas automáticas</h4><p>Notificación inmediata si un servicio cae</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="s3-right">
+      <div class="grafana-mock">
+        <div class="gm-header">
+          <div class="gm-logo"><div class="gm-logo-icon">G</div> Grafana · Tooli Posgrado</div>
+          <div class="gm-time">Últimas 24h · Live</div>
+        </div>
+        <div class="gm-panels">
+          <div class="gm-panel">
+            <div class="gm-panel-title">Mensajes procesados</div>
+            <div class="gm-stat" style="color:#38bdf8;">30</div>
+            <div class="gm-sparkline">
+              <div class="gm-bar" style="height:20px;"></div><div class="gm-bar" style="height:30px;"></div><div class="gm-bar" style="height:15px;"></div><div class="gm-bar" style="height:35px;"></div><div class="gm-bar" style="height:25px;"></div><div class="gm-bar" style="height:40px;"></div><div class="gm-bar" style="height:20px;"></div>
+            </div>
+          </div>
+          <div class="gm-panel">
+            <div class="gm-panel-title">Preguntas IA</div>
+            <div class="gm-stat" style="color:#a855f7;">2</div>
+            <div class="gm-sparkline">
+              <div class="gm-bar" style="height:10px;background:#a855f7;"></div><div class="gm-bar" style="height:20px;background:#a855f7;"></div><div class="gm-bar" style="height:5px;background:#a855f7;"></div><div class="gm-bar" style="height:15px;background:#a855f7;"></div><div class="gm-bar" style="height:8px;background:#a855f7;"></div><div class="gm-bar" style="height:25px;background:#a855f7;"></div><div class="gm-bar" style="height:10px;background:#a855f7;"></div>
+            </div>
+          </div>
+          <div class="gm-panel">
+            <div class="gm-panel-title">Latencia p95</div>
+            <div class="gm-stat" style="color:#22c55e;">312ms</div>
+            <div class="gm-sparkline">
+              <div class="gm-bar" style="height:18px;background:#22c55e;"></div><div class="gm-bar" style="height:22px;background:#22c55e;"></div><div class="gm-bar" style="height:30px;background:#22c55e;"></div><div class="gm-bar" style="height:15px;background:#22c55e;"></div><div class="gm-bar" style="height:20px;background:#22c55e;"></div><div class="gm-bar" style="height:25px;background:#22c55e;"></div><div class="gm-bar" style="height:18px;background:#22c55e;"></div>
+            </div>
+          </div>
+          <div class="gm-panel">
+            <div class="gm-panel-title">Servicios OK</div>
+            <div class="gm-stat" style="color:#22c55e;">5/5</div>
+            <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;">
+              <span style="font-size:9px;background:rgba(34,197,94,.2);color:#22c55e;border-radius:4px;padding:2px 6px;">WhatsApp</span>
+              <span style="font-size:9px;background:rgba(34,197,94,.2);color:#22c55e;border-radius:4px;padding:2px 6px;">Redis</span>
+              <span style="font-size:9px;background:rgba(34,197,94,.2);color:#22c55e;border-radius:4px;padding:2px 6px;">OpenAI</span>
+              <span style="font-size:9px;background:rgba(34,197,94,.2);color:#22c55e;border-radius:4px;padding:2px 6px;">Sheets</span>
+              <span style="font-size:9px;background:rgba(34,197,94,.2);color:#22c55e;border-radius:4px;padding:2px 6px;">Chatwoot</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- SLIDE 4 — QR GRANDE                           -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="s4-layout">
+    <div class="s4-left">
+      <div class="s4-big-title">Escanea<br>y prueba<br><span>ahora</span></div>
+      <div class="s4-url">wa.me/573012821925</div>
+      <div class="s4-links">
+        <div class="s4-link"><div class="s4-link-icon">🤖</div><div><strong>Bot WhatsApp</strong><br><span style="font-size:12px;color:rgba(255,255,255,.5);">+57 301 2821925</span></div></div>
+        <div class="s4-link"><div class="s4-link-icon">🖥️</div><div><strong>Panel asesores</strong><br><span style="font-size:12px;color:rgba(255,255,255,.5);">tooli-utb.duckdns.org/app</span></div></div>
+        <div class="s4-link"><div class="s4-link-icon">💬</div><div><strong>Chatwoot CRM</strong><br><span style="font-size:12px;color:rgba(255,255,255,.5);">tooli-chat.duckdns.org</span></div></div>
+        <div class="s4-link"><div class="s4-link-icon">📈</div><div><strong>Grafana</strong><br><span style="font-size:12px;color:rgba(255,255,255,.5);">tooli-grafana.duckdns.org</span></div></div>
+      </div>
+    </div>
+    <div class="s4-right">
+      <div class="qr-frame">
+        <img src="./qr.png" alt="QR" onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=https://wa.me/573012821925'">
+      </div>
+      <div class="s4-phone">+57 301 2821925</div>
+    </div>
+  </div>
+</div>
+
+<!-- DOTS -->
+<div class="dots">
+  <div class="dot active" data-i="0"></div>
+  <div class="dot" data-i="1"></div>
+  <div class="dot" data-i="2"></div>
+  <div class="dot" data-i="3"></div>
+</div>
+<div class="prog"><div class="prog-fill" id="pf"></div></div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const dots   = document.querySelectorAll('.dot');
+const fill   = document.getElementById('pf');
+const DELAY  = 9000;
+let cur = 0, start = null, raf = null;
+
+function goTo(i) {
+  slides[cur].classList.remove('active');
+  dots[cur].classList.remove('active');
+  cur = (i + slides.length) % slides.length;
+  slides[cur].classList.add('active');
+  dots[cur].classList.add('active');
+  reset();
+}
+
+function reset() {
+  cancelAnimationFrame(raf);
+  start = performance.now();
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+  requestAnimationFrame(() => requestAnimationFrame(tick));
+}
+
+function tick(now) {
+  const p = Math.min((now - start) / DELAY * 100, 100);
+  fill.style.width = p + '%';
+  if (p < 100) raf = requestAnimationFrame(tick);
+  else setTimeout(() => goTo(cur + 1), 150);
+}
+
+reset();
+dots.forEach(d => d.addEventListener('click', () => goTo(+d.dataset.i)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') goTo(cur + 1);
+  if (e.key === 'ArrowLeft') goTo(cur - 1);
+  if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+document.addEventListener('click', e => { if (!e.target.closest('.dot,.hdr')) goTo(cur + 1); });
+</script>
+</body>
+</html>

@@ -60,7 +60,13 @@
       "Bash(curl -s -X POST \"http://localhost:8081/chat/findChats/tooli\" -H \"apikey: tooli_api_key_local\")",
       "PowerShell(docker compose exec evolution-api sh -c \"grep -rln 'whatsappNumber\\\\|isOnWhatsapp\\\\|onWhatsApp' /evolution/dist/api/integrations/channel/whatsapp/ 2>/dev/null | head -5\")",
       "Bash(tasklist)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(dir \"C:\\\\Users\\\\MANUEL\\\\Desktop\\\\SentraSecurity\")",
+      "WebFetch(domain:faq.whatsapp.com)",
+      "Bash(npx tsc *)",
+      "WebSearch",
+      "Bash(npm run *)",
+      "Bash(copy \"C:\\\\Users\\\\MANUEL\\\\IdeaProjects\\\\tooli-chatbot\\\\stand\\\\nuria.png\" \"C:\\\\Users\\\\MANUEL\\\\IdeaProjects\\\\tooli-chatbot\\\\src\\\\public\\\\nutria\\\\nuria.png\")"
     ]
   }
 }

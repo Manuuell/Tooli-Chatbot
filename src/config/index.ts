@@ -3,14 +3,30 @@ import { z } from 'zod';
 
 const schema = z.object({
   PORT: z.string().default('3000'),
-  EVOLUTION_API_BASE_URL: z.string().url(),
-  EVOLUTION_API_INSTANCE: z.string(),
-  EVOLUTION_API_KEY: z.string(),
+  // Selecciona el adaptador de mensajería activo: 'evolution' (Baileys) o 'meta' (Meta Cloud API)
+  MESSAGING_ADAPTER: z.enum(['evolution', 'meta']).default('evolution'),
+  EVOLUTION_API_BASE_URL: z.string().url().optional().default('http://localhost:8080'),
+  EVOLUTION_API_INSTANCE: z.string().optional().default('tooli'),
+  EVOLUTION_API_KEY: z.string().optional().default(''),
   WEBHOOK_SECRET: z.string(),
   REDIS_URL: z.string().default('redis://redis:6379'),
   SESSION_TTL_SECONDS: z.string().default('3600'),
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string(),
   OPENAI_API_KEY: z.string().optional(),
+  // ── Meta WhatsApp Cloud API ──────────────────────────────────────────────────
+  WHATSAPP_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_WABA_ID: z.string().optional(),
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  // ── NutriA — bot de encuesta ─────────────────────────────────────────────────
+  NUTRIA_WHATSAPP_TOKEN: z.string().optional(),
+  NUTRIA_PHONE_NUMBER_ID: z.string().optional(),
+  NUTRIA_WABA_ID: z.string().optional(),
+  NUTRIA_SHEET_ID: z.string().optional(),
+  // ── Google Sheets — registro de prospectos de posgrado ───────────────────────
+  // ID del spreadsheet donde se guardan los registros (compartir con service account)
+  POSGRADO_REGISTRO_SHEET_ID: z.string().optional(),
+  // ─────────────────────────────────────────────────────────────────────────────
   CHATWOOT_URL: z.string().optional(),
   CHATWOOT_ACCOUNT_ID: z.string().optional(),
   CHATWOOT_INBOX_ID: z.string().optional(),
@@ -38,18 +54,32 @@ const env = parsed.data;
 
 export const config = {
   port: parseInt(env.PORT),
+  messagingAdapter: env.MESSAGING_ADAPTER,
   webhookSecret: env.WEBHOOK_SECRET,
   evolutionApi: {
-    baseUrl: env.EVOLUTION_API_BASE_URL,
-    instance: env.EVOLUTION_API_INSTANCE,
-    apiKey: env.EVOLUTION_API_KEY,
+    baseUrl: env.EVOLUTION_API_BASE_URL ?? 'http://localhost:8080',
+    instance: env.EVOLUTION_API_INSTANCE ?? 'tooli',
+    apiKey: env.EVOLUTION_API_KEY ?? '',
+  },
+  metaCloud: {
+    token: env.WHATSAPP_TOKEN ?? '',
+    phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID ?? '',
+    wabaId: env.WHATSAPP_WABA_ID ?? '',
+    verifyToken: env.WHATSAPP_VERIFY_TOKEN ?? env.WEBHOOK_SECRET,
   },
   redis: {
     url: env.REDIS_URL,
     sessionTtl: parseInt(env.SESSION_TTL_SECONDS),
   },
+  nutria: {
+    token: env.NUTRIA_WHATSAPP_TOKEN ?? '',
+    phoneNumberId: env.NUTRIA_PHONE_NUMBER_ID ?? '',
+    wabaId: env.NUTRIA_WABA_ID ?? '',
+    sheetId: env.NUTRIA_SHEET_ID ?? '',
+  },
   google: {
     serviceAccount: JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON),
+    registroPosgradoSheetId: env.POSGRADO_REGISTRO_SHEET_ID ?? '',
   },
   openai: {
     apiKey: env.OPENAI_API_KEY,

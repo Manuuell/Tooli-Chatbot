@@ -87,7 +87,7 @@ metaWebhookRouter.post('/', async (req: Request, res: Response) => {
   const isNutria = config.nutria.phoneNumberId && inbound.phoneNumberId === config.nutria.phoneNumberId;
 
   if (isNutria) {
-    handleNutriaMessage(from, inbound.text).catch(err => {
+    handleNutriaMessage(from, inbound.text, inbound).catch(err => {
       console.error('[meta-webhook] error en handleNutriaMessage para', from.slice(-4), err);
     });
   } else {

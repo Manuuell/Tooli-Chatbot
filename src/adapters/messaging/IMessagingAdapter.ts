@@ -47,6 +47,16 @@ export interface OutboundDocument {
   caption?: string;
 }
 
+export interface OutboundImage {
+  to: string;
+  /** Buffer PNG/JPEG de la imagen */
+  buffer: Buffer;
+  /** mimetype, default: 'image/png' */
+  mimetype?: string;
+  /** Caption opcional debajo de la imagen */
+  caption?: string;
+}
+
 export type MediaKind = 'image' | 'video' | 'audio' | 'document';
 
 export interface OutboundMediaUrl {
@@ -65,6 +75,8 @@ export interface InboundMessage {
   text: string;  // para botones/lista: llega el id de la opción seleccionada
   timestamp: number;
   phoneNumberId: string; // ID del número que recibió el mensaje (routing multi-bot)
+  mediaId?: string;      // presente cuando el mensaje es imagen/video/documento
+  mediaType?: string;    // 'image' | 'video' | 'document' | 'audio'
 }
 
 export interface IMessagingAdapter {
@@ -72,6 +84,7 @@ export interface IMessagingAdapter {
   sendButtons(msg: OutboundButtons): Promise<void>;
   sendList(msg: OutboundList): Promise<void>;
   sendDocument(msg: OutboundDocument): Promise<void>;
+  sendImage(msg: OutboundImage): Promise<void>;
   /** Envía un media descargándolo desde una URL pública (imágenes, audio, video, documentos). */
   sendMediaFromUrl(msg: OutboundMediaUrl): Promise<void>;
   /** Resuelve un identificador de remitente (puede ser @lid) al número E.164 real. */

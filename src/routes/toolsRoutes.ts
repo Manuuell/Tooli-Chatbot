@@ -13,6 +13,7 @@ import {
 } from '../services/botUserService';
 import { leerRegistrosPosgrado } from '../services/registroService';
 import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSheets';
+import { getCodigoNutria, canjearCodigoNutria, getCanjesRecientes } from '../services/nutriaCodigoService';
 
 export const toolsRouter = Router();
 
@@ -63,6 +64,35 @@ toolsRouter.post('/nutria/encuestas/seed', async (req, res) => {
     console.error('[tools/nutria/seed] error:', err);
     res.status(500).json({ error: 'internal_error', message: err?.message });
   }
+});
+
+// ── Validación y canje de códigos QR NutriA (sin autenticación) ──────────────
+
+toolsRouter.get('/nutria/codigo/:code', async (req, res) => {
+  const code = req.params.code.toUpperCase();
+  const data = await getCodigoNutria(code);
+  if (!data) {
+    res.status(404).json({ error: 'not_found', message: 'Código no existe o expiró' });
+    return;
+  }
+  res.json({ ok: true, code, ...data });
+});
+
+toolsRouter.get('/nutria/canjes', async (_req, res) => {
+  const canjes = await getCanjesRecientes(10);
+  res.json({ canjes });
+});
+
+toolsRouter.post('/nutria/codigo/:code/canjear', async (req, res) => {
+  const code = req.params.code.toUpperCase();
+  const result = await canjearCodigoNutria(code);
+  if (!result.ok) {
+    const status = result.error === 'not_found' ? 404 : 409;
+    res.status(status).json({ error: result.error, data: result.data });
+    return;
+  }
+  console.log(`[nutria] código canjeado: ${code} — ${result.data?.phone?.slice(-4)}`);
+  res.json({ ok: true, code, ...result.data });
 });
 
 // ── Rutas PROTEGIDAS (requieren sesión) ───────────────────────────────────────

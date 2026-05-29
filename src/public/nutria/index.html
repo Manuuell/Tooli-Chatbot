@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NutriA — Dashboard de Encuestas</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',sans-serif;background:#f3f0ff;color:#1e1b4b;min-height:100vh}
@@ -70,6 +71,50 @@
     tr:hover td{background:#faf5ff}
     .empty{text-align:center;color:#a78bfa;padding:40px;font-size:.9rem}
 
+    /* Scanner */
+    .scanner-card{
+      background:#fff;border-radius:14px;padding:24px;
+      box-shadow:0 2px 12px rgba(109,40,217,.08);
+      border-left:3px solid #7c3aed;
+      margin-bottom:28px;
+    }
+    .scanner-card h3{font-size:.8rem;font-weight:700;color:#5b21b6;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px}
+    .scanner-inner{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+    #qr-reader{width:280px;border-radius:10px;overflow:hidden;background:#f5f3ff;display:none}
+    #qr-reader video{border-radius:10px}
+    .scanner-controls{flex:1;min-width:220px}
+    .scan-btn{
+      background:linear-gradient(135deg,#6d28d9,#2563eb);color:#fff;
+      border:none;border-radius:10px;padding:10px 20px;
+      cursor:pointer;font-size:.9rem;font-weight:600;width:100%;
+      box-shadow:0 2px 8px rgba(109,40,217,.3);transition:opacity .2s;margin-bottom:12px;
+    }
+    .scan-btn:hover{opacity:.88}
+    .scan-btn.stop{background:linear-gradient(135deg,#dc2626,#b91c1c)}
+    .scan-result{
+      border-radius:10px;padding:14px;font-size:.85rem;
+      display:none;
+    }
+    .scan-result.valid{background:#f0fdf4;border:2px solid #16a34a;color:#15803d}
+    .scan-result.invalid{background:#fef2f2;border:2px solid #dc2626;color:#b91c1c}
+    .scan-result.used{background:#fffbeb;border:2px solid #d97706;color:#b45309}
+    .scan-result .result-code{font-weight:700;font-size:1rem;margin-bottom:4px}
+    .scan-result .result-info{font-size:.78rem;opacity:.85;margin-bottom:10px}
+    .canjear-btn{
+      background:#16a34a;color:#fff;border:none;border-radius:8px;
+      padding:8px 16px;cursor:pointer;font-size:.85rem;font-weight:600;width:100%;
+      transition:opacity .2s;
+    }
+    .canjear-btn:hover{opacity:.88}
+    .scanner-history{margin-top:16px}
+    .scanner-history h4{font-size:.75rem;color:#6b7280;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+    .history-item{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:6px 10px;border-radius:8px;font-size:.78rem;margin-bottom:4px;
+    }
+    .history-item.ok{background:#f0fdf4;color:#15803d}
+    .history-item.fail{background:#fef2f2;color:#b91c1c}
+
     /* Loading */
     #loading{text-align:center;padding:80px;color:#7c3aed}
     .spinner{width:44px;height:44px;border:4px solid #e9d5ff;border-top-color:#7c3aed;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
@@ -114,6 +159,26 @@
       <span class="countdown" id="countdown"></span>
     </div>
 
+    <!-- Scanner QR -->
+    <div class="scanner-card">
+      <h3>🍟 Canjear Papita — Escanear QR</h3>
+      <div class="scanner-inner">
+        <div id="qr-reader"></div>
+        <div class="scanner-controls">
+          <button class="scan-btn" id="scanBtn" onclick="toggleScanner()">📷 Iniciar escáner</button>
+          <div class="scan-result" id="scanResult">
+            <div class="result-code" id="resultCode"></div>
+            <div class="result-info" id="resultInfo"></div>
+            <button class="canjear-btn" id="canjearBtn" onclick="canjearCodigo()" style="display:none">🎁 Confirmar canje</button>
+          </div>
+          <div class="scanner-history">
+            <h4>Últimos canjes</h4>
+            <div id="historyList"><span style="color:#a78bfa;font-size:.75rem">Sin canjes aún</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- KPIs -->
     <div class="kpis">
       <div class="kpi"><div class="num" id="kTotal">0</div><div class="lbl">Total respuestas</div></div>
@@ -156,10 +221,11 @@
 <script>
 const COL = {
   fecha:0, wa:1, edad:2, genero:3, tiempoCelular:4, verificar:5,
-  tiempoRedes:6, redPrincipal:7, sabeUP:8, vioPublicidad:9,
-  redPublicidad:10, pubMotivo:11, bebidas:12, panaderia:13,
-  postres:14, mecatos:15, comproDespues:16, sellos:17,
-  consumiriaSello:18, motivacion:19, comoEntero:20, contacto:21
+  imagenMetricas:6,
+  tiempoRedes:7, redPrincipal:8, sabeUP:9, vioPublicidad:10,
+  redPublicidad:11, pubMotivo:12, bebidas:13, panaderia:14,
+  postres:15, mecatos:16, comproDespues:17, sellos:18,
+  consumiriaSello:19, motivacion:20, comoEntero:21, contacto:22
 };
 
 let charts = {};
@@ -305,6 +371,170 @@ function renderDashboard(rows) {
 }
 
 loadData();
+
+// ── Escáner QR ────────────────────────────────────────────────────────────────
+
+let html5QrCode = null;
+let scannerRunning = false;
+let currentCode = null;
+
+let scanHistory = [];
+
+// Polling del historial desde el servidor cada 5 segundos
+async function pollCanjes() {
+  try {
+    const res = await fetch('/api/tools/nutria/canjes');
+    const json = await res.json();
+    scanHistory = json.canjes || [];
+    renderHistory();
+  } catch {}
+}
+pollCanjes();
+setInterval(pollCanjes, 5000);
+
+function toggleScanner() {
+  if (scannerRunning) stopScanner();
+  else startScanner();
+}
+
+function startScanner() {
+  document.getElementById('qr-reader').style.display = 'block';
+  html5QrCode = new Html5Qrcode('qr-reader');
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    onQrDetected
+  ).then(() => {
+    scannerRunning = true;
+    document.getElementById('scanBtn').textContent = '⏹ Detener escáner';
+    document.getElementById('scanBtn').classList.add('stop');
+    resetResult();
+  }).catch(err => {
+    console.error('Scanner error:', err);
+    alert('No se pudo acceder a la cámara. Verifica los permisos.');
+  });
+}
+
+function stopScanner() {
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => {
+      scannerRunning = false;
+      document.getElementById('qr-reader').style.display = 'none';
+      document.getElementById('scanBtn').textContent = '📷 Iniciar escáner';
+      document.getElementById('scanBtn').classList.remove('stop');
+    });
+  }
+}
+
+async function onQrDetected(decodedText) {
+  // Extraer código de la URL o usarlo directamente
+  const match = decodedText.match(/NUTR-[A-Z0-9]{4}/);
+  if (!match) return;
+  const code = match[0];
+  if (code === currentCode) return; // evitar re-escaneo del mismo código
+
+  stopScanner();
+  currentCode = code;
+
+  // Consultar estado
+  try {
+    const res = await fetch(`/api/tools/nutria/codigo/${code}`);
+    const json = await res.json();
+    showResult(code, json, res.status);
+  } catch (e) {
+    showError('Error de conexión');
+  }
+}
+
+function showResult(code, data, status) {
+  const el = document.getElementById('scanResult');
+  const codeEl = document.getElementById('resultCode');
+  const infoEl = document.getElementById('resultInfo');
+  const btn = document.getElementById('canjearBtn');
+
+  el.style.display = 'block';
+  el.className = 'scan-result';
+
+  if (status === 404) {
+    el.classList.add('invalid');
+    codeEl.textContent = '❌ Código no válido';
+    infoEl.textContent = `"${code}" no existe o expiró`;
+    btn.style.display = 'none';
+  } else if (data.canjeado) {
+    el.classList.add('used');
+    codeEl.textContent = '⚠️ Ya canjeado';
+    infoEl.textContent = `${code} — Canjeado el ${data.canjeadoEn ?? ''}`;
+    btn.style.display = 'none';
+  } else {
+    el.classList.add('valid');
+    codeEl.textContent = '✅ Código válido';
+    infoEl.textContent = `${code} · Participante registrado`;
+    btn.style.display = 'block';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('scanResult');
+  el.style.display = 'block';
+  el.className = 'scan-result invalid';
+  document.getElementById('resultCode').textContent = '❌ Error';
+  document.getElementById('resultInfo').textContent = msg;
+  document.getElementById('canjearBtn').style.display = 'none';
+}
+
+function resetResult() {
+  currentCode = null;
+  const el = document.getElementById('scanResult');
+  el.style.display = 'none';
+  document.getElementById('canjearBtn').style.display = 'none';
+}
+
+async function canjearCodigo() {
+  if (!currentCode) return;
+  const btn = document.getElementById('canjearBtn');
+  btn.textContent = 'Procesando...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/tools/nutria/codigo/${currentCode}/canjear`, { method: 'POST' });
+    const json = await res.json();
+
+    if (json.ok) {
+      const el = document.getElementById('scanResult');
+      el.className = 'scan-result used';
+      document.getElementById('resultCode').textContent = '🎁 ¡Papita entregada!';
+      document.getElementById('resultInfo').textContent = `${currentCode} — Canjeado ahora`;
+      btn.style.display = 'none';
+      addHistory(currentCode, true);
+    } else {
+      showError(json.error === 'already_redeemed' ? 'Ya fue canjeado antes' : 'Error al canjear');
+    }
+  } catch (e) {
+    showError('Error de conexión al canjear');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🎁 Confirmar canje';
+}
+
+function addHistory() {
+  pollCanjes(); // refresca inmediatamente desde el servidor
+}
+
+function renderHistory() {
+  const container = document.getElementById('historyList');
+  if (!container) return;
+  if (!scanHistory.length) {
+    container.innerHTML = '<span style="color:#a78bfa;font-size:.75rem">Sin canjes aún</span>';
+    return;
+  }
+  container.innerHTML = scanHistory.map(h => `
+    <div class="history-item ok">
+      <span>✅ ${h.code}</span>
+      <span>${h.canjeadoEn?.split(' ')[1] ?? ''}</span>
+    </div>
+  `).join('');
+}
 </script>
 </body>
 </html>

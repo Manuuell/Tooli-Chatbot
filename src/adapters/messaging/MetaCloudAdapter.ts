@@ -5,6 +5,7 @@ import {
   OutboundButtons,
   OutboundList,
   OutboundDocument,
+  OutboundImage,
   OutboundMediaUrl,
 } from './IMessagingAdapter';
 import { config } from '../../config';
@@ -154,6 +155,35 @@ export class MetaCloudAdapter implements IMessagingAdapter {
           filename: msg.fileName,
           caption: msg.caption,
         },
+      },
+      { headers: this.headers, timeout: 15_000 }
+    );
+  }
+
+  async sendImage(msg: OutboundImage): Promise<void> {
+    const mimetype = msg.mimetype ?? 'image/png';
+
+    // Paso 1: subir la imagen a la Media API de Meta
+    const form = new FormData();
+    form.append('file', new Blob([msg.buffer], { type: mimetype }), 'image.png');
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mimetype);
+
+    const uploadRes = await axios.post(
+      `${GRAPH_URL}/${this.phoneNumberId}/media`,
+      form,
+      { headers: { Authorization: `Bearer ${this.token}` }, timeout: 60_000 }
+    );
+    const mediaId: string = uploadRes.data.id;
+
+    // Paso 2: enviar la imagen usando el media_id
+    await axios.post(
+      this.messagesUrl,
+      {
+        messaging_product: 'whatsapp',
+        to: msg.to,
+        type: 'image',
+        image: { id: mediaId, caption: msg.caption },
       },
       { headers: this.headers, timeout: 15_000 }
     );

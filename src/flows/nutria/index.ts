@@ -1,6 +1,9 @@
 import { getNutriaSession } from './shared';
 import {
   handleNutriaInicio,
+  handleNutriaConsentimiento,
+  handleNutriaRechazado,
+  handleNutriaCapturaPantalla,
   handleNutriaEdad,
   handleNutriaEdadTexto,
   handleNutriaGenero,
@@ -28,9 +31,12 @@ import {
   handleNutriaCompletada,
 } from './survey';
 
-type Handler = (ctx: { from: string; text: string; session: any }) => Promise<void>;
+type Handler = (ctx: { from: string; text: string; session: any; _inbound?: any }) => Promise<void>;
 
 const HANDLERS: Record<string, Handler> = {
+  nutria_consentimiento:     handleNutriaConsentimiento,
+  nutria_rechazado:          handleNutriaRechazado,
+  nutria_captura_pantalla:   handleNutriaCapturaPantalla,
   nutria_edad:               handleNutriaEdad,
   nutria_edad_texto:         handleNutriaEdadTexto,
   nutria_genero:             handleNutriaGenero,
@@ -58,11 +64,11 @@ const HANDLERS: Record<string, Handler> = {
   nutria_completada:         handleNutriaCompletada,
 };
 
-export async function handleNutriaMessage(from: string, text: string): Promise<void> {
+export async function handleNutriaMessage(from: string, text: string, inbound?: any): Promise<void> {
   const session = await getNutriaSession(from);
   const step    = session?.step ?? 'nutria_inicio';
 
   const handler = HANDLERS[step] ?? handleNutriaInicio;
 
-  await handler({ from, text, session });
+  await handler({ from, text, session, _inbound: inbound });
 }

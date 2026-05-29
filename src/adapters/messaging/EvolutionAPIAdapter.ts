@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList, OutboundDocument, OutboundMediaUrl } from './IMessagingAdapter';
+import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList, OutboundDocument, OutboundImage, OutboundMediaUrl } from './IMessagingAdapter';
 import { config } from '../../config';
 import { recordActivity } from '../../services/botUserService';
 
@@ -143,5 +143,10 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
       console.error('[sendList] ERROR:', err?.response?.data ?? err?.message);
       throw err;
     }
+  }
+
+  async sendImage(_msg: OutboundImage): Promise<void> {
+    // Evolution API no se usa para NutriA — stub requerido por la interfaz
+    console.warn('[EvolutionAPIAdapter] sendImage no implementado para Evolution API');
   }
 }

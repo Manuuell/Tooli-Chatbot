@@ -1,6 +1,10 @@
+import QRCode from 'qrcode';
 import { Session } from '../../services/session';
 import { getNutriaSession, setNutriaSession, nutriaMessaging } from './shared';
 import { guardarEncuestaNutria } from '../../services/nutriaSheets';
+import { crearCodigoNutria } from '../../services/nutriaCodigoService';
+import { guardarImagenMeta } from '../../services/nutriaImageService';
+import { config } from '../../config';
 
 interface Ctx {
   from: string;
@@ -81,7 +85,7 @@ function invalid(to: string): Promise<void> {
   return nutriaMessaging.sendText({ to, text: 'Por favor selecciona una opción de la lista 👆' });
 }
 
-// ── 0. Inicio (primer mensaje del usuario) ────────────────────────────────────
+// ── 0. Inicio → Consentimiento informado ─────────────────────────────────────
 
 export async function handleNutriaInicio(ctx: Ctx): Promise<void> {
   const { from } = ctx;
@@ -91,12 +95,82 @@ export async function handleNutriaInicio(ctx: Ctx): Promise<void> {
     text:
       '👋 *¡Hola! Soy NutriA* 🥗\n\n' +
       'Soy un bot de investigación de la *Universidad Tecnológica de Bolívar*.\n\n' +
-      'Te haré *19 preguntas rápidas* sobre tus hábitos en redes sociales y consumo de alimentos.\n\n' +
-      '⏱️ Tiempo estimado: *3 minutos*\n' +
-      '🔒 Respuestas *anónimas y confidenciales*',
+      'Antes de comenzar, por favor lee el siguiente *consentimiento informado*. 👇',
   });
 
+  await nutriaMessaging.sendText({
+    to: from,
+    text:
+      '📋 *CONSENTIMIENTO INFORMADO*\n\n' +
+      '*Título del estudio:*\n' +
+      'Estrategias de marketing de marcas con productos ultraprocesados con sellos octogonales: Caracterización post implementación regulatoria en Colombia.\n\n' +
+      '*Investigadores:*\n' +
+      'Ricardo Peña Ruiz, Estefania Pulido Garcia, Fernando Salcedo Mejía\n\n' +
+      '*Institución:*\n' +
+      'Escuela de Transformación Digital — Universidad Tecnológica de Bolívar\n\n' +
+      '📧 ripena@utb.edu.co · epulido@utb.edu.co · fsalcedo@utb.edu.co',
+  });
+
+  await nutriaMessaging.sendText({
+    to: from,
+    text:
+      'Ha sido invitado/a a participar *voluntariamente* en este estudio. El objetivo es conocer los hábitos alimenticios de jóvenes colombianos, su conocimiento sobre alimentos ultraprocesados, percepción del etiquetado octogonal e incidencia de la publicidad en redes sociales.\n\n' +
+      '⏱️ Duración aproximada: *3 minutos*\n\n' +
+      '🔒 Esta encuesta es *completamente anónima*. No se solicitará cédula, nombre ni dirección.\n\n' +
+      'Puede retirarse en cualquier momento sin ninguna consecuencia. Según la *Resolución 8430 de 1993* (Art. 11), esta investigación se clasifica como *sin riesgo*.\n\n' +
+      'Al aceptar, usted declara que:\n' +
+      '• Ha leído y comprendido esta información\n' +
+      '• Acepta participar voluntariamente\n' +
+      '• Autoriza el uso de sus datos únicamente para fines académicos, conforme a la *Ley 1581 de 2012*',
+  });
+
+  await setNutriaSession(from, { step: 'nutria_consentimiento', data: {} });
+
+  await nutriaMessaging.sendButtons({
+    to: from,
+    title: 'NutriA · UTB',
+    description: '¿Acepta participar en este estudio de investigación?',
+    footer: 'Escuela de Transformación Digital',
+    buttons: [
+      { id: 'si', displayText: '✅ Sí, acepto' },
+      { id: 'no', displayText: '❌ No, gracias' },
+    ],
+  });
+}
+
+// ── 0b. Consentimiento ────────────────────────────────────────────────────────
+
+export async function handleNutriaConsentimiento(ctx: Ctx): Promise<void> {
+  const { from, text } = ctx;
+  const input = text.trim().toLowerCase();
+
+  if (input !== 'si' && input !== 'no') {
+    await nutriaMessaging.sendText({ to: from, text: 'Por favor responde usando los botones 👆' });
+    return;
+  }
+
+  if (input === 'no') {
+    await setNutriaSession(from, { step: 'nutria_rechazado', data: {} });
+    await nutriaMessaging.sendText({
+      to: from,
+      text:
+        'Gracias por tu tiempo. 🙏\n\n' +
+        'Respetamos tu decisión. Si en algún momento deseas participar, escribe *encuesta* para comenzar.\n\n' +
+        '🎓 *Universidad Tecnológica de Bolívar*',
+    });
+    return;
+  }
+
+  // Acepta → iniciar encuesta
   await setNutriaSession(from, { step: 'nutria_edad', data: {} });
+
+  await nutriaMessaging.sendText({
+    to: from,
+    text:
+      '¡Perfecto! Empecemos 🚀\n\n' +
+      'Te haré *19 preguntas rápidas*.\n' +
+      '⏱️ Tiempo estimado: *3 minutos*',
+  });
 
   await nutriaMessaging.sendList({
     to: from,
@@ -209,7 +283,88 @@ export async function handleNutriaVerificarMetricas(ctx: Ctx): Promise<void> {
   if (input !== 'si' && input !== 'no') { await invalid(from); return; }
 
   const verificarMetricas = input === 'si' ? 'Sí' : 'No';
-  await setNutriaSession(from, { step: 'nutria_tiempo_redes', data: { ...session?.data, verificarMetricas } });
+
+  if (input === 'no') {
+    await setNutriaSession(from, { step: 'nutria_tiempo_redes', data: { ...session?.data, verificarMetricas, imagenMetricas: 'No compartió' } });
+    await nutriaMessaging.sendList({
+      to: from,
+      title: 'NutriA',
+      description: p(5) + '¿Cuánto tiempo pasas en redes sociales al día? 📲',
+      footer: 'UTB · Investigación',
+      buttonText: 'Ver opciones',
+      sections: [{ title: 'Horas en redes', rows: TIEMPO_OPTS }],
+    });
+    return;
+  }
+
+  // Usuario dijo Sí → pedir captura de pantalla
+  await setNutriaSession(from, { step: 'nutria_captura_pantalla', data: { ...session?.data, verificarMetricas } });
+
+  await nutriaMessaging.sendText({
+    to: from,
+    text:
+      '📸 *Adjunta una captura de pantalla* de las métricas de tu celular.\n\n' +
+      '*Android:*\n' +
+      '→ Ajustes › Bienestar digital y controles parentales › Tomar captura\n\n' +
+      '*iPhone:*\n' +
+      '→ Configuración › Tiempo de uso › Tomar captura\n\n' +
+      '⚠️ *Asegúrate de que NO se vea ninguna información personal en la captura.*',
+  });
+
+  await nutriaMessaging.sendButtons({
+    to: from,
+    title: 'NutriA',
+    description: '¿Prefieres no compartir la imagen?',
+    footer: 'Puedes enviar la foto en cualquier momento',
+    buttons: [
+      { id: 'omitir', displayText: '⏭️ Omitir foto' },
+    ],
+  });
+}
+
+// ── 4b. Captura de pantalla de métricas ───────────────────────────────────────
+
+export async function handleNutriaCapturaPantalla(ctx: Ctx): Promise<void> {
+  const { from, text, session } = ctx;
+
+  // Usuario quiere omitir
+  if (text.trim().toLowerCase() === 'omitir' || text.trim() === '__skip__') {
+    await setNutriaSession(from, { step: 'nutria_tiempo_redes', data: { ...session?.data, imagenMetricas: 'Omitió' } });
+    await nutriaMessaging.sendList({
+      to: from,
+      title: 'NutriA',
+      description: p(5) + '¿Cuánto tiempo pasas en redes sociales al día? 📲',
+      footer: 'UTB · Investigación',
+      buttonText: 'Ver opciones',
+      sections: [{ title: 'Horas en redes', rows: TIEMPO_OPTS }],
+    });
+    return;
+  }
+
+  // Verificar si llegó una imagen
+  const inbound = (ctx as any)._inbound;
+  const mediaId: string | undefined = inbound?.mediaId;
+
+  if (!mediaId) {
+    await nutriaMessaging.sendText({
+      to: from,
+      text: '📸 Por favor envía la captura de pantalla como *imagen*, o escribe *omitir* para continuar.',
+    });
+    return;
+  }
+
+  // Descargar y guardar imagen
+  let imagenMetricas = 'Error al guardar';
+  try {
+    const filename = await guardarImagenMeta(mediaId, config.nutria.token, from);
+    imagenMetricas = filename;
+  } catch (err) {
+    console.error('[nutria] error guardando imagen:', err);
+  }
+
+  await setNutriaSession(from, { step: 'nutria_tiempo_redes', data: { ...session?.data, imagenMetricas } });
+
+  await nutriaMessaging.sendText({ to: from, text: '✅ ¡Imagen recibida! Continuemos.' });
 
   await nutriaMessaging.sendList({
     to: from,
@@ -536,7 +691,7 @@ async function sendComoEnteroList(to: string): Promise<void> {
   await nutriaMessaging.sendList({
     to,
     title: 'NutriA',
-    description: '🏁 *Última pregunta — 18 de 18* 🎉\n\n¿Por qué medio te enteraste de este stand?',
+    description: p(18) + '¿Por qué medio te enteraste de este stand?',
     footer: 'UTB · Investigación',
     buttonText: 'Ver opciones',
     sections: [{
@@ -620,6 +775,7 @@ export async function handleNutriaContacto(ctx: Ctx): Promise<void> {
       genero:            d.genero            ?? '',
       tiempoCelular:     d.tiempoCelular     ?? '',
       verificarMetricas: d.verificarMetricas ?? '',
+      imagenMetricas:    d.imagenMetricas    ?? '',
       tiempoRedes:       d.tiempoRedes       ?? '',
       redPrincipal:      d.redPrincipal      ?? '',
       sabeUltraprocesado:d.sabeUltraprocesado?? '',
@@ -650,6 +806,44 @@ export async function handleNutriaContacto(ctx: Ctx): Promise<void> {
       'Tus respuestas han sido guardadas de forma *confidencial*.\n\n' +
       'Este estudio nos ayuda a entender la influencia del marketing digital en los hábitos alimenticios de los jóvenes universitarios.\n\n' +
       '🎓 *Universidad Tecnológica de Bolívar*',
+  });
+
+  // Generar y enviar QR para reclamar la papita
+  try {
+    const codigo = await crearCodigoNutria(from);
+    const validationUrl = `https://tooli-stand.duckdns.org/api/tools/nutria/codigo/${codigo}`;
+    const qrBuffer = await QRCode.toBuffer(validationUrl, {
+      width: 400,
+      margin: 2,
+      color: { dark: '#1e1b4b', light: '#ffffff' },
+    });
+
+    await nutriaMessaging.sendImage({
+      to: from,
+      buffer: qrBuffer,
+      caption:
+        `🎁 *¡Tu mecato gratis te espera!*\n\n` +
+        `Muestra este QR en el stand para reclamarlo 🍟\n` +
+        `📍 Frente al Café UTB · Válido una sola vez\n` +
+        `🔑 Código: *${codigo}*`,
+    });
+  } catch (err) {
+    console.error('[nutria] error generando QR:', err);
+  }
+}
+
+// ── Rechazado (si vuelve a escribir tras no aceptar) ─────────────────────────
+
+export async function handleNutriaRechazado(ctx: Ctx): Promise<void> {
+  const { from, text } = ctx;
+  if (text.trim().toLowerCase() === 'encuesta') {
+    await setNutriaSession(from, { step: 'nutria_inicio', data: {} });
+    await handleNutriaInicio(ctx);
+    return;
+  }
+  await nutriaMessaging.sendText({
+    to: from,
+    text: 'Escribe *encuesta* si deseas participar en el estudio. 🔬',
   });
 }
 

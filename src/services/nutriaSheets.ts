@@ -7,6 +7,7 @@ export interface EncuestaNutria {
   genero: string;
   tiempoCelular: string;
   verificarMetricas: string;
+  imagenMetricas?: string;
   tiempoRedes: string;
   redPrincipal: string;
   sabeUltraprocesado: string;
@@ -30,11 +31,13 @@ export interface EncuestaNutria {
  *
  * Estructura de la hoja "Encuestas" (crear manualmente):
  *   A: Fecha/hora     B: WhatsApp (anon)  C: Edad            D: Género
- *   E: T.Celular/día  F: VerificarMétricas G: T.Redes/día    H: Red principal
- *   I: Sabía UP       J: Vio publicidad   K: Red publicidad  L: Publicidad motivó
- *   M: Bebidas/sem    N: Panadería/sem    O: Postres/sem     P: Mecatos/sem
- *   Q: Compró x redes R: Sellos           S: Consomiría sello T: Motivación
- *   U: Cómo se enteró
+ *   E: T.Celular/día  F: VerificarMétricas G: Imagen métricas H: T.Redes/día
+ *   I: Red principal  J: Sabía UP         K: Vio publicidad  L: Red publicidad
+ *   M: Publicidad motivó N: Bebidas/sem   O: Panadería/sem   P: Postres/sem
+ *   Q: Mecatos/sem    R: Compró x redes   S: Sellos          T: Consomiría sello
+ *   U: Motivación     V: Cómo se enteró   W: Contacto futuro
+ *
+ * Tip analista: para ver la imagen dentro de la celda usa =IMAGE(G2)
  *
  * Compartir el sheet con el service account con permisos de Editor.
  */
@@ -63,7 +66,7 @@ export async function guardarEncuestaNutria(data: EncuestaNutria): Promise<void>
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'A:V',
+    range: 'A:W',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
@@ -74,6 +77,7 @@ export async function guardarEncuestaNutria(data: EncuestaNutria): Promise<void>
         data.genero,
         data.tiempoCelular,
         data.verificarMetricas,
+        data.imagenMetricas ?? '',
         data.tiempoRedes,
         data.redPrincipal,
         data.sabeUltraprocesado,
@@ -114,7 +118,7 @@ export async function leerEncuestasNutria(): Promise<string[][]> {
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'A2:V',
+    range: 'A2:W',
   });
 
   return (response.data.values as string[][]) ?? [];

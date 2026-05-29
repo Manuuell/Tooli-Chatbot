@@ -22,7 +22,12 @@ const MetaInteractiveSchema = z.object({
   ]),
 });
 
-const MetaMessageSchema = z.union([MetaTextMessageSchema, MetaInteractiveSchema]).and(
+const MetaImageMessageSchema = z.object({
+  type: z.literal('image'),
+  image: z.object({ id: z.string(), mime_type: z.string().optional() }),
+});
+
+const MetaMessageSchema = z.union([MetaTextMessageSchema, MetaInteractiveSchema, MetaImageMessageSchema]).and(
   z.object({
     from: z.string(),
     id: z.string(),
@@ -73,6 +78,9 @@ export function parseMetaCloudWebhook(body: unknown): InboundMessage | null {
       for (const msg of messages) {
         let text: string | undefined;
 
+        let mediaId: string | undefined;
+        let mediaType: string | undefined;
+
         if (msg.type === 'text') {
           text = msg.text.body;
         } else if (msg.type === 'interactive') {
@@ -81,16 +89,22 @@ export function parseMetaCloudWebhook(body: unknown): InboundMessage | null {
           } else if (msg.interactive.type === 'list_reply') {
             text = msg.interactive.list_reply.id;
           }
+        } else if (msg.type === 'image') {
+          text = '__image__';
+          mediaId = msg.image.id;
+          mediaType = 'image';
         }
 
-        if (!text) continue; // audio, imagen, sticker — ignorar
+        if (!text) continue; // audio, sticker — ignorar
 
         return {
-          from: msg.from,           // número E.164 sin + (ej: 573001234567)
-          messageId: msg.id,        // wamid.xxx
+          from: msg.from,
+          messageId: msg.id,
           text,
           timestamp: parseInt(msg.timestamp, 10),
           phoneNumberId: change.value.metadata.phone_number_id,
+          mediaId,
+          mediaType,
         };
       }
     }

@@ -41,6 +41,7 @@ const schema = z.object({
   ADMIN_PASSWORD: z.string().default('admin'),
   PUBLIC_CHATWOOT_URL: z.string().default('http://localhost:3001'),
   PUBLIC_GRAFANA_URL: z.string().default('http://localhost:3002'),
+  APP_BASE_URL: z.string().default('https://tooli-stand.duckdns.org'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -104,4 +105,5 @@ export const config = {
     chatwoot: env.PUBLIC_CHATWOOT_URL,
     grafana: env.PUBLIC_GRAFANA_URL,
   },
+  appBaseUrl: env.APP_BASE_URL,
 };

@@ -11,17 +11,23 @@ import {
   handlePosgradoCompletada,
   handlePosgradoReengage,
 } from './flow';
+import { HANDLERS_VARIANTE_TALVEZ } from './variante-talvez';
 
 type Handler = (ctx: { from: string; text: string; session: any }) => Promise<void>;
 
 const HANDLERS: Record<string, Handler> = {
-  posg_nombre:     handlePosgradoNombre,
-  posg_correo:     handlePosgradoCorreo,
-  posg_interes:    handlePosgradoInteres,
-  posg_cual:       handlePosgradoCual,
-  posg_consent:    handlePosgradoConsent,
-  posg_completada: handlePosgradoCompletada,
-  posg_reengage:   handlePosgradoReengage,
+  posg_nombre:       handlePosgradoNombre,
+  posg_correo:       handlePosgradoCorreo,
+  // ── Variante "Tal vez" ACTIVA (Especialización / Maestría / Tal vez) ──
+  posg_interes:      HANDLERS_VARIANTE_TALVEZ.posg_interes,
+  posg_cual_v:       HANDLERS_VARIANTE_TALVEZ.posg_cual_v,
+  posg_confirma_v:   HANDLERS_VARIANTE_TALVEZ.posg_confirma_v,
+  posg_cual_final_v: HANDLERS_VARIANTE_TALVEZ.posg_cual_final_v,
+  // ── Resto del flujo base (consentimiento al inicio en posg_consent) ──
+  posg_consent:      handlePosgradoConsent,
+  posg_cual:         handlePosgradoCual,
+  posg_completada:   handlePosgradoCompletada,
+  posg_reengage:     handlePosgradoReengage,
 };
 
 // Pasos del flujo principal a los que cedemos el control (IA / asesor humano)

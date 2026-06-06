@@ -17,9 +17,9 @@ interface Ctx {
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const BRAND        = 'Tooli Posgrados';
-const ASESOR       = '+57 317 800 2131';
 const URL_ESP      = 'https://www.utb.edu.co/posgrados/especializacion-en-gestion-de-tecnologias-disruptivas-en-los-negocios/';
 const URL_MAESTRIA = 'https://www.utb.edu.co/posgrados/maestria-en-management-de-la-transformacion-digital/';
+const URL_INSCRIPCION = 'https://ssbprod.utb.edu.co:8443/PROD/bwskalog.P_DispLoginNon';
 
 const NOMBRE_ESP      = 'Especialización en Gestión de Tecnologías Disruptivas en los Negocios';
 const NOMBRE_MAESTRIA = 'Maestría en Management de la Transformación Digital';
@@ -33,13 +33,39 @@ function invalid(to: string): Promise<void> {
   return posgradoMessaging.sendText({ to, text: 'Por favor usa los botones 👆' });
 }
 
-/** Pausa breve para que una imagen se entregue antes del siguiente mensaje. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function primerNombre(nombre: string): string {
   return (nombre ?? '').trim().split(/\s+/)[0] ?? '';
+}
+
+/**
+ * Cierre del flujo: envía el flyer con el call-to-action de cupos limitados y el
+ * enlace de inscripción de Banner, todo en un mismo mensaje (imagen + caption).
+ *  - variant 'si' → cliente interesado.
+ *  - variant 'no' → añade el gancho "Piénsalo otra vez".
+ */
+async function cerrarConCupos(from: string, variant: 'si' | 'no'): Promise<void> {
+  const gancho =
+    variant === 'no'
+      ? '🔥 *PIÉNSALO OTRA VEZ.*\n*¡SON CUPOS LIMITADOS, INSCRÍBETE YA!*'
+      : '🔥 *¡SON CUPOS LIMITADOS, INSCRÍBETE YA!*';
+
+  const caption = `${gancho}\n\n📝 Inscríbete aquí 👇\n${URL_INSCRIPCION}`;
+
+  try {
+    const flyer = fs.readFileSync(FLYER_POSGRADO);
+    await posgradoMessaging.sendImage({
+      to: from,
+      buffer: flyer,
+      mimetype: 'image/jpeg',
+      caption,
+    });
+  } catch (err) {
+    console.error('[posgrados] error enviando imagen de cierre:', err);
+    // Fallback a solo texto si la imagen falla
+    await posgradoMessaging.sendText({ to: from, text: caption });
+  }
+
+  await setPosgradoSession(from, { step: 'posg_completada', data: {} });
 }
 
 // ── 0. Inicio → pide nombre ──────────────────────────────────────────────────
@@ -82,7 +108,7 @@ export async function handlePosgradoNombre(ctx: Ctx): Promise<void> {
   });
 }
 
-// ── 2. Correo → pregunta de interés ──────────────────────────────────────────
+// ── 2. Correo → pregunta de interés (solo Sí / No) ───────────────────────────
 
 export async function handlePosgradoCorreo(ctx: Ctx): Promise<void> {
   const { from, text, session } = ctx;
@@ -104,9 +130,8 @@ export async function handlePosgradoCorreo(ctx: Ctx): Promise<void> {
     description: '💰 ¿Te interesaría hacer un posgrado si lo puedes *financiar* o conseguir una *beca*?',
     footer: 'Posgrado País de ICETEX disponible',
     buttons: [
-      { id: 'si',     displayText: '✅ Sí' },
-      { id: 'talvez', displayText: '🤔 Tal vez' },
-      { id: 'no',     displayText: '❌ No' },
+      { id: 'si', displayText: '✅ Sí' },
+      { id: 'no', displayText: '❌ No' },
     ],
   });
 }
@@ -116,7 +141,7 @@ export async function handlePosgradoCorreo(ctx: Ctx): Promise<void> {
 export async function handlePosgradoInteres(ctx: Ctx): Promise<void> {
   const { from, text, session } = ctx;
   const input = text.trim().toLowerCase();
-  const map: Record<string, string> = { si: 'Sí', talvez: 'Tal vez', no: 'No' };
+  const map: Record<string, string> = { si: 'Sí', no: 'No' };
   const interesFinanciacion = map[input];
   if (!interesFinanciacion) { await invalid(from); return; }
 
@@ -135,20 +160,13 @@ export async function handlePosgradoInteres(ctx: Ctx): Promise<void> {
     console.error('[posgrados] error guardando registro:', err);
   }
 
-  // No le interesa → cerrar amablemente (el dato ya quedó guardado)
+  // No le interesa → cierre con gancho de cupos limitados (el dato ya quedó guardado)
   if (input === 'no') {
-    await setPosgradoSession(from, { step: 'posg_completada', data: {} });
-    await posgradoMessaging.sendText({
-      to: from,
-      text:
-        `¡Gracias por tu tiempo, ${primerNombre(d.nombre ?? '')}! 🙌\n\n` +
-        'Si más adelante cambias de opinión, recuerda que en la UTB puedes *financiar tu posgrado* con ICETEX.\n\n' +
-        `📞 Asesoría: *${ASESOR}*\n🌐 www.utb.edu.co`,
-    });
+    await cerrarConCupos(from, 'no');
     return;
   }
 
-  // Sí / Tal vez → presentar los 2 posgrados
+  // Sí → presentar los 2 posgrados
   await setPosgradoSession(from, { step: 'posg_cual', data: { ...d, filaSheet: String(fila) } });
 
   await posgradoMessaging.sendText({
@@ -177,7 +195,7 @@ export async function handlePosgradoInteres(ctx: Ctx): Promise<void> {
   });
 }
 
-// ── 4. ¿Cuál posgrado? → actualiza Sheet + cierre con info ────────────────────
+// ── 4. ¿Cuál posgrado? → actualiza Sheet + envía info + pide consentimiento ───
 
 export async function handlePosgradoCual(ctx: Ctx): Promise<void> {
   const { from, text, session } = ctx;
@@ -198,7 +216,7 @@ export async function handlePosgradoCual(ctx: Ctx): Promise<void> {
 
   const nombre = primerNombre(session?.data?.nombre ?? '');
 
-  // Enviar la info del posgrado elegido (el cierre/asesor llega tras el consentimiento)
+  // Enviar la info del posgrado elegido (el cierre llega tras el consentimiento)
   if (input === 'esp') {
     await posgradoMessaging.sendText({
       to: from,
@@ -223,7 +241,7 @@ export async function handlePosgradoCual(ctx: Ctx): Promise<void> {
     });
   }
 
-  // Pedir consentimiento de tratamiento de datos / contacto
+  // Pedir consentimiento de tratamiento de datos / contacto (Ley 1581)
   await setPosgradoSession(from, { step: 'posg_consent', data: { ...session?.data, posgradoInteres: valor } });
   await posgradoMessaging.sendButtons({
     to: from,
@@ -238,7 +256,7 @@ export async function handlePosgradoCual(ctx: Ctx): Promise<void> {
   });
 }
 
-// ── 5. Consentimiento → (si autoriza) pasa al asistente IA ───────────────────
+// ── 5. Consentimiento → push CRM (si autoriza) + cierre con cupos ────────────
 
 export async function handlePosgradoConsent(ctx: Ctx): Promise<void> {
   const { from, text, session } = ctx;
@@ -254,65 +272,67 @@ export async function handlePosgradoConsent(ctx: Ctx): Promise<void> {
     console.error('[posgrados] error actualizando consentimiento:', err);
   }
 
-  // No autoriza → cerrar respetando su decisión
-  if (input === 'no') {
-    await setPosgradoSession(from, { step: 'posg_completada', data: {} });
-    await posgradoMessaging.sendText({
-      to: from,
-      text:
-        `¡Gracias, ${primerNombre(d.nombre ?? '')}! 🙌 Respetamos tu decisión, no te contactaremos.\n\n` +
-        `Si más adelante quieres información, escríbenos cuando gustes: *${ASESOR}*\n🌐 www.utb.edu.co`,
+  // Si autoriza → empujar el lead a HubSpot (CRM de la UTB) — sin bloquear el flujo
+  if (input === 'si') {
+    void upsertContactoHubspot({
+      email:               d.correo ?? '',
+      nombre:              d.nombre ?? '',
+      whatsapp:            from,
+      posgradoInteres:     d.posgradoInteres ?? '',
+      interesFinanciacion: d.interesFinanciacion ?? '',
+      consentimiento:      true,
     });
-    return;
   }
 
-  // Sí autoriza → empujar el lead a HubSpot (CRM de la UTB) — sin bloquear el flujo
-  void upsertContactoHubspot({
-    email:               d.correo ?? '',
-    nombre:              d.nombre ?? '',
-    whatsapp:            from,
-    posgradoInteres:     d.posgradoInteres ?? '',
-    interesFinanciacion: d.interesFinanciacion ?? '',
-    consentimiento:      true,
-  });
-
-  // Cierre limpio — el seguimiento se hace después con una plantilla (no chat en vivo)
-  await setPosgradoSession(from, { step: 'posg_completada', data: {} });
-  await posgradoMessaging.sendText({
-    to: from,
-    text:
-      `🎓 ¡Listo, ${primerNombre(d.nombre ?? '')}! Registramos tu interés en *${d.posgradoInteres ?? 'el posgrado'}*.\n\n` +
-      'Un asesor de la UTB te contactará pronto con las *fechas de inscripción*, requisitos y *financiación (ICETEX)*. 📩\n\n' +
-      `¿Una duda ya mismo? Escríbenos a *${ASESOR}*`,
-  });
-
-  // 🎁 Recompensa por completar — la Escuela de Transformación Digital comparte la oportunidad de financiación
-  await sleep(1500);
-  try {
-    const flyer = fs.readFileSync(FLYER_POSGRADO);
-    await posgradoMessaging.sendImage({
-      to: from,
-      buffer: flyer,
-      mimetype: 'image/jpeg',
-      caption:
-        '🎁 *¡Gracias por completar!*\n\n' +
-        'La *Escuela de Transformación Digital* te comparte esta oportunidad:\n' +
-        '💰 *Posgrado País de ICETEX* — paga el *40% mientras estudias* y el *60% después de graduarte*.\n\n' +
-        '¡Tu posgrado está más cerca de lo que crees! 🚀',
-    });
-  } catch (err) {
-    console.error('[posgrados] error enviando flyer de recompensa:', err);
-  }
+  // Cierre del flujo: flyer + cupos limitados + enlace de inscripción
+  await cerrarConCupos(from, 'si');
 }
 
-// ── Completada (si vuelve a escribir) ─────────────────────────────────────────
+// ── Completada (si vuelve a escribir) → ofrece info o reiniciar encuesta ──────
 
 export async function handlePosgradoCompletada(ctx: Ctx): Promise<void> {
   const { from } = ctx;
-  await posgradoMessaging.sendText({
+
+  await setPosgradoSession(from, { step: 'posg_reengage', data: {} });
+
+  await posgradoMessaging.sendButtons({
     to: from,
-    text:
-      '✅ ¡Ya tenemos tus datos! Un asesor te contactará pronto. 🎓\n\n' +
-      `📞 ¿Dudas ya mismo? Escríbenos: *${ASESOR}*`,
+    title: BRAND,
+    description: '¿Te puedo ayudar con algo más?',
+    footer: 'Elige una opción 👇',
+    buttons: [
+      { id: 'info',     displayText: '📄 Información adicional' },
+      { id: 'encuesta', displayText: '🔄 Volver a la encuesta' },
+    ],
   });
+}
+
+// ── Re-enganche → manda info adicional o reinicia el flujo ────────────────────
+
+export async function handlePosgradoReengage(ctx: Ctx): Promise<void> {
+  const { from, text } = ctx;
+  const input = text.trim().toLowerCase();
+
+  if (input === 'encuesta') {
+    await handlePosgradoInicio({ from, text, session: null });
+    return;
+  }
+
+  if (input === 'info') {
+    await posgradoMessaging.sendText({
+      to: from,
+      text:
+        '📚 *Toda la info aquí de la maestría* 👇\n' +
+        `${URL_MAESTRIA}\n\n` +
+        '🎯 *Toda la info aquí de la especialización* 👇\n' +
+        `${URL_ESP}\n\n` +
+        '📝 *Enlace de inscripción* 👇\n' +
+        `${URL_INSCRIPCION}`,
+    });
+    // Permanece disponible: si vuelve a escribir, se le ofrece de nuevo el menú
+    await setPosgradoSession(from, { step: 'posg_completada', data: {} });
+    return;
+  }
+
+  await invalid(from);
 }

@@ -34,6 +34,9 @@ app.get('/app', (_req, res) => res.redirect('/app/'));
 // Dashboard público NutriA
 app.use('/nutria', express.static(path.resolve(__dirname, 'public/nutria')));
 
+// Dashboard público Posgrados (presentación + QR del chat)
+app.use('/posgrados', express.static(path.resolve(__dirname, 'public/posgrados')));
+
 // Imágenes subidas por usuarios (capturas de pantalla métricas)
 app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 

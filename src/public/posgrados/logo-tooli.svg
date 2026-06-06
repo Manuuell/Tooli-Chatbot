@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="56" viewBox="0 0 200 56" fill="none">
+  <defs>
+    <linearGradient id="tooliGrad" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3FF"/>
+      <stop offset="1" stop-color="#0A84FF"/>
+    </linearGradient>
+  </defs>
+  <!-- Chat bubble icon -->
+  <rect x="2" y="6" width="44" height="38" rx="13" fill="url(#tooliGrad)"/>
+  <path d="M16 44 L24 44 L18 52 Z" fill="url(#tooliGrad)"/>
+  <!-- bot eyes / dots -->
+  <circle cx="16" cy="25" r="4" fill="#ffffff"/>
+  <circle cx="32" cy="25" r="4" fill="#ffffff"/>
+  <!-- antenna -->
+  <line x1="24" y1="6" x2="24" y2="0.5" stroke="url(#tooliGrad)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="24" cy="1" r="2.4" fill="#22D3FF"/>
+  <!-- Wordmark -->
+  <text x="56" y="38" font-family="'DM Sans','Segoe UI',Arial,sans-serif" font-size="34" font-weight="800" letter-spacing="-1" fill="#13294B">Tooli</text>
+</svg>

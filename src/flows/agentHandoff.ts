@@ -48,8 +48,13 @@ export async function iniciarConversacionAsesor(
     timeStyle: 'short',
   });
 
+  const areaLabel =
+    area === 'ti' ? 'Soporte TI' :
+    area === 'posgrados' ? 'Interesado en Posgrado' :
+    'Soporte Admisiones';
+
   let contexto = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  contexto += `🆘 Solicitud nueva — ${area === 'ti' ? 'Soporte TI' : 'Soporte Admisiones'}\n`;
+  contexto += `🆘 Solicitud nueva — ${areaLabel}\n`;
   contexto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   contexto += `📱 WhatsApp: +${from}\n`;
   contexto += `📅 Recibido: ${ahora}\n`;
@@ -62,6 +67,11 @@ export async function iniciarConversacionAsesor(
   if (area === 'ti') {
     contexto += `🔎 Plataforma: ${data.plataforma}\n`;
     contexto += `📝 Problema: ${data.descripcion}\n`;
+  } else if (area === 'posgrados') {
+    contexto += `👤 Nombre: ${data.nombre ?? '(no disponible)'}\n`;
+    contexto += `📧 Correo: ${data.correo ?? '(no disponible)'}\n`;
+    contexto += `🎓 Posgrado de interés: ${data.posgradoInteres ?? '(no especificado)'}\n`;
+    if (data.descripcion) contexto += `📝 Consulta: ${data.descripcion}\n`;
   } else {
     contexto += `🎓 Nivel: ${data.nivel}\n`;
     contexto += `📌 Etapa: ${data.etapa}\n`;
@@ -113,9 +123,11 @@ export async function iniciarConversacionAsesor(
       teamId,
       initialMessage: contexto,
       customAttributes: {
-        area: area === 'ti' ? 'Soporte TI' : 'Soporte Admisiones',
+        area: areaLabel,
         ...(area === 'ti'
           ? { plataforma: data.plataforma }
+          : area === 'posgrados'
+          ? { nombre: data.nombre ?? '', correo: data.correo ?? '', posgrado_interes: data.posgradoInteres ?? '' }
           : { nivel: data.nivel, etapa: data.etapa }),
         ...(opts.conVerificacionIdentidad
           ? {

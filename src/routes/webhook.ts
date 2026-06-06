@@ -7,6 +7,8 @@ import { isBanned, recordActivity } from '../services/botUserService';
 import { config } from '../config';
 import { messaging } from '../flows/shared';
 import { handleMessage } from '../flows';
+import { handleEventoMessage } from '../flows/evento';
+import { handlePosgradoMessage } from '../flows/posgrados-evento';
 
 export const webhookRouter = Router();
 
@@ -80,6 +82,12 @@ webhookRouter.post(['/', '/:event'], async (req: Request, res: Response) => {
         return;
       }
 
+      if (config.evento.activo) {
+        return handleEventoMessage(resolvedFrom, inbound.text);
+      }
+      if (config.posgradosEvento.activo) {
+        return handlePosgradoMessage(resolvedFrom, inbound.text);
+      }
       return handleMessage(resolvedFrom, inbound.text);
     })
     .catch(err => {

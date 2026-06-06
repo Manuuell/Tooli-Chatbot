@@ -26,6 +26,22 @@ const schema = z.object({
   // ── Google Sheets — registro de prospectos de posgrado ───────────────────────
   // ID del spreadsheet donde se guardan los registros (compartir con service account)
   POSGRADO_REGISTRO_SHEET_ID: z.string().optional(),
+  // ── Evento Talento Tech — flujo temporal en el número de Posgrados ────────────
+  // 'true' activa el flujo del evento (reemplaza el menú clásico). Apagar tras el evento.
+  EVENTO_FLOW_ACTIVO: z.string().optional().default('false'),
+  EVENTO_SHEET_ID: z.string().optional(),
+  // ── Evento Posgrados (sábado) — capta interesados en posgrado con financiación ─
+  POSGRADOS_EVENTO_ACTIVO: z.string().optional().default('false'),
+  POSGRADOS_EVENTO_SHEET_ID: z.string().optional(),
+  // ── HubSpot CRM (UTB) — empuja leads que dan consentimiento ───────────────────
+  HUBSPOT_ACTIVO: z.string().optional().default('false'),
+  HUBSPOT_TOKEN: z.string().optional(), // Private App token (scope crm.objects.contacts.write)
+  HUBSPOT_FUENTE_VALOR: z.string().optional().default('Bot WhatsApp - Evento Posgrados'),
+  // Nombres internos de propiedades personalizadas (vacío = no se envían)
+  HUBSPOT_PROP_POSGRADO: z.string().optional(),
+  HUBSPOT_PROP_FUENTE: z.string().optional(),
+  HUBSPOT_PROP_CONSENTIMIENTO: z.string().optional(),
+  HUBSPOT_PROP_FINANCIACION: z.string().optional(),
   // ─────────────────────────────────────────────────────────────────────────────
   CHATWOOT_URL: z.string().optional(),
   CHATWOOT_ACCOUNT_ID: z.string().optional(),
@@ -81,6 +97,23 @@ export const config = {
   google: {
     serviceAccount: JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON),
     registroPosgradoSheetId: env.POSGRADO_REGISTRO_SHEET_ID ?? '',
+  },
+  evento: {
+    activo: env.EVENTO_FLOW_ACTIVO === 'true',
+    sheetId: env.EVENTO_SHEET_ID ?? '',
+  },
+  posgradosEvento: {
+    activo: env.POSGRADOS_EVENTO_ACTIVO === 'true',
+    sheetId: env.POSGRADOS_EVENTO_SHEET_ID ?? '',
+  },
+  hubspot: {
+    activo: env.HUBSPOT_ACTIVO === 'true',
+    token: env.HUBSPOT_TOKEN ?? '',
+    fuenteValor: env.HUBSPOT_FUENTE_VALOR ?? 'Bot WhatsApp - Evento Posgrados',
+    propPosgrado: env.HUBSPOT_PROP_POSGRADO ?? '',
+    propFuente: env.HUBSPOT_PROP_FUENTE ?? '',
+    propConsentimiento: env.HUBSPOT_PROP_CONSENTIMIENTO ?? '',
+    propFinanciacion: env.HUBSPOT_PROP_FINANCIACION ?? '',
   },
   openai: {
     apiKey: env.OPENAI_API_KEY,

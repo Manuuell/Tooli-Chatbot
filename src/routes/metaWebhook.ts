@@ -8,6 +8,8 @@ import { config } from '../config';
 import { messaging } from '../flows/shared';
 import { handleMessage } from '../flows';
 import { handleNutriaMessage } from '../flows/nutria';
+import { handleEventoMessage } from '../flows/evento';
+import { handlePosgradoMessage } from '../flows/posgrados-evento';
 
 export const metaWebhookRouter = Router();
 
@@ -89,6 +91,16 @@ metaWebhookRouter.post('/', async (req: Request, res: Response) => {
   if (isNutria) {
     handleNutriaMessage(from, inbound.text, inbound).catch(err => {
       console.error('[meta-webhook] error en handleNutriaMessage para', from.slice(-4), err);
+    });
+  } else if (config.evento.activo) {
+    // Flujo temporal del evento Talento Tech (reemplaza el menú clásico mientras esté activo)
+    handleEventoMessage(from, inbound.text, inbound).catch(err => {
+      console.error('[meta-webhook] error en handleEventoMessage para', from.slice(-4), err);
+    });
+  } else if (config.posgradosEvento.activo) {
+    // Flujo temporal del evento de Posgrados (sábado)
+    handlePosgradoMessage(from, inbound.text, inbound).catch(err => {
+      console.error('[meta-webhook] error en handlePosgradoMessage para', from.slice(-4), err);
     });
   } else {
     handleMessage(from, inbound.text).catch(err => {

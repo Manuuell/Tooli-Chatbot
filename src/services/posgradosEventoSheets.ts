@@ -1,0 +1,105 @@
+import { google } from 'googleapis';
+import { config } from '../config';
+
+export interface RegistroPosgrado {
+  whatsapp: string;
+  nombre: string;
+  correo: string;
+  interesFinanciacion: string;
+}
+
+function getSheetsClient(readonly = false) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: config.google.serviceAccount,
+    scopes: [
+      readonly
+        ? 'https://www.googleapis.com/auth/spreadsheets.readonly'
+        : 'https://www.googleapis.com/auth/spreadsheets',
+    ],
+  });
+  return google.sheets({ version: 'v4', auth });
+}
+
+/**
+ * Guarda un registro del evento de Posgrados en Google Sheets.
+ * Devuelve el número de fila (para actualizar el posgrado de interés luego), o 0.
+ *
+ * Estructura de la hoja (crear y compartir con el service account como Editor):
+ *   A: Fecha/hora   B: WhatsApp   C: Nombre   D: Correo
+ *   E: ¿Interés con financiación?   F: Posgrado de interés   G: ¿Autoriza contacto?
+ */
+export async function guardarRegistroPosgrado(data: RegistroPosgrado): Promise<number> {
+  const sheetId = config.posgradosEvento.sheetId;
+  if (!sheetId) {
+    console.warn('[posgrados] POSGRADOS_EVENTO_SHEET_ID no configurado — guardando solo en logs');
+    console.log('[posgrados] REGISTRO:', JSON.stringify(data));
+    return 0;
+  }
+
+  const sheets = getSheetsClient();
+  const ahora = new Date().toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+
+  const res = await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: 'A:G',
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: [[
+        ahora,
+        data.whatsapp,
+        data.nombre,
+        data.correo,
+        data.interesFinanciacion,
+        '', // F: posgrado de interés (se completa después)
+        '', // G: ¿autoriza contacto? (se completa después)
+      ]],
+    },
+  });
+
+  console.log('[posgrados] registro guardado:', data.nombre, '·', data.correo);
+
+  const updatedRange = res.data.updates?.updatedRange ?? '';
+  const match = updatedRange.match(/![A-Z]+(\d+):/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+/**
+ * Actualiza la columna F (posgrado de interés) de una fila ya guardada.
+ */
+export async function actualizarPosgradoInteres(fila: number, valor: string): Promise<void> {
+  const sheetId = config.posgradosEvento.sheetId;
+  if (!sheetId || !fila) return;
+
+  const sheets = getSheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `F${fila}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[valor]] },
+  });
+
+  console.log('[posgrados] posgrado de interés actualizado — fila', fila, ':', valor);
+}
+
+/**
+ * Actualiza la columna G (¿autoriza contacto?) de una fila ya guardada.
+ */
+export async function actualizarConsentimiento(fila: number, valor: string): Promise<void> {
+  const sheetId = config.posgradosEvento.sheetId;
+  if (!sheetId || !fila) return;
+
+  const sheets = getSheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `G${fila}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[valor]] },
+  });
+
+  console.log('[posgrados] consentimiento actualizado — fila', fila, ':', valor);
+}

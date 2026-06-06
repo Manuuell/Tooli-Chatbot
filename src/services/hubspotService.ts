@@ -1,0 +1,78 @@
+import axios from 'axios';
+import { config } from '../config';
+
+const HUBSPOT_API = 'https://api.hubapi.com';
+
+export interface HubspotLead {
+  email: string;
+  nombre: string;            // nombre completo
+  whatsapp: string;          // E.164 sin '+', ej: 573001234567
+  posgradoInteres: string;
+  interesFinanciacion: string;
+  consentimiento: boolean;
+}
+
+/**
+ * Crea o actualiza (upsert por correo) un contacto en el HubSpot de la UTB.
+ *
+ * Solo se ejecuta si HUBSPOT_ACTIVO=true y hay token. Si una propiedad
+ * personalizada no existe en HubSpot, reintenta con las propiedades estándar
+ * para no perder el contacto.
+ *
+ * Requisitos:
+ *  - HUBSPOT_TOKEN: token de una Private App con scope crm.objects.contacts.write
+ *  - (opcional) HUBSPOT_PROP_* con el nombre interno de las propiedades custom
+ */
+export async function upsertContactoHubspot(lead: HubspotLead): Promise<void> {
+  if (!config.hubspot.activo || !config.hubspot.token) {
+    console.log('[hubspot] inactivo o sin token — omitido');
+    return;
+  }
+
+  const partes = lead.nombre.trim().split(/\s+/).filter(Boolean);
+  const firstname = partes[0] ?? '';
+  const lastname = partes.slice(1).join(' ');
+
+  // Propiedades estándar (siempre existen en HubSpot)
+  const base: Record<string, string> = {
+    email: lead.email,
+    firstname,
+    lastname,
+    phone: `+${lead.whatsapp}`,
+  };
+
+  // Propiedades personalizadas — solo si se configuró su nombre interno
+  const full: Record<string, string> = { ...base };
+  if (config.hubspot.propPosgrado) full[config.hubspot.propPosgrado] = lead.posgradoInteres;
+  if (config.hubspot.propFuente) full[config.hubspot.propFuente] = config.hubspot.fuenteValor;
+  if (config.hubspot.propConsentimiento) {
+    full[config.hubspot.propConsentimiento] = lead.consentimiento ? 'true' : 'false';
+  }
+  if (config.hubspot.propFinanciacion) full[config.hubspot.propFinanciacion] = lead.interesFinanciacion;
+
+  const headers = {
+    Authorization: `Bearer ${config.hubspot.token}`,
+    'Content-Type': 'application/json',
+  };
+
+  const doUpsert = (properties: Record<string, string>) =>
+    axios.post(
+      `${HUBSPOT_API}/crm/v3/objects/contacts/batch/upsert`,
+      { inputs: [{ idProperty: 'email', id: lead.email, properties }] },
+      { headers, timeout: 15_000 }
+    );
+
+  try {
+    await doUpsert(full);
+    console.log('[hubspot] contacto upsert OK:', lead.email);
+  } catch (err: any) {
+    console.error('[hubspot] error upsert (reintento con datos básicos):', err.response?.data ?? err.message);
+    // Reintento con solo propiedades estándar (por si alguna custom no existe)
+    try {
+      await doUpsert(base);
+      console.log('[hubspot] contacto upsert OK (básico):', lead.email);
+    } catch (err2: any) {
+      console.error('[hubspot] error definitivo:', err2.response?.data ?? err2.message);
+    }
+  }
+}

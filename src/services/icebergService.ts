@@ -204,13 +204,28 @@ async function tryDownloadFromMenu(
     return { found: false };
   }
 
-  // Seleccionar la primera fila — ZK Listbox usa radio buttons en columna "Selec."
+  // Seleccionar la primera fila del ZK Listbox.
+  // ZK oculta visualmente los inputs y usa spans custom, así que probamos en orden:
+  // 1) radio button (con force para elementos ocultos por CSS)
+  // 2) checkbox (con force)
+  // 3) click directo en la primera fila del listbox
   const firstRadio = page.locator('input[type="radio"]').first();
-  const radioVisible = await firstRadio.isVisible().catch(() => false);
-  if (!radioVisible) {
+  const firstCheckbox = page.locator('input[type="checkbox"]').first();
+  const firstRow = page.locator('.z-listitem, tr.z-listitem, li.z-listitem').first();
+
+  const radioExists = await firstRadio.count().then(n => n > 0).catch(() => false);
+  const checkboxExists = await firstCheckbox.count().then(n => n > 0).catch(() => false);
+  const rowExists = await firstRow.count().then(n => n > 0).catch(() => false);
+
+  if (radioExists) {
+    await firstRadio.click({ force: true }).catch(() => {});
+  } else if (checkboxExists) {
+    await firstCheckbox.click({ force: true }).catch(() => {});
+  } else if (rowExists) {
+    await firstRow.click().catch(() => {});
+  } else {
     return { found: false };
   }
-  await firstRadio.click().catch(() => {});
   await page.waitForTimeout(500);
 
   // Click en "Generar Recibo" — abre pestaña nueva con el PDF

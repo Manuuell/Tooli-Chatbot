@@ -10,22 +10,23 @@ const PORTAL_URL = 'https://iceberg-niif.utb.edu.co/iceberg-pf/';
 const DEBUG_DIR = '/tmp/iceberg';
 const MAX_CAPTCHA_RETRIES = 5;
 
+export interface MatriculaFecha {
+  tipo: 'ORDINARIA' | 'EXTRAORDINARIA' | 'EXTEMPORANEA';
+  fechaVencimiento: string;
+  recargo: string;
+}
+
 export interface IcebergLoginResult {
   ok: boolean;
   error?: string;
-  /** Nombre del estudiante extraído del banner post-login (ej: "MANUEL ESTEBAN SEVERICHE PUELLO") */
   nombre?: string;
-  /** Cédula extraída del banner post-login */
   cedula?: string;
-  /** true si el login fue OK pero ningún menú tiene recibos pendientes */
   noRecibos?: boolean;
-  /** Menú donde se encontró/intentó descargar el recibo */
   menuUsado?: string;
-  /** Buffer del PDF del recibo de matrícula, si llegamos a descargarlo */
   pdf?: Buffer;
-  /** Captchas que se intentaron resolver (para debug) */
+  /** Fechas de vencimiento extraídas de la tabla del portal */
+  matriculas?: MatriculaFecha[];
   captchaAttempts?: Array<{ solver: 'openai' | 'tesseract'; text: string }>;
-  /** Screenshots de cada paso (paths) cuando debug=true */
   debugFiles?: string[];
 }
 
@@ -169,6 +170,67 @@ async function refreshCaptcha(page: Page): Promise<void> {
 }
 
 /**
+ * Lee la tabla del portal y extrae fechas de vencimiento por tipo de matrícula.
+ * ZK Listbox renderiza las filas como .z-listitem y las celdas como .z-listcell-cnt.
+ */
+async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
+  try {
+    const rows = await page.evaluate(() => {
+      const results: Array<{ desc: string; fecha: string; recargo: string }> = [];
+
+      // ZK Listbox: filas como li.z-listitem, contenido de celda en span.z-listcell-cnt
+      const listitems = document.querySelectorAll('.z-listitem');
+      listitems.forEach(row => {
+        const cells = Array.from(row.querySelectorAll('.z-listcell-cnt'));
+        if (cells.length >= 4) {
+          const desc   = cells[1]?.textContent?.trim() ?? '';
+          const fecha  = cells[2]?.textContent?.trim() ?? '';
+          const recargo = cells[3]?.textContent?.trim() ?? '';
+          if (desc) results.push({ desc, fecha, recargo });
+        }
+      });
+
+      // Fallback: tabla HTML clásica
+      if (results.length === 0) {
+        document.querySelectorAll('tr').forEach(row => {
+          const cells = Array.from(row.querySelectorAll('td'));
+          if (cells.length >= 4) {
+            const desc   = cells[1]?.textContent?.trim() ?? '';
+            const fecha  = cells[2]?.textContent?.trim() ?? '';
+            const recargo = cells[3]?.textContent?.trim() ?? '';
+            if (desc.length > 10) results.push({ desc, fecha, recargo });
+          }
+        });
+      }
+
+      return results;
+    });
+
+    const matriculas: MatriculaFecha[] = [];
+    for (const row of rows) {
+      const desc = row.desc.toUpperCase();
+      let tipo: MatriculaFecha['tipo'] | null = null;
+      if (desc.includes('MATRICULA ORDINARIA') || desc.includes('MATRÍCULA ORDINARIA')) {
+        tipo = 'ORDINARIA';
+      } else if (desc.includes('EXTRAORDINARIA')) {
+        tipo = 'EXTRAORDINARIA';
+      } else if (desc.includes('EXTEMPORANEA') || desc.includes('EXTEMPORÁNEA')) {
+        tipo = 'EXTEMPORANEA';
+      }
+      if (tipo && row.fecha) {
+        matriculas.push({ tipo, fechaVencimiento: row.fecha, recargo: row.recargo });
+      }
+    }
+
+    console.log(`[iceberg] fechas extraídas: ${JSON.stringify(matriculas)}`);
+    return matriculas;
+  } catch (err: any) {
+    console.error('[iceberg] error extrayendo fechas de matrícula:', err?.message);
+    return [];
+  }
+}
+
+/**
  * Navega a un menú y verifica si tiene registros. Si los tiene, selecciona la primera
  * fila y clickea "Generar Recibo", capturando el PDF de la pestaña nueva que se abre.
  *
@@ -182,7 +244,7 @@ async function tryDownloadFromMenu(
   menuName: string,
   debug: boolean,
   debugFiles: string[]
-): Promise<{ found: boolean; pdf?: Buffer; error?: string }> {
+): Promise<{ found: boolean; pdf?: Buffer; error?: string; matriculas?: MatriculaFecha[] }> {
   // Click en el item del menú lateral
   await page.locator(`text="${menuName}"`).first().click().catch(() => {});
   await page.waitForTimeout(2_000);
@@ -203,6 +265,9 @@ async function tryDownloadFromMenu(
   if (sinRegistros) {
     return { found: false };
   }
+
+  // Extraer fechas de vencimiento de la tabla antes de seleccionar fila
+  const matriculas = await extractMatriculaFechas(page);
 
   // Seleccionar la primera fila del ZK Listbox.
   // ZK oculta visualmente los inputs y usa spans custom, así que probamos en orden:
@@ -290,7 +355,7 @@ async function tryDownloadFromMenu(
     debugFiles.push(p);
   }
 
-  return { found: true, pdf: pdfBuffer };
+  return { found: true, pdf: pdfBuffer, matriculas };
 }
 
 /**
@@ -467,12 +532,15 @@ async function loginAndDownloadReceiptInternal(
     let menuUsado: string | undefined;
     let downloadError: string | undefined;
 
+    let matriculas: MatriculaFecha[] | undefined;
+
     for (const menu of MENUS_RECIBOS) {
       console.log(`[iceberg] revisando menú: ${menu}`);
       const r = await tryDownloadFromMenu(page, menu, debug, debugFiles);
       if (r.pdf) {
         pdf = r.pdf;
         menuUsado = menu;
+        matriculas = r.matriculas;
         break;
       }
       if (r.found && r.error) {
@@ -483,7 +551,7 @@ async function loginAndDownloadReceiptInternal(
     }
 
     if (pdf) {
-      return { ok: true, nombre, cedula: cedulaExtraida, pdf, menuUsado, captchaAttempts, debugFiles };
+      return { ok: true, nombre, cedula: cedulaExtraida, pdf, menuUsado, matriculas, captchaAttempts, debugFiles };
     }
 
     if (downloadError) {

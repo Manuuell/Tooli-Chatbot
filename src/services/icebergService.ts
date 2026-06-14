@@ -175,41 +175,44 @@ async function refreshCaptcha(page: Page): Promise<void> {
  */
 async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
   try {
+    // Extraer todo el texto visible de la página y parsear con regex.
+    // Esto es robusto ante cualquier versión de ZK Framework.
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+
+    console.log(`[iceberg] texto página (primeros 500): ${bodyText.slice(0, 500)}`);
+
     const matriculas: MatriculaFecha[] = [];
+    const DATE_RE = /(\d{2}\/\d{2}\/\d{4})/g;
 
-    // Intentar con ZK Listbox (.z-listitem / .z-listcell-cnt)
-    const zkRows = page.locator('.z-listitem');
-    const zkCount = await zkRows.count().catch(() => 0);
-
-    for (let i = 0; i < zkCount; i++) {
-      const cells = zkRows.nth(i).locator('.z-listcell-cnt');
-      const cellCount = await cells.count().catch(() => 0);
-      if (cellCount < 4) continue;
-
-      const desc    = (await cells.nth(1).textContent().catch(() => '')) ?? '';
-      const fecha   = (await cells.nth(2).textContent().catch(() => '')) ?? '';
-      const recargo = (await cells.nth(3).textContent().catch(() => '')) ?? '';
-      const parsed  = parseTipo(desc);
-      if (parsed && fecha.trim()) {
-        matriculas.push({ tipo: parsed, fechaVencimiento: fecha.trim(), recargo: recargo.trim() });
+    // Buscar líneas que contengan tipo de matrícula y una fecha
+    const lines = bodyText.split(/\n|\\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const tipo = parseTipo(line);
+      if (!tipo) continue;
+      const dates = line.match(DATE_RE);
+      if (dates && dates.length > 0) {
+        // Tomar la última fecha del texto (suele ser la fecha de vencimiento)
+        const fecha = dates[dates.length - 1];
+        // Buscar recargo en la misma línea (ej: "2 %" o "0 %")
+        const recargoMatch = line.match(/(\d+)\s*%/);
+        const recargo = recargoMatch ? `${recargoMatch[1]}%` : '0%';
+        // Evitar duplicados del mismo tipo
+        if (!matriculas.find(m => m.tipo === tipo)) {
+          matriculas.push({ tipo, fechaVencimiento: fecha, recargo });
+        }
       }
     }
 
-    // Fallback: tabla HTML clásica (tr / td)
+    // Si no encontró nada por líneas, buscar patrones directamente en el texto completo
     if (matriculas.length === 0) {
-      const trRows = page.locator('tr');
-      const trCount = await trRows.count().catch(() => 0);
-      for (let i = 0; i < trCount; i++) {
-        const cells = trRows.nth(i).locator('td');
-        const cellCount = await cells.count().catch(() => 0);
-        if (cellCount < 4) continue;
-        const desc    = (await cells.nth(1).textContent().catch(() => '')) ?? '';
-        const fecha   = (await cells.nth(2).textContent().catch(() => '')) ?? '';
-        const recargo = (await cells.nth(3).textContent().catch(() => '')) ?? '';
-        const parsed  = parseTipo(desc);
-        if (parsed && fecha.trim()) {
-          matriculas.push({ tipo: parsed, fechaVencimiento: fecha.trim(), recargo: recargo.trim() });
-        }
+      const tipos: Array<[MatriculaFecha['tipo'], RegExp]> = [
+        ['EXTRAORDINARIA', /EXTRAORDINARIA[^\d]*(\d{2}\/\d{2}\/\d{4})/i],
+        ['ORDINARIA',      /ORDINARIA[^\d]*(\d{2}\/\d{2}\/\d{4})/i],
+        ['EXTEMPORANEA',   /EXTEMPORA[NÑ]EA[^\d]*(\d{2}\/\d{2}\/\d{4})/i],
+      ];
+      for (const [tipo, re] of tipos) {
+        const m = bodyText.match(re);
+        if (m) matriculas.push({ tipo, fechaVencimiento: m[1], recargo: '0%' });
       }
     }
 
@@ -221,11 +224,11 @@ async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
   }
 }
 
-function parseTipo(desc: string): MatriculaFecha['tipo'] | null {
-  const d = desc.toUpperCase();
-  if (d.includes('ORDINARIA') && !d.includes('EXTRAORDINARIA')) return 'ORDINARIA';
-  if (d.includes('EXTRAORDINARIA')) return 'EXTRAORDINARIA';
-  if (d.includes('EXTEMPORANEA') || d.includes('EXTEMPORÁNEA')) return 'EXTEMPORANEA';
+function parseTipo(text: string): MatriculaFecha['tipo'] | null {
+  const t = text.toUpperCase();
+  if (t.includes('EXTRAORDINARIA')) return 'EXTRAORDINARIA';
+  if (t.includes('ORDINARIA')) return 'ORDINARIA';
+  if (t.includes('EXTEMPORANEA') || t.includes('EXTEMPORÁNEA')) return 'EXTEMPORANEA';
   return null;
 }
 

@@ -175,32 +175,33 @@ async function refreshCaptcha(page: Page): Promise<void> {
  */
 async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
   try {
-    const rows = await page.evaluate(() => {
+    const rows = await page.evaluate((): Array<{ desc: string; fecha: string; recargo: string }> => {
       const results: Array<{ desc: string; fecha: string; recargo: string }> = [];
+      const text = (el: Element | null): string => (el as HTMLElement | null)?.innerText?.trim() ?? el?.textContent?.trim() ?? '';
 
       // ZK Listbox: filas como li.z-listitem, contenido de celda en span.z-listcell-cnt
-      const listitems = document.querySelectorAll('.z-listitem');
-      listitems.forEach(row => {
+      const listitems = Array.from(document.querySelectorAll('.z-listitem'));
+      for (const row of listitems) {
         const cells = Array.from(row.querySelectorAll('.z-listcell-cnt'));
         if (cells.length >= 4) {
-          const desc   = cells[1]?.textContent?.trim() ?? '';
-          const fecha  = cells[2]?.textContent?.trim() ?? '';
-          const recargo = cells[3]?.textContent?.trim() ?? '';
+          const desc    = text(cells[1]);
+          const fecha   = text(cells[2]);
+          const recargo = text(cells[3]);
           if (desc) results.push({ desc, fecha, recargo });
         }
-      });
+      }
 
       // Fallback: tabla HTML clásica
       if (results.length === 0) {
-        document.querySelectorAll('tr').forEach(row => {
+        for (const row of Array.from(document.querySelectorAll('tr'))) {
           const cells = Array.from(row.querySelectorAll('td'));
           if (cells.length >= 4) {
-            const desc   = cells[1]?.textContent?.trim() ?? '';
-            const fecha  = cells[2]?.textContent?.trim() ?? '';
-            const recargo = cells[3]?.textContent?.trim() ?? '';
+            const desc    = text(cells[1]);
+            const fecha   = text(cells[2]);
+            const recargo = text(cells[3]);
             if (desc.length > 10) results.push({ desc, fecha, recargo });
           }
-        });
+        }
       }
 
       return results;

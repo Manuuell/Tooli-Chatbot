@@ -94,7 +94,7 @@ export async function handleReciboCedula(ctx: FlowContext): Promise<void> {
         msg += `📅 *Matrícula ordinaria:* paga antes del *${ordinaria.fechaVencimiento}* (sin recargo)\n`;
       }
       if (extraordinaria) {
-        msg += `⚠️ *Matrícula extraordinaria:* hasta el *${extraordinaria.fechaVencimiento}* (+${extraordinaria.recargo} recargo)\n`;
+        msg += `⚠️ *Matrícula extraordinaria:* hasta el *${extraordinaria.fechaVencimiento}* (+2% recargo)\n`;
       }
       msg += `\nEscribe *menu* para volver al inicio.`;
 

@@ -175,51 +175,41 @@ async function refreshCaptcha(page: Page): Promise<void> {
  */
 async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
   try {
-    const rows = await page.evaluate((): Array<{ desc: string; fecha: string; recargo: string }> => {
-      const results: Array<{ desc: string; fecha: string; recargo: string }> = [];
-      const text = (el: Element | null): string => (el as HTMLElement | null)?.innerText?.trim() ?? el?.textContent?.trim() ?? '';
-
-      // ZK Listbox: filas como li.z-listitem, contenido de celda en span.z-listcell-cnt
-      const listitems = Array.from(document.querySelectorAll('.z-listitem'));
-      for (const row of listitems) {
-        const cells = Array.from(row.querySelectorAll('.z-listcell-cnt'));
-        if (cells.length >= 4) {
-          const desc    = text(cells[1]);
-          const fecha   = text(cells[2]);
-          const recargo = text(cells[3]);
-          if (desc) results.push({ desc, fecha, recargo });
-        }
-      }
-
-      // Fallback: tabla HTML clásica
-      if (results.length === 0) {
-        for (const row of Array.from(document.querySelectorAll('tr'))) {
-          const cells = Array.from(row.querySelectorAll('td'));
-          if (cells.length >= 4) {
-            const desc    = text(cells[1]);
-            const fecha   = text(cells[2]);
-            const recargo = text(cells[3]);
-            if (desc.length > 10) results.push({ desc, fecha, recargo });
-          }
-        }
-      }
-
-      return results;
-    });
-
     const matriculas: MatriculaFecha[] = [];
-    for (const row of rows) {
-      const desc = row.desc.toUpperCase();
-      let tipo: MatriculaFecha['tipo'] | null = null;
-      if (desc.includes('MATRICULA ORDINARIA') || desc.includes('MATRÍCULA ORDINARIA')) {
-        tipo = 'ORDINARIA';
-      } else if (desc.includes('EXTRAORDINARIA')) {
-        tipo = 'EXTRAORDINARIA';
-      } else if (desc.includes('EXTEMPORANEA') || desc.includes('EXTEMPORÁNEA')) {
-        tipo = 'EXTEMPORANEA';
+
+    // Intentar con ZK Listbox (.z-listitem / .z-listcell-cnt)
+    const zkRows = page.locator('.z-listitem');
+    const zkCount = await zkRows.count().catch(() => 0);
+
+    for (let i = 0; i < zkCount; i++) {
+      const cells = zkRows.nth(i).locator('.z-listcell-cnt');
+      const cellCount = await cells.count().catch(() => 0);
+      if (cellCount < 4) continue;
+
+      const desc    = (await cells.nth(1).textContent().catch(() => '')) ?? '';
+      const fecha   = (await cells.nth(2).textContent().catch(() => '')) ?? '';
+      const recargo = (await cells.nth(3).textContent().catch(() => '')) ?? '';
+      const parsed  = parseTipo(desc);
+      if (parsed && fecha.trim()) {
+        matriculas.push({ tipo: parsed, fechaVencimiento: fecha.trim(), recargo: recargo.trim() });
       }
-      if (tipo && row.fecha) {
-        matriculas.push({ tipo, fechaVencimiento: row.fecha, recargo: row.recargo });
+    }
+
+    // Fallback: tabla HTML clásica (tr / td)
+    if (matriculas.length === 0) {
+      const trRows = page.locator('tr');
+      const trCount = await trRows.count().catch(() => 0);
+      for (let i = 0; i < trCount; i++) {
+        const cells = trRows.nth(i).locator('td');
+        const cellCount = await cells.count().catch(() => 0);
+        if (cellCount < 4) continue;
+        const desc    = (await cells.nth(1).textContent().catch(() => '')) ?? '';
+        const fecha   = (await cells.nth(2).textContent().catch(() => '')) ?? '';
+        const recargo = (await cells.nth(3).textContent().catch(() => '')) ?? '';
+        const parsed  = parseTipo(desc);
+        if (parsed && fecha.trim()) {
+          matriculas.push({ tipo: parsed, fechaVencimiento: fecha.trim(), recargo: recargo.trim() });
+        }
       }
     }
 
@@ -229,6 +219,14 @@ async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
     console.error('[iceberg] error extrayendo fechas de matrícula:', err?.message);
     return [];
   }
+}
+
+function parseTipo(desc: string): MatriculaFecha['tipo'] | null {
+  const d = desc.toUpperCase();
+  if (d.includes('ORDINARIA') && !d.includes('EXTRAORDINARIA')) return 'ORDINARIA';
+  if (d.includes('EXTRAORDINARIA')) return 'EXTRAORDINARIA';
+  if (d.includes('EXTEMPORANEA') || d.includes('EXTEMPORÁNEA')) return 'EXTEMPORANEA';
+  return null;
 }
 
 /**

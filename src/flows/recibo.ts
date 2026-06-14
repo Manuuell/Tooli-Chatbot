@@ -63,6 +63,7 @@ export async function handleReciboCedula(ctx: FlowContext): Promise<void> {
 
     if (!result.ok) {
       await track('recibo_login_failed');
+      console.error(`[recibo] fallo para ${codigo}: ${result.error} | menu=${result.menuUsado}`);
       await messaging.sendText({
         to: from,
         text: `No pude completar el proceso. ${result.error?.includes('Login falló') ? 'Verifica que el código y la cédula sean correctos.' : 'Intenta más tarde.'}\n\nEscribe *menu* para volver al inicio.`,

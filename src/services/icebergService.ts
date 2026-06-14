@@ -228,49 +228,69 @@ async function tryDownloadFromMenu(
   }
   await page.waitForTimeout(500);
 
-  // Click en "Generar Recibo" — abre pestaña nueva con el PDF
+  // Click en "Generar Recibo" — puede abrir pestaña nueva o disparar descarga directa
   const context = page.context();
   const newPagePromise = context.waitForEvent('page', { timeout: 15_000 });
+  const downloadPromise = page.waitForEvent('download', { timeout: 15_000 });
 
-  await page.locator('text="Generar Recibo"').first().click().catch(() => {});
+  const generarBtn = page.locator('text="Generar Recibo"').first();
+  const btnVisible = await generarBtn.isVisible().catch(() => false);
+  console.log(`[iceberg] botón "Generar Recibo" visible: ${btnVisible}`);
+  await generarBtn.click({ timeout: 5_000 }).catch((e: any) => console.error('[iceberg] click Generar Recibo falló:', e?.message));
 
-  let pdfPage: Page;
+  // Esperar lo que llegue primero: nueva pestaña o descarga directa
+  let pdfBuffer: Buffer | undefined;
   try {
-    pdfPage = await newPagePromise;
-    await pdfPage.waitForLoadState('domcontentloaded', { timeout: 15_000 });
-  } catch {
-    return { found: true, error: 'No se abrió la pestaña del recibo' };
+    const result = await Promise.race([
+      newPagePromise.then(async (pdfPage) => {
+        console.log('[iceberg] nueva pestaña abierta:', pdfPage.url());
+        await pdfPage.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+
+        if (debug) {
+          const p = path.join(DEBUG_DIR, `07-pdf-tab-${menuName.replace(/\s+/g, '_')}.png`);
+          await pdfPage.screenshot({ path: p, fullPage: true }).catch(() => {});
+          debugFiles.push(p);
+        }
+
+        const pdfUrl = pdfPage.url();
+        const pdfBytes = await pdfPage.evaluate(async (url: string) => {
+          const res = await fetch(url, { credentials: 'include' });
+          const buf = await res.arrayBuffer();
+          return Array.from(new Uint8Array(buf));
+        }, pdfUrl);
+        await pdfPage.close().catch(() => {});
+        return Buffer.from(pdfBytes);
+      }),
+      downloadPromise.then(async (download) => {
+        console.log('[iceberg] descarga directa detectada:', download.suggestedFilename());
+        const buffer = await download.createReadStream().then((stream: any) =>
+          new Promise<Buffer>((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            stream.on('data', (c: Buffer) => chunks.push(c));
+            stream.on('end', () => resolve(Buffer.concat(chunks)));
+            stream.on('error', reject);
+          })
+        );
+        return buffer;
+      }),
+    ]);
+    pdfBuffer = result;
+  } catch (err: any) {
+    console.error(`[iceberg] error esperando PDF en menú ${menuName}:`, err?.message);
+    return { found: true, error: `No se pudo obtener el PDF: ${err?.message ?? err}` };
   }
 
-  // El PDF se carga en la pestaña nueva. Obtener su URL y descargar manteniendo cookies.
-  const pdfUrl = pdfPage.url();
+  if (!pdfBuffer || pdfBuffer.length === 0) {
+    return { found: true, error: 'PDF vacío o no recibido' };
+  }
+
   if (debug) {
-    const p = path.join(DEBUG_DIR, `07-pdf-tab-${menuName.replace(/\s+/g, '_')}.png`);
-    await pdfPage.screenshot({ path: p, fullPage: true }).catch(() => {});
+    const p = path.join(DEBUG_DIR, `08-recibo-${menuName.replace(/\s+/g, '_')}.pdf`);
+    await fs.writeFile(p, pdfBuffer);
     debugFiles.push(p);
   }
 
-  try {
-    const pdfBytes = await pdfPage.evaluate(async (url: string) => {
-      const res = await fetch(url, { credentials: 'include' });
-      const buf = await res.arrayBuffer();
-      return Array.from(new Uint8Array(buf));
-    }, pdfUrl);
-
-    const pdfBuffer = Buffer.from(pdfBytes);
-    await pdfPage.close().catch(() => {});
-
-    if (debug) {
-      const p = path.join(DEBUG_DIR, `08-recibo-${menuName.replace(/\s+/g, '_')}.pdf`);
-      await fs.writeFile(p, pdfBuffer);
-      debugFiles.push(p);
-    }
-
-    return { found: true, pdf: pdfBuffer };
-  } catch (err: any) {
-    await pdfPage.close().catch(() => {});
-    return { found: true, error: `Error descargando PDF: ${err?.message ?? err}` };
-  }
+  return { found: true, pdf: pdfBuffer };
 }
 
 /**

@@ -204,13 +204,13 @@ async function tryDownloadFromMenu(
     return { found: false };
   }
 
-  // Intentar marcar el primer checkbox de la columna "Selec."
-  const firstCheckbox = page.locator('input[type="checkbox"]').first();
-  const checkboxVisible = await firstCheckbox.isVisible().catch(() => false);
-  if (!checkboxVisible) {
+  // Seleccionar la primera fila — ZK Listbox usa radio buttons en columna "Selec."
+  const firstRadio = page.locator('input[type="radio"]').first();
+  const radioVisible = await firstRadio.isVisible().catch(() => false);
+  if (!radioVisible) {
     return { found: false };
   }
-  await firstCheckbox.check().catch(() => {});
+  await firstRadio.click().catch(() => {});
   await page.waitForTimeout(500);
 
   // Click en "Generar Recibo" — abre pestaña nueva con el PDF

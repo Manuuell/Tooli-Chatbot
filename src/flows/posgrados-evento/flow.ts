@@ -188,14 +188,30 @@ export async function handlePosgradoPrograma(ctx: Ctx): Promise<void> {
     consentimiento:      true,
   });
 
-  // Cierre simple
+  // Cierre + recordatorio de la Beca País (imagen) para que quede sonando
   await setPosgradoSession(from, { step: 'posg_completada', data: {} });
   await posgradoMessaging.sendText({
     to: from,
     text:
-      `✅ *¡Listo, ${primerNombre(d.nombre ?? '')}!* Registramos tu interés en *${programa}*.\n\n` +
-      'Un asesor de la UTB te contactará pronto. ¡Gracias por participar! 🎓',
+      '¡Listo, tus datos han sido guardados con éxito! 🙌\n\n' +
+      'Muchas gracias por tu interés. Un asesor de nuestro equipo tomará tu solicitud y se comunicará contigo para guiarte en tu proceso.\n\n' +
+      '¡Que tengas un excelente día! 🎓',
   });
+
+  await sleep(1500);
+  try {
+    const flyer = fs.readFileSync(FLYER_POSGRADO);
+    await posgradoMessaging.sendImage({
+      to: from,
+      buffer: flyer,
+      mimetype: 'image/jpeg',
+      caption:
+        '💰 *No lo olvides:* con el *Posgrado País de ICETEX* pagas el *40% mientras estudias* y el *60% después de graduarte*.\n\n' +
+        '¡Tu posgrado está más cerca de lo que crees! 🚀',
+    });
+  } catch (err) {
+    console.error('[posgrados] error enviando flyer de cierre:', err);
+  }
 }
 
 // ── Completada (si vuelve a escribir) ─────────────────────────────────────────

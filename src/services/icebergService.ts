@@ -204,16 +204,14 @@ async function tryDownloadFromMenu(
     return { found: false };
   }
 
-  // El portal usa un ZK Listbox: no hay <input>. Cada fila tiene la clase
-  // .z-listitem y la selección se marca con <i class="z-listitem-icon z-icon-radio">.
-  // Seleccionamos la primera fila haciendo click en ella (modo radio = selección única).
-  const firstRow = page.locator('.z-listitem:has(i.z-icon-radio)').first();
-  const rowVisible = await firstRow.isVisible().catch(() => false);
-  if (!rowVisible) {
+  // Intentar marcar el primer checkbox de la columna "Selec."
+  const firstCheckbox = page.locator('input[type="checkbox"]').first();
+  const checkboxVisible = await firstCheckbox.isVisible().catch(() => false);
+  if (!checkboxVisible) {
     return { found: false };
   }
-  await firstRow.click().catch(() => {});
-  await page.waitForTimeout(800); // ZK procesa la selección en el servidor antes de "Generar Recibo"
+  await firstCheckbox.check().catch(() => {});
+  await page.waitForTimeout(500);
 
   // Click en "Generar Recibo" — abre pestaña nueva con el PDF
   const context = page.context();

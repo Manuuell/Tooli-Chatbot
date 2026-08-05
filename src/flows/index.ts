@@ -19,10 +19,18 @@ import {
   handleAgentAdmisionesP3,
 } from './agent';
 import { handleTiCollectEmail, handleTiCollectCodigo, handleTiCollectCedula } from './identity';
+import { handleVerifEmail, handleVerifCodigo } from './verificacion';
+import { handleNotasPassword, handleNotasMfa } from './notas';
 
 const HANDLERS: Record<string, (ctx: FlowContext) => Promise<void>> = {
   // ── Posgrados ────────────────────────────────────────────────────────────────
   menu: handleMenu,
+  // ── Verificación de identidad (OTP correo institucional) ────────────────────
+  verif_email: handleVerifEmail,
+  verif_codigo: handleVerifCodigo,
+  // ── Notas (requiere verificación previa; login SSO con Playwright) ──────────
+  notas_password: handleNotasPassword,
+  notas_mfa: handleNotasMfa,
   programas_categoria: handleProgramasCategoria,
   programas_detalle: handleProgramasDetalle,
   prospecto_nombre: handleProspectoNombre,

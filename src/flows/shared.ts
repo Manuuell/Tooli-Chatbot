@@ -79,20 +79,19 @@ export async function sendAreaPrompt(to: string): Promise<void> {
 export async function sendMenu(to: string): Promise<void> {
   await messaging.sendList({
     to,
-    title: '🎓 Tooli Posgrados UTB',
-    description: 'Hola 👋 Soy el asistente virtual de Posgrados UTB.\n\n¿En qué te puedo ayudar hoy?',
+    title: '🎓 Tooli UTB',
+    description: 'Hola 👋 Soy Tooli, tu asistente de servicios estudiantiles de la UTB.\n\n¿En qué te ayudo hoy?',
     footer: 'Universidad Tecnológica de Bolívar',
     buttonText: 'Ver opciones',
     sections: [
       {
-        title: 'Menú principal',
+        title: 'Servicios',
         rows: [
-          { id: '1', title: '🎓 Ver programas',       description: 'Especializaciones, maestrías y doctorados' },
-          { id: '2', title: '🤖 Asistente IA',         description: 'Costos, requisitos, diferencias de programas' },
-          { id: '3', title: '📬 Registrarme',           description: 'Recibe novedades de posgrados por WhatsApp' },
-          { id: '4', title: '📋 Turno matrícula',       description: 'Consulta tu turno y fecha asignada' },
-          { id: '5', title: '🧾 Recibo matrícula',      description: 'Descarga el PDF de tu recibo de pago' },
-          { id: '6', title: '👤 Hablar con asesor',     description: 'Conecta con el equipo de admisiones' },
+          { id: '1', title: '📊 Ver notas',         description: 'Consulta tus calificaciones (verifica tu correo UTB)' },
+          { id: '2', title: '📋 Turno matrícula',   description: 'Consulta tu turno y fecha asignada' },
+          { id: '3', title: '🧾 Recibo matrícula',  description: 'Descarga el PDF de tu recibo de pago' },
+          { id: '4', title: '🤖 Asistente IA',      description: 'Pregúntame lo que necesites de la UTB' },
+          { id: '5', title: '👤 Hablar con asesor', description: 'Soporte TI o Admisiones' },
         ],
       },
     ],

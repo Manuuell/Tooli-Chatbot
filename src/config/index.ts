@@ -58,6 +58,11 @@ const schema = z.object({
   PUBLIC_CHATWOOT_URL: z.string().default('http://localhost:3001'),
   PUBLIC_GRAFANA_URL: z.string().default('http://localhost:3002'),
   APP_BASE_URL: z.string().default('https://tooli-stand.duckdns.org'),
+  // ── Verificación por correo (OTP) — Resend ───────────────────────────────────
+  // API key de https://resend.com. MAIL_FROM debe ser de un dominio verificado
+  // en Resend para producción (sin dominio solo se puede enviar al correo propio).
+  RESEND_API_KEY: z.string().optional().default(''),
+  MAIL_FROM: z.string().optional().default('onboarding@resend.dev'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -139,4 +144,8 @@ export const config = {
     grafana: env.PUBLIC_GRAFANA_URL,
   },
   appBaseUrl: env.APP_BASE_URL,
+  mail: {
+    apiKey: env.RESEND_API_KEY ?? '',
+    from: env.MAIL_FROM ?? 'onboarding@resend.dev',
+  },
 };

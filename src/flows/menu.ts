@@ -1,49 +1,37 @@
 import { setSession } from '../services/session';
 import { track } from '../services/metrics';
-import { FlowContext, messaging, sendMenu } from './shared';
-import { sendCategoriasMenu } from './programas';
+import { FlowContext, messaging, sendMenu, sendAreaPrompt } from './shared';
+import { isVerified } from '../services/identityService';
+import { startVerificationFlow } from './verificacion';
 
+// Menú de SERVICIOS AL ESTUDIANTE. Las opciones de captación de posgrados
+// (Ver programas, Registrarme) siguen en el código (handlers registrados) pero
+// ya no se muestran aquí.
 export async function handleMenu(ctx: FlowContext): Promise<void> {
   const { from, text } = ctx;
   const input = text.trim();
 
-  // 1 — Ver programas de posgrado
+  // 1 — Ver notas (requiere verificación de identidad por OTP al correo)
   if (input === '1') {
-    await setSession(from, { step: 'programas_categoria', data: {} });
-    await sendCategoriasMenu(from);
+    if (await isVerified(from)) {
+      await setSession(from, { step: 'notas_password', data: {} });
+      await messaging.sendText({
+        to: from,
+        text:
+          'Para ver tus notas, inicio sesión por ti en Banner.\n\n' +
+          'Escribe tu *contraseña institucional* (la de tu correo @utb / Microsoft).\n\n' +
+          '⚠️ Se usa solo para esta consulta y *no se guarda*.\n\nEscribe *menu* para cancelar.',
+      });
+    } else {
+      // Aún no verificado → primero OTP al correo, luego retoma las notas.
+      await startVerificationFlow(from, 'notas');
+      await track('verificacion_iniciada');
+    }
     return;
   }
 
-  // 2 — Asistente IA
+  // 2 — Turno de matrícula
   if (input === '2') {
-    await setSession(from, { step: 'chatting_with_ai', data: { area: 'posgrados' } });
-    await messaging.sendText({
-      to: from,
-      text:
-        '🤖 *Asistente IA de Posgrados*\n\n' +
-        'Cuéntame qué quieres saber: costos, requisitos, diferencias entre programas, perfil del egresado…\n\n' +
-        '_Escribe *asesor* para hablar con una persona, o *menu* para volver._',
-    });
-    return;
-  }
-
-  // 3 — Registrarse en base de datos
-  if (input === '3') {
-    await setSession(from, { step: 'registro_nombre', data: {} });
-    await messaging.sendText({
-      to: from,
-      text:
-        '📬 *Registro de interés en Posgrados UTB*\n\n' +
-        'Te agregaremos a nuestra base de datos para enviarte información sobre admisiones, becas y novedades.\n\n' +
-        '¿Cuál es tu *nombre completo*?\n\n' +
-        '_Escribe *menu* para cancelar._',
-    });
-    await track('registro_iniciado');
-    return;
-  }
-
-  // 4 — Turno de matrícula
-  if (input === '4') {
     await setSession(from, { step: 'esperando_codigo', data: {} });
     await messaging.sendText({
       to: from,
@@ -52,8 +40,8 @@ export async function handleMenu(ctx: FlowContext): Promise<void> {
     return;
   }
 
-  // 5 — Recibo de matrícula
-  if (input === '5') {
+  // 3 — Recibo de matrícula
+  if (input === '3') {
     await setSession(from, { step: 'recibo_codigo', data: {} });
     await messaging.sendText({
       to: from,
@@ -64,18 +52,23 @@ export async function handleMenu(ctx: FlowContext): Promise<void> {
     return;
   }
 
-  // 6 — Hablar con asesor
-  if (input === '6') {
-    await setSession(from, { step: 'prospecto_nombre', data: {} });
+  // 4 — Asistente IA
+  if (input === '4') {
+    await setSession(from, { step: 'chatting_with_ai', data: { area: 'posgrados' } });
     await messaging.sendText({
       to: from,
       text:
-        '🧑‍💼 *Conectar con asesor de Posgrados*\n\n' +
-        'Para que el asesor pueda ayudarte mejor, necesito algunos datos rápidos.\n\n' +
-        '¿Cuál es tu *nombre completo*?\n\n' +
-        '_Escribe *menu* para cancelar._',
+        '🤖 *Asistente IA*\n\n' +
+        'Pregúntame lo que necesites sobre la UTB: trámites, fechas, requisitos, programas…\n\n' +
+        '_Escribe *asesor* para hablar con una persona, o *menu* para volver._',
     });
-    await track('prospecto_iniciado');
+    return;
+  }
+
+  // 5 — Hablar con asesor (handoff por área: TI / Admisiones)
+  if (input === '5') {
+    await setSession(from, { step: 'agent_area', data: {} });
+    await sendAreaPrompt(from);
     return;
   }
 

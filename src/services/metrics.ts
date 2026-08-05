@@ -31,7 +31,13 @@ export type MetricEvent =
   | 'programas_maestrias'
   | 'programas_doctorados'
   | 'registro_iniciado'
-  | 'registro_completado';
+  | 'registro_completado'
+  // Verificación de identidad (OTP correo)
+  | 'verificacion_iniciada'
+  | 'verificacion_completada'
+  // Notas
+  | 'notas_consultadas'
+  | 'notas_no_encontradas';
 
 export interface MetricProps {
   area?: 'ti' | 'admisiones' | 'posgrados';

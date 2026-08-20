@@ -3,10 +3,10 @@ import { track } from '../services/metrics';
 import { FlowContext, messaging, sendMenu, sendAreaPrompt } from './shared';
 import { isVerified } from '../services/identityService';
 import { startVerificationFlow } from './verificacion';
+import { sendCategoriasMenu } from './programas';
 
-// Menú de SERVICIOS AL ESTUDIANTE. Las opciones de captación de posgrados
-// (Ver programas, Registrarme) siguen en el código (handlers registrados) pero
-// ya no se muestran aquí.
+// Menú de SERVICIOS AL ESTUDIANTE + captación de posgrados (opción 6).
+// "Registrarme" sigue en el código (handlers registrados) pero no se muestra aquí.
 export async function handleMenu(ctx: FlowContext): Promise<void> {
   const { from, text } = ctx;
   const input = text.trim();
@@ -69,6 +69,13 @@ export async function handleMenu(ctx: FlowContext): Promise<void> {
   if (input === '5') {
     await setSession(from, { step: 'agent_area', data: {} });
     await sendAreaPrompt(from);
+    return;
+  }
+
+  // 6 — Ver programas de posgrado (catálogo con costos → asesor de Admisiones)
+  if (input === '6') {
+    await setSession(from, { step: 'programas_categoria', data: {} });
+    await sendCategoriasMenu(from);
     return;
   }
 

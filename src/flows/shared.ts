@@ -92,6 +92,7 @@ export async function sendMenu(to: string): Promise<void> {
           { id: '3', title: '🧾 Recibo matrícula',  description: 'Descarga el PDF de tu recibo de pago' },
           { id: '4', title: '🤖 Asistente IA',      description: 'Pregúntame lo que necesites de la UTB' },
           { id: '5', title: '👤 Hablar con asesor', description: 'Soporte TI o Admisiones' },
+          { id: '6', title: '🎓 Ver programas',     description: 'Especializaciones, maestrías y doctorados' },
         ],
       },
     ],

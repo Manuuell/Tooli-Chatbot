@@ -1,92 +1,136 @@
-# Tooli Chatbot
+# Tooli — Chatbot de WhatsApp para la UTB
 
-Plataforma de chatbot para WhatsApp de la **Universidad Tecnológica de Bolívar (UTB)**. Gestiona múltiples flujos conversacionales — servicios estudiantiles, encuestas de investigación y atención a prospectos — sobre una arquitectura de adaptadores que soporta tanto **Meta WhatsApp Cloud API** como **Evolution API (Baileys)**.
+Plataforma conversacional de la **Universidad Tecnológica de Bolívar** que atiende por WhatsApp
+dos necesidades distintas de la universidad con una misma base técnica:
+
+1. **Servicios al estudiante** — automatiza los trámites que hoy saturan al Centro de Servicios:
+   consulta de notas, turno de matrícula y descarga del recibo de pago, con escalamiento a un
+   asesor humano cuando el bot no basta.
+2. **Captación de aspirantes a posgrado** — informa sobre programas y costos, resuelve dudas con
+   un asistente de IA, y entrega al coordinador de admisiones los prospectos ya calificados.
+
+WhatsApp es el canal principal de comunicación en Colombia: llegar por ahí elimina la fricción de
+instalar una app o navegar un portal. El bot opera sobre la **API oficial de WhatsApp Cloud (Meta)**,
+con número verificado por la plataforma.
 
 ---
 
-## Módulos activos
+## Por qué existe
 
-| Bot | Número | Función |
-|-----|--------|---------|
-| **Tooli** | WhatsApp UTB principal | Consulta de turnos, recibos de pago, handoff a agentes Chatwoot |
-| **NutriA** | Número independiente | Encuesta de investigación sobre marketing y ultraprocesados |
-| **Posgrado** | Número independiente | Registro de prospectos de posgrado → Google Sheets |
+| | Antes | Con Tooli |
+|---|---|---|
+| **Estudiante** | Escribe o va presencialmente por su turno, su recibo o sus notas; espera en fila o en cola de correo | Lo obtiene en segundos por WhatsApp, 24/7 |
+| **Centro de Servicios** | Responde manualmente el mismo puñado de preguntas repetitivas | Atiende solo los casos que el bot escala, con el contexto ya recogido |
+| **Coordinador de posgrado** | Contacta aspirantes uno por uno, sin trazabilidad de quién mostró interés | Recibe prospectos calificados con nombre, correo y programa de interés |
+
+---
+
+## Los dos flujos
+
+El menú principal es una lista interactiva de WhatsApp con seis opciones. Las cinco primeras son
+servicios al estudiante; la sexta abre la línea de posgrados.
+
+### 1 · Servicios al estudiante
+
+| Opción | Qué hace | Cómo |
+|---|---|---|
+| **Ver notas** | Consulta las calificaciones del período | Verificación de identidad por OTP al correo institucional, luego inicio de sesión SSO en Banner automatizado con Playwright (soporta MFA reanudable entre mensajes) |
+| **Turno de matrícula** | Devuelve el turno y la ventana asignada | Lectura en vivo del listado oficial vía Google Sheets API con cuenta de servicio |
+| **Recibo de matrícula** | Entrega el PDF del recibo | Automatización del portal Iceberg con Playwright; el captcha se resuelve con OCR y visión por modelo |
+| **Asistente IA** | Responde dudas abiertas sobre la UTB | Modelo de lenguaje con una base de conocimiento propia: calendario académico, requisitos, costos y financiación |
+| **Hablar con asesor** | Conecta con una persona | Handoff a Chatwoot, enrutado al equipo de TI o de Admisiones según el caso |
+
+La verificación de identidad es requisito para los trámites sensibles: el bot envía un código de un
+solo uso al correo `@utb.edu.co` del estudiante y solo continúa cuando lo confirma.
+
+### 2 · Posgrados
+
+```
+Ver programas → categoría → listado con costos → ┬→ Asistente IA (resuelve dudas)
+                                                 └→ Hablar con asesor
+                                                       ↓
+                                        nombre → correo → programa de interés
+                                                       ↓
+                                    Chatwoot (equipo Admisiones) + CRM HubSpot
+```
+
+- **Catálogo con costos reales**: especializaciones, maestrías y doctorados, con valor por semestre
+  y duración.
+- **Asistente de IA** sobre la base de conocimiento de posgrados: requisitos, calendario, opciones
+  de financiación.
+- **Calificación y entrega del prospecto**: al pedir asesor, el bot recoge nombre, correo y programa
+  de interés, abre la conversación en Chatwoot asignada al equipo de Admisiones —etiquetada como
+  `posgrado-prospecto` y con prioridad— y envía el contacto al CRM.
+- **Conversación puente**: mientras dura la atención humana, lo que escribe el aspirante llega al
+  asesor y la respuesta del asesor vuelve a WhatsApp, de forma transparente para ambos.
+
+Existe además un **flujo de captación para eventos**, que se activa por configuración: pide
+consentimiento explícito conforme a la Ley 1581 antes de recoger cualquier dato, registra al
+prospecto en Google Sheets y en el CRM, y cierra con la información de financiación vigente.
 
 ---
 
 ## Arquitectura
 
 ```
-WhatsApp (usuario)
-       │
-       ▼
-Meta Cloud API / Evolution API
-       │  webhook
-       ▼
-┌─────────────────────────────────────┐
-│         Express Backend (TS)        │
-│                                     │
-│  ┌─────────────┐  ┌──────────────┐  │
-│  │ Flow Router │  │  REST /api   │  │
-│  └──────┬──────┘  └──────┬───────┘  │
-│         │                │          │
-│  ┌──────▼──────────────────────┐    │
-│  │  Flows: Tooli · NutriA      │    │
-│  │         Posgrado · AI Chat  │    │
-│  └──────┬──────────────────────┘    │
-│         │                           │
-│  ┌──────▼──────┐  ┌──────────────┐  │
-│  │    Redis    │  │ Google Sheets│  │
-│  │  (sesiones) │  │ (encuestas)  │  │
-│  └─────────────┘  └──────────────┘  │
-└─────────────────────────────────────┘
-       │
-       ▼
-  Chatwoot (handoff humano)
-  Grafana  (métricas)
+                    WhatsApp (estudiante / aspirante)
+                                  │
+                                  ▼
+                    Meta WhatsApp Cloud API (oficial)
+                                  │  webhook
+                                  ▼
+        ┌───────────────────────────────────────────────────┐
+        │              Backend Express + TypeScript          │
+        │                                                    │
+        │   Router de flujos          API REST (JWT)         │
+        │   (máquina de estados)      dashboard de asesores  │
+        │           │                          │             │
+        │   ┌───────┴────────┐                 │             │
+        │   │ Servicios al   │  Posgrados      │             │
+        │   │ estudiante     │  IA · Handoff   │             │
+        │   └───────┬────────┘                 │             │
+        └───────────┼──────────────────────────┼─────────────┘
+                    │                          │
+     ┌──────────────┼──────────────┬───────────┴────────┐
+     ▼              ▼              ▼                    ▼
+  Redis        Google Sheets    OpenAI              Chatwoot
+ (sesiones)   (turnos, datos)  (asistente)      (atención humana)
+                                                       │
+                    Banner · Iceberg              CRM HubSpot
+                 (portales académicos)
 ```
+
+**Máquina de estados conversacional.** Cada conversación guarda en Redis el paso en que va. Al
+llegar un mensaje, el router lo entrega al handler de ese paso, que responde y decide el siguiente.
+Esto permite diálogos de varios turnos —pedir un dato, validarlo, pedir el siguiente— sin perder el
+hilo, y que el usuario retome donde quedó. Las sesiones tienen tiempo de vida limitado.
+
+**Capa de mensajería desacoplada.** El backend no habla directamente con WhatsApp: lo hace a través
+de una interfaz de adaptador. El envío, la recepción y el formato de los mensajes quedan aislados
+del código de los flujos, de modo que la lógica conversacional no depende del proveedor.
+
+**Observabilidad.** El servicio expone métricas de uso y operación en formato Prometheus, con
+tableros en Grafana y reglas de alerta.
 
 ---
 
 ## Stack técnico
 
 | Capa | Tecnología |
-|------|-----------|
+|---|---|
 | Runtime | Node.js 20 + TypeScript |
 | Framework | Express.js |
-| Mensajería | Meta WhatsApp Cloud API / Evolution API (Baileys) |
-| Sesiones | Redis (ioredis) con TTL configurable |
-| Base de datos | Google Sheets API v4 (service account) |
-| IA | OpenAI GPT (flujo de chat libre) |
-| Handoff | Chatwoot |
-| Métricas | Prometheus + Grafana |
-| Infraestructura | Docker Compose en Oracle Cloud VPS |
-| Proxy | nginx + Let's Encrypt (SSL) |
-
----
-
-## Flujos conversacionales
-
-### Tooli (bot principal UTB)
-- Consulta de turno de matrícula por código (`T########`)
-- Descarga de recibo de pago (login + PDF)
-- Información de programas de pregrado y posgrado
-- Chat con IA (GPT) para consultas generales
-- Escalado a agente humano vía Chatwoot
-
-### NutriA (investigación UTB)
-Encuesta de 19 preguntas sobre hábitos de consumo de ultraprocesados e influencia del marketing digital.
-
-- Flujo guiado con botones interactivos de WhatsApp
-- Opciones de texto libre para respuestas abiertas
-- Guarda resultados en Google Sheets en tiempo real
-- Dashboard público en `https://tooli-stand.duckdns.org/nutria/`
-  - KPIs en vivo, 8 gráficas, tabla de respuestas individuales
-  - Auto-refresh cada 30 segundos
-
-### Posgrado
-- Captura de datos de prospectos interesados en posgrados
-- Almacenamiento en Google Sheets
+| Mensajería | Meta WhatsApp Cloud API |
+| Sesiones y estado | Redis (ioredis), con TTL |
+| Datos | Google Sheets API v4 (cuenta de servicio) |
+| IA | OpenAI (asistente conversacional y visión) |
+| Automatización de portales | Playwright + Tesseract.js |
+| Atención humana | Chatwoot (con SSO para asesores) |
+| CRM | HubSpot |
+| Correo transaccional | Resend (códigos OTP) |
+| Métricas | Prometheus + Grafana + Alertmanager |
+| Infraestructura | Docker Compose sobre VPS en Oracle Cloud |
+| Proxy y TLS | nginx + Let's Encrypt |
 
 ---
 
@@ -94,38 +138,34 @@ Encuesta de 19 preguntas sobre hábitos de consumo de ultraprocesados e influenc
 
 ```
 src/
-├── adapters/messaging/
-│   ├── IMessagingAdapter.ts       # Interfaz común
-│   ├── MetaCloudAdapter.ts        # Meta WhatsApp Cloud API
-│   └── EvolutionAPIAdapter.ts     # Evolution API (Baileys)
-├── flows/
-│   ├── index.ts                   # Router principal de mensajes
-│   ├── menu.ts                    # Menú principal Tooli
-│   ├── aiChat.ts                  # Chat libre con GPT
-│   ├── programas.ts               # Info de programas UTB
-│   ├── registro.ts                # Registro de usuarios
-│   ├── prospecto.ts               # Flujo posgrado
-│   └── nutria/
-│       ├── index.ts               # Entry point NutriA
-│       ├── shared.ts              # Sesiones Redis NutriA
-│       └── survey.ts              # 19 pasos de la encuesta
-├── routes/
-│   ├── toolsRoutes.ts             # API REST (dashboard, bot management)
-│   ├── metaWebhook.ts             # Webhook Meta Cloud API
-│   └── chatwootWebhook.ts         # Webhook Chatwoot
-├── services/
-│   ├── nutriaSheets.ts            # Google Sheets — NutriA
-│   ├── registroService.ts         # Google Sheets — Posgrado
-│   ├── botUserService.ts          # Gestión usuarios del bot (Redis)
-│   ├── metrics.ts                 # Métricas de uso
-│   └── aiAssistant.ts             # Integración OpenAI
-├── public/
-│   ├── nutria/                    # Dashboard NutriA (público)
-│   └── app/                      # Dashboard asesores (privado)
-└── webhooks/
-    ├── metaCloudParser.ts         # Parser webhook Meta
-    └── evolutionParser.ts         # Parser webhook Evolution
+├── adapters/messaging/     Interfaz de mensajería + implementación Meta Cloud API
+├── flows/                  Lógica conversacional (un archivo por flujo)
+│   ├── index.ts              Router: mapea paso de sesión → handler
+│   ├── menu.ts               Menú principal
+│   ├── verificacion.ts       Verificación de identidad por OTP
+│   ├── notas.ts              Consulta de notas (SSO + MFA)
+│   ├── turno.ts              Turno de matrícula
+│   ├── recibo.ts             Recibo de pago
+│   ├── programas.ts          Catálogo de posgrados con costos
+│   ├── prospecto.ts          Captura de prospecto → Chatwoot
+│   ├── aiChat.ts             Asistente de IA
+│   ├── agent*.ts             Handoff y conversación con asesor humano
+│   └── posgrados-evento/     Captación para eventos (activable)
+├── routes/                 Webhooks (WhatsApp, Chatwoot) y API REST
+├── services/               Integraciones: Sheets, Chatwoot, HubSpot, OpenAI,
+│                           Banner/Iceberg, identidad, métricas, sesiones
+└── public/
+    ├── app/                Dashboard de asesores (privado, JWT)
+    └── posgrados/          Landing pública de captación con código QR
 ```
+
+---
+
+## Dashboard de asesores
+
+Interfaz web privada en `/app`, con autenticación JWT y roles. Permite consultar turnos y recibos
+en nombre de un estudiante, ver métricas de uso del bot, administrar las sesiones de los usuarios y
+gestionar las cuentas de los asesores. Incluye inicio de sesión unificado hacia Chatwoot.
 
 ---
 
@@ -134,99 +174,95 @@ src/
 ```env
 # General
 PORT=3000
-MESSAGING_ADAPTER=meta          # 'meta' o 'evolution'
 WEBHOOK_SECRET=...
 REDIS_URL=redis://redis:6379
 SESSION_TTL_SECONDS=3600
 
-# Meta WhatsApp Cloud API — Bot principal (Tooli)
+# WhatsApp Cloud API (Meta)
 WHATSAPP_TOKEN=...
 WHATSAPP_PHONE_NUMBER_ID=...
 WHATSAPP_WABA_ID=...
 WHATSAPP_VERIFY_TOKEN=...
 
-# Meta WhatsApp Cloud API — NutriA
-NUTRIA_WHATSAPP_TOKEN=...
-NUTRIA_PHONE_NUMBER_ID=...
-NUTRIA_WABA_ID=...
-NUTRIA_SHEET_ID=...             # ID del Google Sheet de encuestas
-
-# Evolution API (opcional)
-EVOLUTION_API_BASE_URL=http://localhost:8080
-EVOLUTION_API_INSTANCE=tooli
-EVOLUTION_API_KEY=...
-
 # Google Sheets
-GOOGLE_SERVICE_ACCOUNT_JSON='{...}'   # JSON completo del service account
+GOOGLE_SERVICE_ACCOUNT_JSON='{...}'    # JSON de la cuenta de servicio
 POSGRADO_REGISTRO_SHEET_ID=...
 
 # OpenAI
 OPENAI_API_KEY=...
+
+# Verificación por correo (OTP)
+RESEND_API_KEY=...
+MAIL_FROM=...
 
 # Chatwoot
 CHATWOOT_URL=...
 CHATWOOT_ACCOUNT_ID=...
 CHATWOOT_INBOX_ID=...
 CHATWOOT_API_TOKEN=...
-CHATWOOT_HMAC_TOKEN=...
-CHATWOOT_INBOX_IDENTIFIER=...
 CHATWOOT_TEAM_TI_ID=...
 CHATWOOT_TEAM_ADMISIONES_ID=...
-CHATWOOT_PLATFORM_TOKEN=...
 
-# Auth (dashboard asesores)
+# CRM
+HUBSPOT_ACTIVO=false
+HUBSPOT_TOKEN=...
+
+# Captación para eventos (opcional)
+POSGRADOS_EVENTO_ACTIVO=false
+POSGRADOS_EVENTO_SHEET_ID=...
+
+# Dashboard de asesores
 JWT_SECRET=...
 ADMIN_USER=admin
 ADMIN_PASSWORD=...
-
-# URLs públicas
-PUBLIC_CHATWOOT_URL=https://...
-PUBLIC_GRAFANA_URL=https://...
 ```
+
+El archivo `.env.example` contiene la plantilla completa.
 
 ---
 
 ## Despliegue
 
 ```bash
-# Build y levantar
 docker compose build backend
 docker compose up -d
-
-# Ver logs
 docker compose logs -f backend
-
-# Reiniciar solo el backend
-docker compose restart backend
 ```
 
-El VPS expone el backend en el puerto `3000`. nginx actúa como reverse proxy con SSL (Let's Encrypt) para los dominios:
-- `tooli-utb.duckdns.org` — Bot principal + dashboard asesores
-- `tooli-stand.duckdns.org` — Dashboard NutriA (público)
+nginx actúa como proxy inverso con certificado TLS sobre el backend en el puerto `3000`.
 
 ---
 
-## API REST destacada
+## API REST
 
 | Método | Ruta | Auth | Descripción |
-|--------|------|------|-------------|
-| `GET` | `/api/tools/nutria/encuestas` | ❌ Pública | Leer todas las encuestas NutriA |
-| `POST` | `/api/tools/nutria/encuestas/seed` | ❌ Pública* | Insertar fila de prueba |
-| `GET` | `/api/tools/turno/:codigo` | ✅ JWT | Consultar turno de matrícula |
-| `POST` | `/api/tools/recibo` | ✅ JWT | Descargar recibo de pago (PDF) |
-| `GET` | `/api/tools/metrics/today` | ✅ JWT | Métricas del día |
-| `GET` | `/api/tools/bot-users` | ✅ JWT | Listar usuarios activos |
-| `POST` | `/api/tools/bot-users/:phone/reset-session` | ✅ JWT | Resetear sesión de un usuario |
-| `POST` | `/api/tools/bot-users/:phone/ban` | ✅ JWT | Banear usuario |
-
-*Protegido por clave interna.
+|---|---|---|---|
+| `GET` | `/api/tools/turno/:codigo` | JWT | Consultar turno de matrícula |
+| `POST` | `/api/tools/recibo` | JWT | Descargar recibo de pago (PDF) |
+| `GET` | `/api/tools/metrics/today` | JWT | Métricas del día |
+| `GET` | `/api/tools/bot-users` | JWT | Listar usuarios activos |
+| `POST` | `/api/tools/bot-users/:phone/reset-session` | JWT | Reiniciar la sesión de un usuario |
+| `GET` | `/health` | — | Estado del servicio |
+| `GET` | `/metrics` | — | Métricas en formato Prometheus |
 
 ---
 
-## Privacidad (Ley 1581 — Habeas Data)
+## Privacidad y tratamiento de datos (Ley 1581 de 2012)
 
-- Los números de WhatsApp se usan únicamente para gestionar la sesión conversacional.
-- Las encuestas NutriA son voluntarias; el participante acepta explícitamente ser contactado.
-- Sesiones almacenadas en Redis con TTL de 1 hora; no se persisten en disco.
-- Sin logs en texto plano del contenido de los mensajes.
-- Datos de Google Sheets accesibles solo mediante service account con permisos acotados.
+- **Consentimiento previo**: en los flujos de captación, el bot pide autorización explícita antes de
+  recoger cualquier dato. Si el usuario no autoriza, la conversación termina y no se registra nada.
+- **Minimización**: se recoge únicamente lo necesario para el trámite o el contacto solicitado.
+- **Credenciales**: las contraseñas institucionales se usan en el momento de la consulta y no se
+  almacenan.
+- **Sesiones efímeras**: el estado conversacional vive en Redis con tiempo de vida limitado.
+- **Sin registro del contenido**: no se guardan en texto plano los mensajes de los usuarios.
+- **Acceso acotado**: los datos en Google Sheets se leen y escriben mediante una cuenta de servicio
+  con permisos restringidos a las hojas del proyecto.
+
+---
+
+## Otros módulos
+
+El mismo backend aloja **NutriA**, un bot independiente para un proyecto de investigación de la
+universidad: una encuesta guiada sobre hábitos de consumo y marketing digital, con registro en
+Google Sheets y un tablero público de resultados en vivo.

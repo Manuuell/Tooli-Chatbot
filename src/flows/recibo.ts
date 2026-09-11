@@ -63,6 +63,7 @@ export async function handleReciboCedula(ctx: FlowContext): Promise<void> {
 
     if (!result.ok) {
       await track('recibo_login_failed');
+      console.error(`[recibo] fallo para ${codigo}: ${result.error} | menu=${result.menuUsado}`);
       await messaging.sendText({
         to: from,
         text: `No pude completar el proceso. ${result.error?.includes('Login falló') ? 'Verifica que el código y la cédula sean correctos.' : 'Intenta más tarde.'}\n\nEscribe *menu* para volver al inicio.`,
@@ -83,7 +84,21 @@ export async function handleReciboCedula(ctx: FlowContext): Promise<void> {
         mimetype: 'application/pdf',
         caption: `🧾 Recibo de matrícula${result.nombre ? ` — ${result.nombre}` : ''}`,
       });
-      await messaging.sendText({ to: from, text: 'Listo. Escribe *menu* para volver al inicio.' });
+
+      const nombre = result.nombre ? result.nombre.split(' ')[0] : null;
+      const ordinaria = result.matriculas?.find(m => m.tipo === 'ORDINARIA');
+      const extraordinaria = result.matriculas?.find(m => m.tipo === 'EXTRAORDINARIA');
+
+      let msg = `✅ Listo${nombre ? `, *${nombre}*` : ''}. Aquí está tu recibo de matrícula.\n\n`;
+      if (ordinaria) {
+        msg += `📅 *Matrícula ordinaria:* paga antes del *${ordinaria.fechaVencimiento}* (sin recargo)\n`;
+      }
+      if (extraordinaria) {
+        msg += `⚠️ *Matrícula extraordinaria:* hasta el *${extraordinaria.fechaVencimiento}* (+2% recargo)\n`;
+      }
+      msg += `\nEscribe *menu* para volver al inicio.`;
+
+      await messaging.sendText({ to: from, text: msg });
     } else {
       await messaging.sendText({
         to: from,

@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Matrícula de Materias · UTB</title>
+<style>
+  :root{
+    --utb-blue:#093AD4; --utb-blue-600:#0A2FAE; --utb-navy:#0A1740;
+    --ink:#18213a; --muted:#616c82; --line:#e4e9f2; --line-2:#eef2f8;
+    --bg:#eef2f8; --card:#ffffff; --ok:#137a3c; --ok-bg:#e9f7ee;
+    --err:#c22a2a; --err-bg:#fdecec; --warn-bg:#fff6e6; --warn-line:#f0d08a;
+    --radius:14px; --shadow:0 10px 30px rgba(10,23,64,.10), 0 2px 8px rgba(10,23,64,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:radial-gradient(1200px 500px at 50% -10%, rgba(9,58,212,.10), transparent 60%),var(--bg);
+    min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+  a{color:var(--utb-blue);text-decoration:none}
+
+  .topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;padding:12px 22px;background:var(--card);border-bottom:1px solid var(--line)}
+  .topbar img{height:48px;width:auto;display:block}
+  .topbar .sep{width:1px;height:32px;background:var(--line)}
+  .topbar .ctx{font-weight:600;color:var(--utb-navy);font-size:15px}
+  .topbar .ctx small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+  .topbar .spacer{flex:1}
+
+  /* sesión iniciada, arriba a la derecha */
+  .session-box{display:flex;align-items:center;gap:11px}
+  .avatar{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--utb-blue);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13.5px;letter-spacing:.5px}
+  .session-who{text-align:right;line-height:1.25;min-width:0}
+  .session-who b{display:block;font-size:13.5px;color:var(--utb-navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+  .session-who small{display:block;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .session-out{flex:0 0 auto;background:#fff;border:1.5px solid var(--line);color:var(--muted);border-radius:9px;padding:8px 13px;font-weight:600;font-size:13px;cursor:pointer}
+  .session-out:hover{border-color:var(--err);color:var(--err);background:var(--err-bg)}
+
+  /* align-items:flex-start evita que la tarjeta se estire hasta el alto de la
+     pantalla y deje un hueco en blanco al final. */
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:34px 18px 48px}
+  .card{width:100%;max-width:940px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .card-head{padding:24px 28px 8px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .card-head .head-txt{min-width:250px;flex:1 1 250px}
+  .card-head h1{margin:0 0 6px;font-size:23px;color:var(--utb-navy);letter-spacing:-.2px}
+  .card-head p{margin:0;color:var(--muted);font-size:14.5px}
+  .body{padding:18px 28px 26px}
+
+  .alert{display:flex;gap:10px;align-items:flex-start;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;padding:11px 13px;font-size:13.5px;color:#6b4b00;margin-top:22px}
+
+  /* panel de bienvenida (sin sesión) */
+  .welcome{max-width:880px}
+  .hero{padding:40px 34px 30px;text-align:center;background:linear-gradient(180deg,rgba(9,58,212,.055),transparent)}
+  .hero h1{margin:0 0 12px;font-size:29px;line-height:1.2;color:var(--utb-navy);letter-spacing:-.4px}
+  .hero p{margin:0 auto 22px;max-width:620px;color:var(--muted);font-size:15px;line-height:1.55}
+  .conn-btn.big{margin:0 auto;font-size:15px;padding:14px 26px;border-radius:11px;box-shadow:0 6px 16px rgba(9,58,212,.28);justify-content:center}
+  .hero-msg{margin:14px auto 0;max-width:520px;background:var(--err-bg);border:1px solid #f3caca;color:var(--err);border-radius:10px;padding:10px 13px;font-size:13.5px}
+  .hero-hint{margin:14px auto 0;max-width:520px;background:#eef3ff;border:1px solid #cdd9ff;color:var(--utb-blue-600);border-radius:10px;padding:10px 13px;font-size:13.5px}
+  .hero-note{display:block;margin:18px auto 0;max-width:560px;color:var(--muted);font-size:12.5px;line-height:1.5}
+
+  .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;padding:6px 34px 30px}
+  .feat{border:1px solid var(--line);border-radius:12px;padding:16px 16px 15px;background:#fbfcfe}
+  .feat .fi{font-size:20px;line-height:1}
+  .feat b{display:block;margin:9px 0 4px;font-size:14px;color:var(--utb-navy)}
+  .feat small{display:block;color:var(--muted);font-size:12.5px;line-height:1.5}
+
+  .welcome details.adv{margin:0;border-top:1px solid var(--line-2);padding:16px 34px 24px}
+  @media (max-width:560px){ .hero{padding:30px 20px 24px} .hero h1{font-size:23px} .feats,.welcome details.adv{padding-left:20px;padding-right:20px} }
+
+  /* tarjeta de conexión */
+  .conn{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:22px;background:#fbfcfe}
+  .conn-row{display:flex;align-items:center;gap:12px}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;background:#c7ccd6}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 4px rgba(19,122,60,.14)}
+  .dot.wait{background:#e0a400;animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .conn-txt{flex:1;min-width:0}
+  .conn-txt b{font-size:14px}
+  .conn-txt small{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+  .conn-btn{background:var(--utb-blue);color:#fff;border:none;border-radius:9px;padding:10px 15px;font-weight:600;cursor:pointer;font-size:13.5px;white-space:nowrap;display:flex;gap:8px;align-items:center}
+  .conn-btn:hover{background:var(--utb-blue-600)}
+  .conn-btn[disabled]{opacity:.6;cursor:progress}
+  .conn-btn.ghost{background:transparent;color:var(--muted);border:1.5px solid var(--line);padding:8px 12px}
+  .conn-btn.ghost:hover{border-color:var(--err);color:var(--err);background:var(--err-bg)}
+  .conn-hint{font-size:12.5px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-2)}
+
+  .spin{width:15px;height:15px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .loading .spin{display:inline-block}
+
+  .mine{margin-bottom:22px}
+  .mine-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .linkbtn{background:none;border:none;color:var(--utb-blue);font-weight:600;cursor:pointer;font-size:13px}
+  .linkbtn:hover{text-decoration:underline}
+  .course{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+  .course-info{flex:1;min-width:0}
+  .course-info .crn{font-weight:700;font-variant-numeric:tabular-nums;color:var(--utb-navy)}
+  .course-info .mat{color:var(--ink);font-size:13.5px;margin-left:7px}
+  .course-info .tit{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+  .drop-btn{flex:0 0 auto;background:#fff;border:1.5px solid var(--line);color:var(--muted);border-radius:9px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;transition:.15s}
+  .drop-btn:hover{border-color:var(--err);color:var(--err);background:var(--err-bg)}
+  .drop-btn[disabled]{opacity:.55;cursor:progress}
+  .mine-empty{color:var(--muted);font-size:13.5px;padding:8px 0}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(6px);background:var(--utb-navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;box-shadow:0 8px 24px rgba(10,23,64,.25);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{background:var(--ok)} .toast.err{background:var(--err)}
+  /* calendario */
+  .mine-tabs{display:flex;align-items:center;gap:6px}
+  .tab{background:#fff;border:1.5px solid var(--line);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .tab.active{background:var(--utb-blue);border-color:var(--utb-blue);color:#fff}
+  /* Calendario al estilo del generador de horarios UTB: semana completa,
+     franja horaria fija y una celda por hora. */
+  .cal-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff;margin-bottom:6px}
+  .cal{display:flex;min-width:700px}
+  .cal-time-col{flex:0 0 58px;position:sticky;left:0;background:#fff;z-index:2;border-right:1px solid var(--line)}
+  .cal-day-col{flex:1 1 0;min-width:86px}
+  .cal-head{height:36px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--utb-navy);border-bottom:1px solid var(--line);background:#f7f9fc}
+  .cal-body{position:relative;padding-bottom:4px}
+  .cal-cell{position:absolute;left:3px;right:3px;background:#f1f4f9;border-radius:5px}
+  .cal-tlabel{position:absolute;right:9px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;transform:translateY(-50%)}
+  .cal-ev{position:absolute;border-radius:6px;padding:4px 6px;overflow:hidden;font-size:10.5px;line-height:1.18;background:var(--ac);color:#fff;word-break:break-word}
+  .cal-ev b{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;font-weight:700}
+  .cal-ev small{display:block;font-weight:600;opacity:.9;font-size:9.5px;margin-top:2px;white-space:nowrap}
+  .cal-ev.ghost{background:#fff;color:var(--ac);box-shadow:inset 0 0 0 2px var(--ac)}
+  .nrc-title{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px}
+  .nrc-title .lbl{font-size:13px;font-weight:600}
+  .nrc-title .hint{font-size:12px;color:var(--muted)}
+  .nrcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+  .nrc{display:flex;gap:8px;align-items:center}
+  input,textarea{width:100%;font:inherit;color:var(--ink);background:#fbfcfe;border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;outline:none;transition:border-color .15s, box-shadow .15s}
+  input:focus,textarea:focus{border-color:var(--utb-blue);box-shadow:0 0 0 3px rgba(9,58,212,.14)}
+  input::placeholder{color:#9aa4b6}
+  .nrc input{text-align:center;letter-spacing:2px;font-weight:600;font-variant-numeric:tabular-nums}
+  .nrc .x{flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1.5px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;font-size:17px;display:grid;place-items:center}
+  .nrc .x:hover{border-color:var(--err);color:var(--err);background:var(--err-bg)}
+  .add{margin-top:12px;background:transparent;border:1.5px dashed var(--line);color:var(--utb-blue);border-radius:10px;padding:9px 12px;font-weight:600;cursor:pointer;width:100%}
+  .add:hover{border-color:var(--utb-blue);background:rgba(9,58,212,.05)}
+  .add[disabled]{opacity:.45;cursor:not-allowed}
+
+  details.adv{margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px}
+  details.adv summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;list-style:none}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::before{content:"▸ ";color:var(--utb-blue)}
+  details.adv[open] summary::before{content:"▾ "}
+  details.adv .note{font-size:12px;color:var(--muted);margin:10px 0}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+  label.field .lbl{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  details.adv textarea{margin-top:10px;min-height:64px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  .submit{margin-top:22px;width:100%;background:var(--utb-blue);color:#fff;border:none;border-radius:11px;padding:14px 16px;font-size:15.5px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(9,58,212,.28);display:flex;gap:10px;justify-content:center;align-items:center}
+  .submit:hover{background:var(--utb-blue-600)}
+  .submit[disabled]{opacity:.7;cursor:progress}
+
+  #out{margin-top:22px;display:none}
+  #out.show{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .banner{border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:14px}
+  .banner.err{background:var(--err-bg);border:1px solid #f3caca;color:var(--err)}
+  .banner.ok{background:var(--ok-bg);border:1px solid #bfe6cd;color:var(--ok)}
+  .banner.info{background:#eef3ff;border:1px solid #cdd9ff;color:var(--utb-blue-600)}
+  .res{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+  .res .ic{flex:0 0 auto;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:700;color:#fff}
+  .res.ok .ic{background:var(--ok)} .res.err .ic{background:var(--err)}
+  .res .crn{font-weight:700;font-variant-numeric:tabular-nums}
+  .res .crn small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+  h3.sub{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:22px 0 10px}
+  table.sched{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.sched th{text-align:left;color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:6px 10px;border-bottom:1px solid var(--line)}
+  table.sched td{padding:9px 10px;border-bottom:1px solid var(--line-2)}
+  table.sched .c-crn{font-weight:700;font-variant-numeric:tabular-nums;color:var(--utb-navy)}
+
+  /* turno de matrícula */
+  .turno{display:flex;gap:11px;align-items:flex-start;border:1px solid #cdd9ff;background:#eef3ff;border-radius:12px;padding:11px 14px;margin:0;flex:0 1 auto}
+  .turno .ic{font-size:17px;line-height:1.3}
+  .turno b{display:block;font-size:14px;color:var(--utb-navy)}
+  .turno small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .turno .cd{font-variant-numeric:tabular-nums;font-weight:700;color:var(--utb-blue)}
+  .turno.open{background:var(--ok-bg);border-color:#bfe6cd}
+  .turno.open .cd{color:var(--ok)}
+  .turno.closed{background:var(--err-bg);border-color:#f3caca}
+  .turno.closed .cd{color:var(--err)}
+
+  /* preview de secciones a agregar */
+  .prev{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+  .prev-item{display:flex;gap:10px;align-items:center;border:1px dashed var(--line);border-radius:10px;padding:9px 12px;font-size:13px;background:#fbfcfe}
+  .prev-item.bad{border-color:#f3caca;background:var(--err-bg)}
+  .prev-item .crn{flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums;color:var(--utb-navy)}
+  .prev-item .meta{flex:1;min-width:0}
+  .prev-item .meta small{display:block;color:var(--muted);font-size:12px;margin-top:1px}
+  .pill{flex:0 0 auto;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .pill.ok{background:var(--ok-bg);color:var(--ok)}
+  .pill.warn{background:var(--warn-bg);color:#8a6100}
+  .pill.err{background:var(--err-bg);color:var(--err)}
+  .cal-ev.ghost{box-shadow:inset 0 0 0 1.5px var(--ac);background:transparent;border-left-style:dashed}
+  .cal-legend{display:flex;gap:14px;align-items:center;font-size:11.5px;color:var(--muted);margin:2px 0 8px}
+  .cal-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  /* auto-matrícula */
+  .auto{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fbfcfe}
+  .auto-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .auto-head b{font-size:14px;color:var(--utb-navy)}
+  .auto-head small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .auto-btn{flex:0 0 auto;background:var(--utb-navy);color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
+  .auto-btn:hover{background:#12235c}
+  .auto-btn.cancel{background:#fff;color:var(--err);border:1.5px solid #f3caca}
+  .auto-btn.cancel:hover{background:var(--err-bg)}
+  .auto-state{margin-top:12px;font-size:13.5px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .chip{font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;font-variant-numeric:tabular-nums}
+  .chip.ok{background:var(--ok-bg);color:var(--ok)}
+  .chip.pend{background:#eef3ff;color:var(--utb-blue-600)}
+  .chip.err{background:var(--err-bg);color:var(--err)}
+  .auto-log{margin-top:10px;max-height:148px;overflow:auto;font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .auto-log div{padding:1px 0;white-space:pre-wrap}
+
+  footer{padding:18px;text-align:center;color:var(--muted);font-size:12.5px}
+  footer b{color:var(--utb-navy)}
+  @media (max-width:560px){ .row2,.nrcs{grid-template-columns:1fr} .conn-row{flex-wrap:wrap} }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <img src="utb-logo.png" alt="UTB" />
+    <div class="sep"></div>
+    <div class="ctx">Autoservicio académico<small>Matrícula de materias por NRC</small></div>
+    <div class="spacer"></div>
+    <div class="session-box" id="session-box" style="display:none">
+      <div class="avatar" id="session-ini">··</div>
+      <div class="session-who"><b id="session-name">Sesión activa</b><small id="session-code"></small></div>
+      <button type="button" class="session-out" id="session-out">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Panel de bienvenida: lo único que se ve sin sesión -->
+    <section class="card welcome" id="welcome">
+      <div class="hero">
+        <h1>Matricula tus materias sin pelear con el portal</h1>
+        <p>Herramienta interna de la UTB para inscribir materias por <b>NRC</b> en el Autoservicio académico.
+           Ves tu horario, simulas cómo te quedaría antes de enviar, y puedes dejar la matrícula lista
+           para que salga sola apenas abra tu turno.</p>
+        <button type="button" class="conn-btn big" id="btn-login"><span class="spin"></span><span class="txt">Iniciar sesión en Banner</span></button>
+        <div class="hero-msg" id="welcome-msg" style="display:none"></div>
+        <div class="hero-hint" id="conn-hint" style="display:none">Se abrió una ventana de Banner. Inicia sesión como siempre (Microsoft + Authenticator); esta página se conectará sola.</div>
+        <small class="hero-note">Se abre el portal oficial en tu navegador y tú entras como siempre, con Microsoft y el Authenticator. Esta herramienta nunca te pide la contraseña.</small>
+      </div>
+
+      <div class="feats">
+        <div class="feat"><span class="fi">🗓</span><b>Tu horario, visual</b><small>La semana completa con las materias que ya tienes inscritas, y la opción de soltar una si te equivocaste.</small></div>
+        <div class="feat"><span class="fi">👀</span><b>Simula antes de enviar</b><small>Escribe los NRC y mira cómo quedaría tu horario, con los cupos disponibles y los choques marcados en rojo.</small></div>
+        <div class="feat"><span class="fi">🕒</span><b>Tu turno, a la vista</b><small>Tomamos tu turno del listado oficial y te mostramos cuánto falta para que abra y cuándo cierra.</small></div>
+        <div class="feat"><span class="fi">⚡</span><b>Auto-matrícula</b><small>Deja los NRC armados y se envían solos en el instante en que abre tu turno, reintentando hasta lograrlo.</small></div>
+      </div>
+
+      <details class="adv" id="adv-conn">
+        <summary>Otras formas de conexión</summary>
+        <div class="note"><b>NIP de Banner</b> (solo si lo tienes configurado — la mayoría entra por Microsoft):</div>
+        <div class="row2">
+          <label class="field"><span class="lbl">Código</span><input id="codigo" placeholder="T00XXXXXX" maxlength="9" spellcheck="false" /></label>
+          <label class="field"><span class="lbl">NIP</span><input id="pin" type="password" placeholder="••••••" /></label>
+        </div>
+        <div class="note" style="margin-top:14px"><b>Cookie de sesión</b> (pegar manualmente desde DevTools → Red → header <code>Cookie</code> de <code>ssbprod</code>):</div>
+        <textarea id="cookie" placeholder="SESSID=…; CASCADE=…; TESTID=…"></textarea>
+      </details>
+    </section>
+
+    <section class="card" id="app" style="display:none">
+      <div class="card-head">
+        <div class="head-txt">
+          <h1>Matrícula de materias</h1>
+          <p>Inicia sesión en Banner, ingresa tus <b>NRC</b> y matricula. Hasta 10 a la vez.</p>
+        </div>
+        <!-- Turno de matrícula -->
+        <div class="turno" id="turno" style="display:none">
+          <span class="ic">🕒</span>
+          <div><b id="turno-title">Tu turno</b><small id="turno-sub"></small></div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="mine" id="mine" style="display:none">
+          <div class="mine-head">
+            <h3 class="sub" style="margin:0">Mis materias matriculadas</h3>
+            <div class="mine-tabs">
+              <button type="button" class="tab active" data-view="cal">🗓 Horario</button>
+              <button type="button" class="tab" data-view="list">☰ Lista</button>
+              <button type="button" class="linkbtn" id="refresh" title="Actualizar">↻</button>
+            </div>
+          </div>
+          <div id="grid"></div>
+          <div id="mine-list"></div>
+        </div>
+
+        <form id="form" autocomplete="off">
+          <div class="nrc-title"><span class="lbl">NRC a matricular</span><span class="hint">4–5 dígitos c/u</span></div>
+          <div class="nrcs" id="nrcs"></div>
+          <button type="button" class="add" id="add">＋ Agregar otro NRC</button>
+
+          <div class="prev" id="prev"></div>
+
+          <button type="submit" class="submit" id="submit"><span class="spin"></span><span class="txt">Matricular</span></button>
+
+          <!-- Auto-matrícula -->
+          <div class="auto" id="auto">
+            <div class="auto-head">
+              <div>
+                <b>Auto-matrícula en tu turno</b>
+                <small id="auto-sub">Deja armados los NRC de arriba y se enviarán solos apenas abra tu turno.</small>
+              </div>
+              <button type="button" class="auto-btn" id="auto-btn" data-mode="arm">Armar auto-matrícula</button>
+            </div>
+            <div class="auto-state" id="auto-state" style="display:none"></div>
+            <div class="auto-log" id="auto-log" style="display:none"></div>
+          </div>
+        </form>
+
+        <div id="out"></div>
+
+        <div class="alert"><span>⚠️</span><div>La matrícula es <b>real</b> y modifica tu registro en el portal. Verifica los NRC antes de enviar; puedes soltar una materia después si te equivocas.</div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><b>Universidad Tecnológica de Bolívar</b> · Herramienta interna · www.utb.edu.co</footer>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  // ── NRC rows ────────────────────────────────────────────────────────────────
+  const MAX = 10, nrcsEl = $('nrcs'), addBtn = $('add');
+  function nrcRow(val=''){
+    const d = document.createElement('div'); d.className='nrc';
+    d.innerHTML = `<input inputmode="numeric" maxlength="5" placeholder="NRC" value="${val}" /><button type="button" class="x" title="Quitar">×</button>`;
+    d.querySelector('input').addEventListener('input', e=>{ e.target.value=e.target.value.replace(/\D/g,'').slice(0,5); schedulePreview(); });
+    d.querySelector('.x').addEventListener('click', ()=>{ d.remove(); sync(); schedulePreview(); });
+    return d;
+  }
+  function nrcValues(){ return [...new Set([...nrcsEl.querySelectorAll('input')].map(i=>i.value.trim()).filter(v=>/^\d{3,5}$/.test(v)))]; }
+  function sync(){ if(!nrcsEl.children.length) nrcsEl.appendChild(nrcRow()); addBtn.disabled = nrcsEl.children.length>=MAX; }
+  addBtn.addEventListener('click', ()=>{ if(nrcsEl.children.length<MAX){ nrcsEl.appendChild(nrcRow()); sync(); } });
+  [nrcRow(),nrcRow(),nrcRow()].forEach(r=>nrcsEl.appendChild(r)); sync();
+
+  // ── Conexión ────────────────────────────────────────────────────────────────
+  const btnLogin=$('btn-login'), connHint=$('conn-hint'), welcomeMsg=$('welcome-msg');
+  let connected = false;
+
+  // Sin sesión sólo se ve el panel de bienvenida; con sesión, la herramienta.
+  function setConn(state, sub){
+    connected = state==='on';
+    const esperando = state==='wait';
+    $('welcome').style.display = connected ? 'none' : 'block';
+    $('app').style.display     = connected ? 'block' : 'none';
+
+    btnLogin.classList.toggle('loading', esperando);
+    btnLogin.disabled = esperando;
+    btnLogin.querySelector('.txt').textContent = esperando ? 'Conectando…' : 'Iniciar sesión en Banner';
+    connHint.style.display = esperando ? 'block' : 'none';
+    welcomeMsg.textContent = (!connected && sub) ? sub : '';
+    welcomeMsg.style.display = (!connected && sub) ? 'block' : 'none';
+
+    if(connected){ setSessionBox(sessionCodigo, sesionNombre); }
+    else {
+      const m=$('mine'); if(m) m.style.display='none';
+      const t=$('turno'); if(t) t.style.display='none';
+      sesionNombre=null; ocultarSessionBox();
+    }
+  }
+
+  let sesionNombre=null;
+  // Se muestra siempre que haya sesión, aunque no se conozca el código: si no,
+  // el usuario se queda sin botón de cerrar sesión.
+  function setSessionBox(codigo, nombre){
+    const box=$('session-box');
+    box.style.display='flex';
+    const n=(nombre||'').trim();
+    $('session-name').textContent = n || 'Sesión activa';
+    $('session-code').textContent = codigo || '';
+    $('session-ini').textContent = n
+      ? n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')
+      : (codigo ? codigo.slice(-2) : '··');
+  }
+  function ocultarSessionBox(){ $('session-box').style.display='none'; }
+
+  async function cerrarSesion(){
+    await fetch('/api/logout',{method:'POST'}).catch(()=>{});
+    setConn('off','Sesión cerrada.');
+  }
+
+  let sessionCodigo=null;
+  async function refreshStatus(){
+    try{ const r = await fetch('/api/session-status'); const j = await r.json(); sessionCodigo=j.codigo||null; setConn(j.ready?'on':'off'); if(j.ready){ loadSchedule(); loadTurno(); } }catch{}
+    pollAuto();
+  }
+
+  // ── Mis materias (ver / eliminar) ───────────────────────────────────────────
+  const mine=$('mine'), mineList=$('mine-list');
+  function sessionPayload(){ return { codigo:$('codigo').value.trim(), pin:$('pin').value, cookie:$('cookie').value.trim() }; }
+
+  async function loadSchedule(){
+    mine.style.display='block'; mineList.innerHTML='<div class="mine-empty">Cargando materias…</div>';
+    try{
+      const r=await fetch('/api/horario',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sessionPayload())});
+      const j=await r.json();
+      if(!j.ok){ mineList.innerHTML=`<div class="mine-empty">No se pudo cargar${j.error?': '+esc(j.error):''}.</div>`; return; }
+      renderSchedule(j.schedule||[]);
+    }catch{ mineList.innerHTML='<div class="mine-empty">No se pudo cargar el horario.</div>'; }
+  }
+
+  let currentSchedule=[];
+  function renderSchedule(list){
+    currentSchedule=list||[];
+    mine.style.display='block';
+    renderList(currentSchedule); applyView();
+    renderPreview();   // repinta el calendario con las materias + el preview
+  }
+  // Nota: los nombres abreviados ("Tóp Espe de Ciencias Computaci") vienen así
+  // desde Banner — el catálogo del curso guarda el mismo texto de 30 caracteres,
+  // no hay una versión larga que consultar.
+
+  function renderList(list){
+    if(!list.length){ mineList.innerHTML='<div class="mine-empty">No tienes materias matriculadas en este período.</div>'; return; }
+    mineList.innerHTML=list.map(c=>`<div class="course"><div class="course-info"><b class="crn">${esc(c.crn)}</b><span class="mat">${esc([c.subj,c.crse].filter(Boolean).join(' '))}${c.sec?' · '+esc(c.sec):''}</span><small class="tit">${esc(titulo(c.title))}</small></div><button type="button" class="drop-btn" data-crn="${esc(c.crn)}">Eliminar</button></div>`).join('');
+    mineList.querySelectorAll('.drop-btn').forEach(b=>b.addEventListener('click',()=>dropCourse(b)));
+  }
+
+  // ── Calendario visual ───────────────────────────────────────────────────────
+  // Sin rojos: el rojo queda reservado para marcar choques de horario.
+  const CAL_COLORS=['#093AD4','#7c3aed','#f59e0b','#0d9488','#2563eb','#c026d3','#65a30d','#0891b2'];
+  const DAY_ORDER=['LUN','MAR','MIE','JUE','VIE','SAB','DOM'];
+  const DAY_LABEL={LUN:'Lun',MAR:'Mar',MIE:'Mié',JUE:'Jue',VIE:'Vie',SAB:'Sáb',DOM:'Dom'};
+  const HH=44;                 // alto de una hora
+  const DIA_INI=7*60, DIA_FIN=20*60;   // franja fija, como el generador UTB
+  function fmt(min,wm){ let h=Math.floor(min/60), m=min%60; const ap=h>=12?'p':'a'; h=h%12||12; return wm?`${h}:${String(m).padStart(2,'0')}${ap}`:`${h}${ap}`; }
+  const fmt24=min=>`${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
+
+  // Banner devuelve los títulos en MAYÚSCULAS; en bloques pequeños se leen
+  // mucho mejor en formato título (los números romanos se respetan).
+  const MINUS=new Set(['de','del','la','las','los','el','y','e','en','a','al','con','para','por','sin','sobre']);
+  function titulo(s){
+    if(!s) return '';
+    return String(s).toLowerCase().split(/\s+/).map((w,i)=>{
+      if(/^[ivx]+$/.test(w.replace(/[^a-z]/g,''))) return w.toUpperCase();
+      if(i>0 && MINUS.has(w)) return w;
+      return w.replace(/^([^a-záéíóúüñ]*)([a-záéíóúüñ])/, (m,p,c)=>p+c.toUpperCase());
+    }).join(' ');
+  }
+
+  // ghosts = reuniones de los NRC que se piensan agregar ("cómo quedaría").
+  function renderGrid(list, ghosts){
+    const grid=$('grid');
+    const meets=[];
+    list.forEach((c,ci)=>(c.meetings||[]).forEach(m=>meets.push({...m, ci,
+      label: titulo(c.title) || `${c.subj} ${c.crse}`,
+      code: `${c.subj} ${c.crse}`.trim(), crn: c.crn })));
+    (ghosts||[]).forEach(g=>meets.push({...g, ghost:true}));
+    if(!meets.length){ grid.innerHTML='<div class="mine-empty">Sin horario para mostrar en este período.</div>'; return; }
+
+    // Semana completa y franja fija 07:00–20:00, que se estira si algo se sale.
+    const minS=Math.min(DIA_INI, ...meets.map(m=>Math.floor(m.startMin/60)*60));
+    const maxE=Math.max(DIA_FIN, ...meets.map(m=>Math.ceil(m.endMin/60)*60));
+    // OFF deja aire arriba para que la primera etiqueta de hora no se corte:
+    // las etiquetas se centran justo sobre la línea de su hora, así un bloque
+    // que empieza a las 7:00 alinea exactamente con el "07:00".
+    const filas=(maxE-minS)/60, OFF=9, H=filas*HH+OFF+12;
+
+    let times=''; for(let i=0;i<=filas;i++) times+=`<div class="cal-tlabel" style="top:${OFF+i*HH}px">${fmt24(minS+i*60)}</div>`;
+    let celdas=''; for(let i=0;i<filas;i++) celdas+=`<div class="cal-cell" style="top:${OFF+i*HH+2}px;height:${HH-4}px"></div>`;
+
+    let html=`<div class="cal"><div class="cal-time-col"><div class="cal-head"></div><div class="cal-body" style="height:${H}px">${times}</div></div>`;
+    for(const day of DAY_ORDER){
+      let evs='';
+      const delDia=meets.filter(x=>x.day===day);
+      delDia.forEach(m=>{
+        // Al superponerse (ej. una materia nueva sobre una inscrita) se reparten el ancho.
+        const solapan=delDia.filter(o=>m.startMin<o.endMin && o.startMin<m.endMin);
+        const col=solapan.indexOf(m), n=solapan.length;
+        const ac = m.ghost ? (m.clash?'#c22a2a':'#0a1740') : CAL_COLORS[m.ci%CAL_COLORS.length];
+        const top=OFF+(m.startMin-minS)/60*HH, h=Math.max((m.endMin-m.startMin)/60*HH-4,18);
+        const w=100/n, left=col*w;
+        const tip=[m.crn?`NRC ${m.crn}`:'', m.code, m.label, m.timeLabel, m.where].filter(Boolean).join(' · ');
+        // El nombre se recorta a las líneas que quepan para que la hora nunca
+        // quede fuera del bloque (una clase de 50 min mide ~37 px).
+        const lineas=Math.max(1, Math.floor((h-21)/12.4));
+        evs+=`<div class="cal-ev${m.ghost?' ghost':''}" title="${esc(tip)}" style="top:${top+2}px;height:${h}px;left:calc(${left}% + 3px);width:calc(${w}% - 6px);--ac:${ac}"><b style="-webkit-line-clamp:${lineas}">${esc(m.label)}</b><small>${fmt(m.startMin,1)}–${fmt(m.endMin,1)}</small></div>`;
+      });
+      html+=`<div class="cal-day-col"><div class="cal-head">${DAY_LABEL[day]}</div><div class="cal-body" style="height:${H}px">${celdas}${evs}</div></div>`;
+    }
+    const leyenda = (ghosts||[]).length
+      ? `<div class="cal-legend"><span><i style="background:#093AD4"></i>Ya matriculado</span><span><i style="background:#fff;box-shadow:inset 0 0 0 2px #0a1740"></i>Por agregar</span>${ghosts.some(g=>g.clash)?'<span><i style="background:#fff;box-shadow:inset 0 0 0 2px #c22a2a"></i>Choque</span>':''}</div>`
+      : '';
+    grid.innerHTML=`<div class="cal-wrap">${html}</div></div>${leyenda}`;
+  }
+
+  // ── Preview de los NRC por agregar ──────────────────────────────────────────
+  let previewSecs=[], prevTimer=null;
+  function schedulePreview(){ clearTimeout(prevTimer); prevTimer=setTimeout(loadPreview, 500); }
+
+  function solapa(a,b){ return a.day===b.day && a.startMin<b.endMin && b.startMin<a.endMin; }
+
+  async function loadPreview(){
+    const inscritos=new Set(currentSchedule.map(c=>c.crn));
+    const pedir=nrcValues().filter(n=>!inscritos.has(n));
+    if(!pedir.length){ previewSecs=[]; renderPreview(); return; }
+    try{
+      const r=await fetch('/api/seccion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nrcs:pedir})});
+      const j=await r.json();
+      previewSecs = j.ok ? (j.secciones||[]) : [];
+    }catch{ previewSecs=[]; }
+    renderPreview();
+  }
+
+  function renderPreview(){
+    const box=$('prev');
+    const inscritos=new Set(currentSchedule.map(c=>c.crn));
+    const secs=previewSecs.filter(s=>!inscritos.has(s.crn));
+    const yaMeets=[]; currentSchedule.forEach(c=>(c.meetings||[]).forEach(m=>yaMeets.push({...m,label:`${c.subj} ${c.crse}`})));
+
+    const ghosts=[]; let html='';
+    secs.forEach((s,i)=>{
+      if(!s.ok){ html+=`<div class="prev-item bad"><b class="crn">${esc(s.crn)}</b><div class="meta">${esc(s.error||'No se pudo consultar.')}</div></div>`; return; }
+      const otras=[]; secs.forEach((o,j)=>{ if(j!==i && o.ok) (o.meetings||[]).forEach(m=>otras.push({...m,label:`${o.subj} ${o.crse}`})); });
+      const contra=yaMeets.concat(otras);
+      const choques=[...new Set((s.meetings||[]).flatMap(m=>contra.filter(o=>solapa(m,o)).map(o=>o.label)))];
+      const codigo=`${s.subj} ${s.crse}`;
+      (s.meetings||[]).forEach(m=>ghosts.push({...m,
+        label: titulo(s.title) || codigo, code: codigo, crn: s.crn,
+        clash: choques.length>0 }));
+
+      const cup=s.cupos;
+      const pill = choques.length ? `<span class="pill err">Choque con ${esc(choques.join(', '))}</span>`
+        : !cup ? ''
+        : cup.disponibles>0 ? `<span class="pill ok">${cup.disponibles} cupo${cup.disponibles===1?'':'s'}</span>`
+        : `<span class="pill err">Sin cupo</span>`;
+      const horas=(s.meetings||[]).length
+        ? [...new Set(s.meetings.map(m=>`${DAY_LABEL[m.day]||m.day} ${m.timeLabel}`))].join(' · ')
+        : 'Sin horario asignado';
+      html+=`<div class="prev-item${choques.length?' bad':''}"><b class="crn">${esc(s.crn)}</b><div class="meta">${esc(titulo(s.title))} <span style="color:var(--muted)">· ${esc(s.subj+' '+s.crse)} ${esc(s.sec||'')}</span><small>${esc(horas)}</small></div>${pill}</div>`;
+    });
+
+    box.innerHTML=html;
+    // El calendario vive dentro del panel "Mis materias"; con preview hay algo
+    // que mostrar aunque todavía no haya sesión (y por tanto ninguna inscrita).
+    if(ghosts.length){ mine.style.display='block'; document.querySelector('.mine-head .sub').textContent = currentSchedule.length ? 'Mis materias matriculadas' : 'Cómo quedaría tu horario'; }
+    renderGrid(currentSchedule, ghosts);
+  }
+
+  let currentView='cal';
+  function applyView(){ $('grid').style.display=currentView==='cal'?'block':'none'; mineList.style.display=currentView==='list'?'block':'none'; }
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ currentView=t.dataset.view; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t)); applyView(); }));
+
+  async function dropCourse(btn){
+    const crn=btn.dataset.crn;
+    if(!confirm(`¿Eliminar la materia con NRC ${crn}? La saca de tu matrícula (puedes volver a agregarla).`)) return;
+    btn.disabled=true; btn.textContent='Eliminando…';
+    try{
+      const r=await fetch('/api/eliminar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({crn,...sessionPayload()})});
+      const j=await r.json();
+      if(j.ok){ renderSchedule(j.schedule||[]); toast(`NRC ${crn} eliminado ✓`,'ok'); }
+      else{ toast(j.error||'No se pudo eliminar.','err'); btn.disabled=false; btn.textContent='Eliminar'; if(j.schedule) renderSchedule(j.schedule); }
+    }catch{ toast('Error de conexión.','err'); btn.disabled=false; btn.textContent='Eliminar'; }
+  }
+
+  let toastT;
+  function toast(msg,kind){ let t=$('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.textContent=msg; t.className='toast '+(kind||'')+' show'; clearTimeout(toastT); toastT=setTimeout(()=>{ t.className='toast '+(kind||''); },3200); }
+
+  $('refresh').addEventListener('click', loadSchedule);
+
+  btnLogin.addEventListener('click', async ()=>{
+    setConn('wait');
+    try{
+      const r = await fetch('/api/login-browser', { method:'POST' });
+      const j = await r.json();
+      if(j.ok){ sessionCodigo=j.codigo||null; setConn('on'); loadSchedule(); loadTurno(); } else { setConn('off', j.error || 'No se pudo iniciar sesión.'); }
+    }catch{ setConn('off','No se pudo conectar con el servidor.'); }
+  });
+  $('session-out').addEventListener('click', cerrarSesion);
+
+  // ── Turno de matrícula ──────────────────────────────────────────────────────
+  const DIAS_C=['dom','lun','mar','mié','jue','vie','sáb'];
+  const MESES_C=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  let turnoData=null, turnoTimer=null;
+
+  function fmtMomento(iso){
+    const d=new Date(iso);
+    return `${DIAS_C[d.getDay()]} ${d.getDate()} ${MESES_C[d.getMonth()]} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  function fmtDur(ms){
+    const s=Math.max(0,Math.floor(ms/1000));
+    const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60), ss=s%60;
+    if(d) return `${d}d ${h}h ${m}m`;
+    if(h) return `${h}h ${m}m ${ss}s`;
+    if(m) return `${m}m ${ss}s`;
+    return `${ss}s`;
+  }
+
+  async function loadTurno(){
+    try{
+      const r=await fetch('/api/turno'); const j=await r.json();
+      // Sin código no hay turno posible: se pide una vez y se guarda.
+      if(!j.ok && /no se conoce tu c[oó]digo/i.test(j.error||'')){ pedirCodigo(); return; }
+      if(!j.ok || !j.turno){ turnoData=null; $('turno').style.display='none'; return; }
+      turnoData=j.turno;
+      // El nombre de la persona sale del mismo listado de turnos.
+      sesionNombre = titulo([j.turno.nombre, j.turno.apellido].filter(Boolean).join(' '));
+      if(connected) setSessionBox(sessionCodigo, sesionNombre);
+      $('turno').style.display='flex'; tickTurno();
+      if(!turnoTimer) turnoTimer=setInterval(tickTurno,1000);
+    }catch{ turnoData=null; $('turno').style.display='none'; }
+  }
+
+  // El SSO no siempre deja la cookie con el código; en ese caso se pide.
+  function pedirCodigo(){
+    const el=$('turno');
+    el.className='turno'; el.style.display='flex';
+    $('turno-title').textContent='¿Cuál es tu código de estudiante?';
+    $('turno-sub').innerHTML='<span style="display:flex;gap:6px;margin-top:6px">'
+      + '<input id="cod-in" placeholder="T00XXXXXX" maxlength="9" spellcheck="false" style="padding:6px 9px;font-size:13px;width:130px" />'
+      + '<button type="button" id="cod-ok" class="tab" style="padding:6px 12px">Guardar</button></span>';
+    $('cod-ok').addEventListener('click', async ()=>{
+      const codigo=$('cod-in').value.trim().toUpperCase();
+      try{
+        const r=await fetch('/api/codigo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codigo})});
+        const j=await r.json();
+        if(!j.ok){ toast(j.error||'Código inválido.','err'); return; }
+        sessionCodigo=j.codigo; setSessionBox(sessionCodigo, sesionNombre); loadTurno();
+      }catch{ toast('No se pudo guardar el código.','err'); }
+    });
+  }
+
+  function tickTurno(){
+    if(!turnoData) return;
+    const el=$('turno'), t=turnoData, now=Date.now();
+    const ini=t.inicioISO?new Date(t.inicioISO).getTime():null;
+    const fin=t.finISO?new Date(t.finISO).getTime():null;
+    const rango = (ini&&fin) ? `${fmtMomento(t.inicioISO)} → ${fmtMomento(t.finISO)}` : `${t.inicioTexto} → ${t.finTexto}`;
+    $('turno-title').textContent = `Tu turno${t.turno!==''?` (${t.turno})`:''}: ${rango}`;
+    if(ini && now<ini){ el.className='turno'; $('turno-sub').innerHTML=`Abre en <span class="cd">${fmtDur(ini-now)}</span>`; }
+    else if(fin && now<fin){ el.className='turno open'; $('turno-sub').innerHTML=`Turno abierto · cierra en <span class="cd">${fmtDur(fin-now)}</span>`; }
+    else if(ini||fin){ el.className='turno closed'; $('turno-sub').textContent='Tu ventana de turno ya cerró.'; }
+    else { el.className='turno'; $('turno-sub').textContent='No se pudo interpretar la fecha del turno.'; }
+  }
+
+  // ── Auto-matrícula ──────────────────────────────────────────────────────────
+  const autoBtn=$('auto-btn'), autoState=$('auto-state'), autoLog=$('auto-log');
+  let autoTimer=null;
+  const ACTIVO=e=>e==='esperando'||e==='disparando';
+
+  autoBtn.addEventListener('click', async ()=>{
+    if(autoBtn.dataset.mode==='cancel'){
+      if(!confirm('¿Cancelar la auto-matrícula armada?')) return;
+      try{ const r=await fetch('/api/auto/cancel',{method:'POST'}); const j=await r.json(); renderAuto(j.auto); }catch{}
+      return;
+    }
+    const nrcs=nrcValues();
+    if(!nrcs.length){ toast('Ingresa al menos un NRC válido.','err'); return; }
+    if(!connected){ toast('Primero inicia sesión en Banner.','err'); return; }
+    const cuando = (turnoData&&turnoData.inicioISO) ? fmtMomento(turnoData.inicioISO) : 'tu turno';
+    if(!confirm(
+      `Se enviará una matrícula REAL con los NRC:\n\n  ${nrcs.join(', ')}\n\n`+
+      `apenas abra tu turno (${cuando}), reintentando hasta lograrlo.\n\n`+
+      `Deja el servidor corriendo. ¿Armar?`
+    )) return;
+    try{
+      const r=await fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nrcs})});
+      const j=await r.json();
+      if(!j.ok){ toast(j.error||'No se pudo armar.','err'); return; }
+      renderAuto(j.auto); toast('Auto-matrícula armada ✓','ok');
+    }catch{ toast('No se pudo conectar con el servidor.','err'); }
+  });
+
+  async function pollAuto(){
+    try{ const r=await fetch('/api/auto/status'); const j=await r.json(); renderAuto(j.auto); }catch{}
+  }
+
+  let autoUltimoEstado=null;
+  function renderAuto(a){
+    if(!a){ autoState.style.display='none'; autoLog.style.display='none'; setAutoBtn('arm'); stopAutoPoll(); return; }
+
+    const ini=new Date(a.startAtISO).getTime();
+    const cabeza = {
+      esperando:  ()=>`⏳ Armada · dispara en <b>${fmtDur(ini-Date.now())}</b>`,
+      disparando: ()=>`🚀 Enviando matrícula… (intento ${a.intentos})`,
+      ok:         ()=>`✅ Listo: todos los NRC quedaron inscritos.`,
+      parcial:    ()=>`⚠️ Terminó con NRC sin inscribir.`,
+      cancelado:  ()=>`✋ Cancelada.`,
+      error:      ()=>`✕ ${esc(a.error||'Falló la auto-matrícula.')}`,
+    }[a.estado] || (()=>esc(a.estado));
+
+    let chips='';
+    a.listos.forEach(x=>chips+=`<span class="chip ok">${esc(x.nrc)} ✓</span>`);
+    a.pendientes.forEach(n=>chips+=`<span class="chip pend">${esc(n)} …</span>`);
+    a.descartados.forEach(x=>chips+=`<span class="chip err" title="${esc(x.message||'')}">${esc(x.nrc)} ✕</span>`);
+
+    autoState.innerHTML=cabeza()+(chips?`<div class="chips">${chips}</div>`:'');
+    autoState.style.display='block';
+
+    if(a.log&&a.log.length){
+      autoLog.innerHTML=a.log.map(l=>`<div>${new Date(l.t).toLocaleTimeString('es-CO')} · ${esc(l.msg)}</div>`).join('');
+      autoLog.style.display='block';
+      autoLog.scrollTop=autoLog.scrollHeight;
+    }
+
+    setAutoBtn(ACTIVO(a.estado)?'cancel':'arm');
+    if(ACTIVO(a.estado)) startAutoPoll(); else stopAutoPoll();
+
+    // Al terminar, refrescar el horario real una sola vez.
+    if(autoUltimoEstado!==a.estado && !ACTIVO(a.estado) && (a.estado==='ok'||a.estado==='parcial')){
+      if(a.horario) renderSchedule(a.horario); else loadSchedule();
+    }
+    autoUltimoEstado=a.estado;
+  }
+
+  function setAutoBtn(mode){
+    autoBtn.dataset.mode=mode;
+    autoBtn.textContent = mode==='cancel' ? 'Cancelar' : 'Armar auto-matrícula';
+    autoBtn.classList.toggle('cancel', mode==='cancel');
+    $('auto-sub').textContent = mode==='cancel'
+      ? 'Se enviará sola en tu turno; puedes cerrar esta pestaña pero NO el servidor.'
+      : 'Deja armados los NRC de arriba y se enviarán solos apenas abra tu turno.';
+  }
+  function startAutoPoll(){ if(!autoTimer) autoTimer=setInterval(pollAuto,2000); }
+  function stopAutoPoll(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+
+  refreshStatus();
+
+  // ── Matricular ──────────────────────────────────────────────────────────────
+  const form=$('form'), submit=$('submit'), out=$('out');
+  form.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const nrcs = [...nrcsEl.querySelectorAll('input')].map(i=>i.value.trim()).filter(v=>/^\d{3,5}$/.test(v));
+    if(!nrcs.length){ render({ ok:false, error:'Ingresa al menos un NRC válido.' }); return; }
+    const payload = { nrcs, codigo:$('codigo').value.trim(), pin:$('pin').value, cookie:$('cookie').value.trim() };
+
+    submit.classList.add('loading'); submit.disabled=true; submit.querySelector('.txt').textContent='Matriculando…';
+    out.className='';
+    try{
+      const r = await fetch('/api/matricula', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const data = await r.json(); render(data);
+      if(data.via==='sesion-navegador') setConn('on');
+    }catch{ render({ ok:false, error:'No se pudo conectar con el servidor local.' }); }
+    finally{ submit.classList.remove('loading'); submit.disabled=false; submit.querySelector('.txt').textContent='Matricular'; }
+  });
+
+  function render(data){
+    let h='';
+    if(!data.ok){ h=`<div class="banner err">✕ ${esc(data.error||'Ocurrió un error.')}</div>`; }
+    else{
+      const okN=data.results.filter(r=>r.ok).length, total=data.results.length;
+      h+=`<div class="banner ${okN===total?'ok':'err'}">${okN===total?'✓':'!'} ${okN} de ${total} NRC matriculados${data.hadErrors?' · el portal reportó errores':''}.</div>`;
+      for(const r of data.results) h+=`<div class="res ${r.ok?'ok':'err'}"><div class="ic">${r.ok?'✓':'✕'}</div><div class="crn">${esc(r.nrc)}<small>${esc(r.message)}</small></div></div>`;
+      if(data.schedule) renderSchedule(data.schedule);
+    }
+    out.innerHTML=h; out.className='show'; out.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+</script>
+</body>
+</html>

@@ -10,22 +10,23 @@ const PORTAL_URL = 'https://iceberg-niif.utb.edu.co/iceberg-pf/';
 const DEBUG_DIR = '/tmp/iceberg';
 const MAX_CAPTCHA_RETRIES = 5;
 
+export interface MatriculaFecha {
+  tipo: 'ORDINARIA' | 'EXTRAORDINARIA' | 'EXTEMPORANEA';
+  fechaVencimiento: string;
+  recargo: string;
+}
+
 export interface IcebergLoginResult {
   ok: boolean;
   error?: string;
-  /** Nombre del estudiante extraído del banner post-login (ej: "MANUEL ESTEBAN SEVERICHE PUELLO") */
   nombre?: string;
-  /** Cédula extraída del banner post-login */
   cedula?: string;
-  /** true si el login fue OK pero ningún menú tiene recibos pendientes */
   noRecibos?: boolean;
-  /** Menú donde se encontró/intentó descargar el recibo */
   menuUsado?: string;
-  /** Buffer del PDF del recibo de matrícula, si llegamos a descargarlo */
   pdf?: Buffer;
-  /** Captchas que se intentaron resolver (para debug) */
+  /** Fechas de vencimiento extraídas de la tabla del portal */
+  matriculas?: MatriculaFecha[];
   captchaAttempts?: Array<{ solver: 'openai' | 'tesseract'; text: string }>;
-  /** Screenshots de cada paso (paths) cuando debug=true */
   debugFiles?: string[];
 }
 
@@ -169,6 +170,69 @@ async function refreshCaptcha(page: Page): Promise<void> {
 }
 
 /**
+ * Lee la tabla del portal y extrae fechas de vencimiento por tipo de matrícula.
+ * ZK Listbox renderiza las filas como .z-listitem y las celdas como .z-listcell-cnt.
+ */
+async function extractMatriculaFechas(page: Page): Promise<MatriculaFecha[]> {
+  try {
+    // Extraer todo el texto visible de la página y parsear con regex.
+    // Esto es robusto ante cualquier versión de ZK Framework.
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+
+    console.log(`[iceberg] texto página (primeros 500): ${bodyText.slice(0, 500)}`);
+
+    const matriculas: MatriculaFecha[] = [];
+    const DATE_RE = /(\d{2}\/\d{2}\/\d{4})/g;
+
+    // Buscar líneas que contengan tipo de matrícula y una fecha
+    const lines = bodyText.split(/\n|\\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const tipo = parseTipo(line);
+      if (!tipo) continue;
+      const dates = line.match(DATE_RE);
+      if (dates && dates.length > 0) {
+        // Tomar la última fecha del texto (suele ser la fecha de vencimiento)
+        const fecha = dates[dates.length - 1];
+        // Buscar recargo en la misma línea (ej: "2 %" o "0 %")
+        const recargoMatch = line.match(/(\d+)\s*%/);
+        const recargo = recargoMatch ? `${recargoMatch[1]}%` : '0%';
+        // Evitar duplicados del mismo tipo
+        if (!matriculas.find(m => m.tipo === tipo)) {
+          matriculas.push({ tipo, fechaVencimiento: fecha, recargo });
+        }
+      }
+    }
+
+    // Si no encontró nada por líneas, buscar patrones directamente en el texto completo
+    if (matriculas.length === 0) {
+      const tipos: Array<[MatriculaFecha['tipo'], RegExp]> = [
+        ['EXTRAORDINARIA', /EXTRAORDINARIA[^\d]*(\d{2}\/\d{2}\/\d{4})/i],
+        ['ORDINARIA',      /ORDINARIA[^\d]*(\d{2}\/\d{2}\/\d{4})/i],
+        ['EXTEMPORANEA',   /EXTEMPORA[NÑ]EA[^\d]*(\d{2}\/\d{2}\/\d{4})/i],
+      ];
+      for (const [tipo, re] of tipos) {
+        const m = bodyText.match(re);
+        if (m) matriculas.push({ tipo, fechaVencimiento: m[1], recargo: '0%' });
+      }
+    }
+
+    console.log(`[iceberg] fechas extraídas: ${JSON.stringify(matriculas)}`);
+    return matriculas;
+  } catch (err: any) {
+    console.error('[iceberg] error extrayendo fechas de matrícula:', err?.message);
+    return [];
+  }
+}
+
+function parseTipo(text: string): MatriculaFecha['tipo'] | null {
+  const t = text.toUpperCase();
+  if (t.includes('EXTRAORDINARIA')) return 'EXTRAORDINARIA';
+  if (t.includes('ORDINARIA')) return 'ORDINARIA';
+  if (t.includes('EXTEMPORANEA') || t.includes('EXTEMPORÁNEA')) return 'EXTEMPORANEA';
+  return null;
+}
+
+/**
  * Navega a un menú y verifica si tiene registros. Si los tiene, selecciona la primera
  * fila y clickea "Generar Recibo", capturando el PDF de la pestaña nueva que se abre.
  *
@@ -182,7 +246,7 @@ async function tryDownloadFromMenu(
   menuName: string,
   debug: boolean,
   debugFiles: string[]
-): Promise<{ found: boolean; pdf?: Buffer; error?: string }> {
+): Promise<{ found: boolean; pdf?: Buffer; error?: string; matriculas?: MatriculaFecha[] }> {
   // Click en el item del menú lateral
   await page.locator(`text="${menuName}"`).first().click().catch(() => {});
   await page.waitForTimeout(2_000);
@@ -204,58 +268,96 @@ async function tryDownloadFromMenu(
     return { found: false };
   }
 
-  // Intentar marcar el primer checkbox de la columna "Selec."
+  // Extraer fechas de vencimiento de la tabla antes de seleccionar fila
+  const matriculas = await extractMatriculaFechas(page);
+
+  // Seleccionar la primera fila del ZK Listbox.
+  // ZK oculta visualmente los inputs y usa spans custom, así que probamos en orden:
+  // 1) radio button (con force para elementos ocultos por CSS)
+  // 2) checkbox (con force)
+  // 3) click directo en la primera fila del listbox
+  const firstRadio = page.locator('input[type="radio"]').first();
   const firstCheckbox = page.locator('input[type="checkbox"]').first();
-  const checkboxVisible = await firstCheckbox.isVisible().catch(() => false);
-  if (!checkboxVisible) {
+  const firstRow = page.locator('.z-listitem, tr.z-listitem, li.z-listitem').first();
+
+  const radioExists = await firstRadio.count().then(n => n > 0).catch(() => false);
+  const checkboxExists = await firstCheckbox.count().then(n => n > 0).catch(() => false);
+  const rowExists = await firstRow.count().then(n => n > 0).catch(() => false);
+
+  if (radioExists) {
+    await firstRadio.click({ force: true }).catch(() => {});
+  } else if (checkboxExists) {
+    await firstCheckbox.click({ force: true }).catch(() => {});
+  } else if (rowExists) {
+    await firstRow.click().catch(() => {});
+  } else {
     return { found: false };
   }
-  await firstCheckbox.check().catch(() => {});
   await page.waitForTimeout(500);
 
-  // Click en "Generar Recibo" — abre pestaña nueva con el PDF
+  // Click en "Generar Recibo" — puede abrir pestaña nueva o disparar descarga directa
   const context = page.context();
   const newPagePromise = context.waitForEvent('page', { timeout: 15_000 });
+  const downloadPromise = page.waitForEvent('download', { timeout: 15_000 });
 
-  await page.locator('text="Generar Recibo"').first().click().catch(() => {});
+  const generarBtn = page.locator('text="Generar Recibo"').first();
+  const btnVisible = await generarBtn.isVisible().catch(() => false);
+  console.log(`[iceberg] botón "Generar Recibo" visible: ${btnVisible}`);
+  await generarBtn.click({ timeout: 5_000 }).catch((e: any) => console.error('[iceberg] click Generar Recibo falló:', e?.message));
 
-  let pdfPage: Page;
+  // Esperar lo que llegue primero: nueva pestaña o descarga directa
+  let pdfBuffer: Buffer | undefined;
   try {
-    pdfPage = await newPagePromise;
-    await pdfPage.waitForLoadState('domcontentloaded', { timeout: 15_000 });
-  } catch {
-    return { found: true, error: 'No se abrió la pestaña del recibo' };
+    const result = await Promise.race([
+      newPagePromise.then(async (pdfPage) => {
+        console.log('[iceberg] nueva pestaña abierta:', pdfPage.url());
+        await pdfPage.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+
+        if (debug) {
+          const p = path.join(DEBUG_DIR, `07-pdf-tab-${menuName.replace(/\s+/g, '_')}.png`);
+          await pdfPage.screenshot({ path: p, fullPage: true }).catch(() => {});
+          debugFiles.push(p);
+        }
+
+        const pdfUrl = pdfPage.url();
+        const pdfBytes = await pdfPage.evaluate(async (url: string) => {
+          const res = await fetch(url, { credentials: 'include' });
+          const buf = await res.arrayBuffer();
+          return Array.from(new Uint8Array(buf));
+        }, pdfUrl);
+        await pdfPage.close().catch(() => {});
+        return Buffer.from(pdfBytes);
+      }),
+      downloadPromise.then(async (download) => {
+        console.log('[iceberg] descarga directa detectada:', download.suggestedFilename());
+        const buffer = await download.createReadStream().then((stream: any) =>
+          new Promise<Buffer>((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            stream.on('data', (c: Buffer) => chunks.push(c));
+            stream.on('end', () => resolve(Buffer.concat(chunks)));
+            stream.on('error', reject);
+          })
+        );
+        return buffer;
+      }),
+    ]);
+    pdfBuffer = result;
+  } catch (err: any) {
+    console.error(`[iceberg] error esperando PDF en menú ${menuName}:`, err?.message);
+    return { found: true, error: `No se pudo obtener el PDF: ${err?.message ?? err}` };
   }
 
-  // El PDF se carga en la pestaña nueva. Obtener su URL y descargar manteniendo cookies.
-  const pdfUrl = pdfPage.url();
+  if (!pdfBuffer || pdfBuffer.length === 0) {
+    return { found: true, error: 'PDF vacío o no recibido' };
+  }
+
   if (debug) {
-    const p = path.join(DEBUG_DIR, `07-pdf-tab-${menuName.replace(/\s+/g, '_')}.png`);
-    await pdfPage.screenshot({ path: p, fullPage: true }).catch(() => {});
+    const p = path.join(DEBUG_DIR, `08-recibo-${menuName.replace(/\s+/g, '_')}.pdf`);
+    await fs.writeFile(p, pdfBuffer);
     debugFiles.push(p);
   }
 
-  try {
-    const pdfBytes = await pdfPage.evaluate(async (url: string) => {
-      const res = await fetch(url, { credentials: 'include' });
-      const buf = await res.arrayBuffer();
-      return Array.from(new Uint8Array(buf));
-    }, pdfUrl);
-
-    const pdfBuffer = Buffer.from(pdfBytes);
-    await pdfPage.close().catch(() => {});
-
-    if (debug) {
-      const p = path.join(DEBUG_DIR, `08-recibo-${menuName.replace(/\s+/g, '_')}.pdf`);
-      await fs.writeFile(p, pdfBuffer);
-      debugFiles.push(p);
-    }
-
-    return { found: true, pdf: pdfBuffer };
-  } catch (err: any) {
-    await pdfPage.close().catch(() => {});
-    return { found: true, error: `Error descargando PDF: ${err?.message ?? err}` };
-  }
+  return { found: true, pdf: pdfBuffer, matriculas };
 }
 
 /**
@@ -432,12 +534,15 @@ async function loginAndDownloadReceiptInternal(
     let menuUsado: string | undefined;
     let downloadError: string | undefined;
 
+    let matriculas: MatriculaFecha[] | undefined;
+
     for (const menu of MENUS_RECIBOS) {
       console.log(`[iceberg] revisando menú: ${menu}`);
       const r = await tryDownloadFromMenu(page, menu, debug, debugFiles);
       if (r.pdf) {
         pdf = r.pdf;
         menuUsado = menu;
+        matriculas = r.matriculas;
         break;
       }
       if (r.found && r.error) {
@@ -448,7 +553,7 @@ async function loginAndDownloadReceiptInternal(
     }
 
     if (pdf) {
-      return { ok: true, nombre, cedula: cedulaExtraida, pdf, menuUsado, captchaAttempts, debugFiles };
+      return { ok: true, nombre, cedula: cedulaExtraida, pdf, menuUsado, matriculas, captchaAttempts, debugFiles };
     }
 
     if (downloadError) {

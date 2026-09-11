@@ -45,7 +45,7 @@ interface Ctx {
   session: Session | null;
 }
 
-const BRAND        = 'Tooli Posgrados';
+const BRAND        = 'Escuela de Posgrados UTB';
 const URL_ESP      = 'https://www.utb.edu.co/posgrados/especializacion-en-gestion-de-tecnologias-disruptivas-en-los-negocios/';
 const URL_MAESTRIA = 'https://www.utb.edu.co/posgrados/maestria-en-management-de-la-transformacion-digital/';
 const URL_INSCRIPCION = 'https://ssbprod.utb.edu.co:8443/PROD/bwskalog.P_DispLoginNon';

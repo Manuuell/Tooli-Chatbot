@@ -10,15 +10,12 @@ Uso:
 El PNG se guarda en src/public/posgrados/ (lo sirve el backend en /posgrados).
 """
 import os
-from urllib.parse import quote
 import qrcode
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
 from qrcode.image.styles.colormasks import SolidFillColorMask
 
-NUMERO  = "573012821925"
-MENSAJE = "Hola, deseo registrar mi asistencia."
-URL = f"https://wa.me/{NUMERO}?text={quote(MENSAJE)}"
+URL = "https://wa.me/573012821925?text=hola"
 
 # Ruta de salida relativa a la raíz del repo (portable en cualquier máquina)
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

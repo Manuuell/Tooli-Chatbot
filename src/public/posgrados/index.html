@@ -45,33 +45,33 @@
     padding:14px 44px;background:rgba(5,10,24,.55);backdrop-filter:blur(16px);border-bottom:1px solid var(--bd)}
   .topbar .utb{height:30px;filter:brightness(0) invert(1);opacity:.95}
   .topbar .vsep{width:1px;height:24px;background:var(--bd)}
-  .topbar .school{font-family:'Space Grotesk',sans-serif;font-size:16.5px;font-weight:600;letter-spacing:.3px;color:#cfe0ff}
+  .topbar .school{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;letter-spacing:.3px;color:#cfe0ff}
   .topbar .year{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
     color:var(--cyan2);background:rgba(47,230,255,.08);border:1px solid rgba(47,230,255,.25);padding:6px 14px;border-radius:30px}
   .topbar .year .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
 
   /* ─────────── STAGE ─────────── */
-  .stage{position:fixed;top:0;left:0;bottom:0;right:var(--qr-w);z-index:1;display:flex;flex-direction:column;justify-content:center;padding:76px 46px 22px}
+  .stage{position:fixed;top:0;left:0;bottom:0;right:var(--qr-w);z-index:1;display:flex;flex-direction:column;justify-content:center;padding:84px 44px 26px}
 
-  .eyebrow{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;font-size:14px;font-weight:700;letter-spacing:2px;
+  .eyebrow{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;font-size:12px;font-weight:700;letter-spacing:2px;
     text-transform:uppercase;color:var(--cyan2);margin-bottom:14px;animation:up .6s ease both}
   .eyebrow .ln{width:26px;height:1px;background:linear-gradient(90deg,var(--cyan),transparent)}
-  .title{font-family:'Space Grotesk',sans-serif;font-size:clamp(36px,4vw,56px);font-weight:700;line-height:1.05;letter-spacing:-.5px;animation:up .7s .07s ease both}
+  .title{font-family:'Space Grotesk',sans-serif;font-size:clamp(30px,3.5vw,48px);font-weight:700;line-height:1.04;letter-spacing:-.5px;animation:up .7s .07s ease both}
   .title .g{background:linear-gradient(110deg,#fff 0%,var(--cyan) 45%,var(--blue2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;
     background-size:200% auto;animation:shine 6s linear infinite}
   @keyframes shine{to{background-position:200% center}}
-  .sub{font-size:18.5px;line-height:1.55;color:var(--muted);margin-top:11px;max-width:740px;animation:up .8s .14s ease both}
+  .sub{font-size:15.5px;line-height:1.6;color:var(--muted);margin-top:12px;max-width:660px;animation:up .8s .14s ease both}
   .sub b{color:#dbe6ff;font-weight:600}
 
   /* features mini row */
-  .feats{display:flex;gap:10px;margin-top:15px;animation:up .8s .2s ease both}
-  .feat{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:500;color:#c4d3f0;
-    background:var(--glass);border:1px solid var(--bd);border-radius:10px;padding:9px 14px}
-  .feat svg{width:18px;height:18px;stroke:var(--cyan);fill:none;stroke-width:1.8}
+  .feats{display:flex;gap:10px;margin-top:16px;animation:up .8s .2s ease both}
+  .feat{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:#c4d3f0;
+    background:var(--glass);border:1px solid var(--bd);border-radius:10px;padding:8px 13px}
+  .feat svg{width:16px;height:16px;stroke:var(--cyan);fill:none;stroke-width:1.8}
 
   /* ─────────── PROGRAM CARDS ─────────── */
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
-  .card{position:relative;overflow:hidden;border-radius:18px;padding:18px 20px 16px;
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+  .card{position:relative;overflow:hidden;border-radius:18px;padding:20px 20px 18px;
     background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
     border:1px solid var(--bd);backdrop-filter:blur(8px);animation:up .8s ease both;transition:transform .35s,border-color .35s,box-shadow .35s}
   .card:nth-child(1){animation-delay:.26s}
@@ -87,24 +87,24 @@
   .c-ic{width:46px;height:46px;flex-shrink:0;border-radius:13px;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(150deg,rgba(47,230,255,.18),rgba(47,107,255,.12));border:1px solid rgba(47,230,255,.32);box-shadow:0 0 20px rgba(47,230,255,.16)}
   .c-ic svg{width:24px;height:24px;stroke:var(--cyan2);fill:none;stroke-width:1.8}
-  .c-badge{font-size:12.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--cyan2);
+  .c-badge{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--cyan2);
     background:rgba(47,230,255,.10);border:1px solid rgba(47,230,255,.22);padding:5px 11px;border-radius:20px}
-  .card h3{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:600;line-height:1.22;margin-bottom:8px;color:#f2f7ff}
-  .card p{font-size:15.5px;line-height:1.5;color:var(--muted)}
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-  .chip{font-size:13px;font-weight:600;color:#bfe9ff;background:rgba(47,230,255,.07);border:1px solid rgba(47,230,255,.18);padding:5px 11px;border-radius:8px}
-  .c-aim{display:flex;align-items:center;gap:7px;margin-top:12px;font-size:13.5px;color:#aab9da}
+  .card h3{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:1.25;margin-bottom:8px;color:#f2f7ff}
+  .card p{font-size:13px;line-height:1.55;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
+  .chip{font-size:11px;font-weight:600;color:#bfe9ff;background:rgba(47,230,255,.07);border:1px solid rgba(47,230,255,.18);padding:4px 10px;border-radius:8px}
+  .c-aim{display:flex;align-items:center;gap:7px;margin-top:13px;font-size:11.5px;color:#aab9da}
   .c-aim svg{width:14px;height:14px;stroke:var(--blue2);fill:none;stroke-width:1.8;flex-shrink:0}
 
   /* ─────────── FINANCIACIÓN ─────────── */
-  .finance{display:flex;align-items:center;gap:16px;margin-top:16px;padding:14px 22px;border-radius:16px;
+  .finance{display:flex;align-items:center;gap:16px;margin-top:20px;padding:14px 22px;border-radius:16px;
     background:linear-gradient(100deg,rgba(47,107,255,.16),rgba(47,230,255,.05));border:1px solid rgba(47,230,255,.26);animation:up .8s .44s ease both}
   .finance .fi{width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;
     background:rgba(255,194,75,.14);border:1px solid rgba(255,194,75,.35)}
   .finance .fi svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:1.8}
-  .finance .ft{font-size:17.5px;line-height:1.4;color:#e7eeff}
+  .finance .ft{font-size:14.5px;line-height:1.45;color:#e7eeff}
   .finance .ft b{color:var(--cyan2);font-weight:700}
-  .finance .badge{margin-left:auto;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#05122e;
+  .finance .badge{margin-left:auto;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;color:#05122e;
     background:linear-gradient(135deg,var(--cyan),var(--cyan2));padding:10px 18px;border-radius:30px;box-shadow:0 0 26px rgba(47,230,255,.4);animation:pulse 2.8s ease-in-out infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 18px rgba(47,230,255,.3)}50%{box-shadow:0 0 34px rgba(47,230,255,.6)}}
 
@@ -112,7 +112,7 @@
   .qr{position:fixed;top:0;right:0;bottom:0;width:var(--qr-w);z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:15px;padding:26px 24px;background:rgba(4,8,20,.84);backdrop-filter:blur(22px);border-left:1px solid rgba(47,230,255,.20)}
   .qr::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 28%,rgba(47,230,255,.12),transparent 60%);pointer-events:none}
-  .qr-cta{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;line-height:1.3;color:#fff}
+  .qr-cta{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;line-height:1.3;color:#fff}
   .qr-cta .wa{color:#37e98a}
   .qr-arrow{font-size:24px;animation:bob 1.6s ease-in-out infinite}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
@@ -125,8 +125,8 @@
   .cn.tr{top:-7px;right:-7px;border-left:0;border-bottom:0;border-radius:0 6px 0 0}
   .cn.bl{bottom:-7px;left:-7px;border-right:0;border-top:0;border-radius:0 0 0 6px}
   .cn.br{bottom:-7px;right:-7px;border-left:0;border-top:0;border-radius:0 0 6px 0}
-  .qr-sub{text-align:center;font-size:15px;color:rgba(220,230,255,.6)}
-  .qr-cupos{font-size:14px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#1a1200;
+  .qr-sub{text-align:center;font-size:13px;color:rgba(220,230,255,.55)}
+  .qr-cupos{font-size:12.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#1a1200;
     background:linear-gradient(135deg,#ffd96b,#ffb01f);padding:7px 16px;border-radius:20px;box-shadow:0 0 22px rgba(255,176,31,.45);animation:pulse 2.2s ease-in-out infinite}
   .logobar{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
     background:rgba(255,255,255,.96);border-radius:15px;padding:11px 13px;box-shadow:0 8px 30px rgba(0,0,0,.4);margin-top:4px}
@@ -135,7 +135,7 @@
   .logolbl{width:100%;text-align:center;font-size:9.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:rgba(200,215,245,.34);margin-top:-2px}
 
   /* ─────────── FOOTER ─────────── */
-  .foot{position:fixed;bottom:13px;left:46px;z-index:6;font-size:14px;font-weight:600;letter-spacing:.6px;color:rgba(200,215,245,.42)}
+  .foot{position:fixed;bottom:13px;left:44px;z-index:6;font-size:12.5px;font-weight:600;letter-spacing:.6px;color:rgba(200,215,245,.42)}
   .foot b{color:var(--cyan2)}
 
   @keyframes up{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
@@ -207,7 +207,7 @@
   <div class="qr-arrow">⬇️</div>
   <div class="qr-frame">
     <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
-    <img src="./qr-tooli-posgrados.png?v=2" alt="QR WhatsApp Tooli Posgrados">
+    <img src="./qr-tooli-posgrados.png" alt="QR WhatsApp Tooli Posgrados">
   </div>
   <div class="qr-sub">Abre la cámara y apunta al código</div>
   <div class="qr-cupos">🔥 Cupos limitados</div>

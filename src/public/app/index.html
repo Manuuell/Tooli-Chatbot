@@ -1876,10 +1876,12 @@ async function renderRegistros(main) {
     `;
     $$('.crm-card[data-longpress]').forEach(card => {
       const row = crmRows[Number(card.dataset.row)];
+      card.addEventListener('click', () => openStudentProfile(row));
       contextSheet(card, {
         title: row[1] || 'Prospecto',
         subtitle: row[2] || undefined,
         actions: [
+          { label: 'Ver perfil', icon: '👤', onClick: () => openStudentProfile(row) },
           ...(row[3] ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(row[3]) }] : []),
           { label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(row[2] ?? '', 'Email copiado') },
           { label: 'Copiar WhatsApp', icon: '📱', onClick: () => copyToClipboard(row[3] ?? '', 'Número copiado') },
@@ -1887,6 +1889,43 @@ async function renderRegistros(main) {
           { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
         ],
       });
+    });
+  }
+
+  /* Perfil del estudiante: combina lo que ya sabemos del registro (CRM) con
+     lo que el bot tiene guardado de su conversación (categoría de flujo,
+     último mensaje) — todo dato real, nada inventado tipo Savia. */
+  async function openStudentProfile(row) {
+    const [fecha, nombre, email, phone, programa] = row;
+    const cat = programaCategoria(programa);
+    let flowInfo = null;
+    if (phone) {
+      try {
+        const r = await api(`/api/tools/bot-users/${phone}`);
+        const info = await r.json();
+        flowInfo = { step: flowCategory(info.session?.step), last: info.recentMessages?.[0] ?? null, banned: info.banned };
+      } catch { /* sin datos de conversación disponibles */ }
+    }
+    openProfileSheet({
+      avatarBg: avatarTone(nombre || phone), avatarText: initialsFor(phone || nombre, nombre),
+      title: nombre || 'Prospecto', subtitle: email || (phone ? `+${phone}` : undefined),
+      badges: [
+        ...(programa ? [{ label: programa, color: PROGRAMA_COLORS[cat] }] : []),
+        ...(flowInfo?.step ? [{ label: flowInfo.step.label, color: flowInfo.step.color }] : []),
+        ...(flowInfo?.banned ? [{ label: 'Baneado', color: '#dc2626' }] : []),
+      ],
+      rows: [
+        ...(email ? [{ icon: '📧', label: 'Email', value: email }] : []),
+        ...(phone ? [{ icon: '📱', label: 'WhatsApp', value: `+${phone}` }] : []),
+        ...(programa ? [{ icon: '🎓', label: 'Programa de interés', value: programa }] : []),
+        { icon: '🗓️', label: 'Registrado', value: friendlyDate(fecha) },
+        ...(flowInfo?.last ? [{ icon: '💬', label: 'Último mensaje', value: flowInfo.last.text }] : []),
+      ],
+      actions: [
+        ...(phone ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(phone), closeAfter: false }] : []),
+        ...(phone ? [{ label: 'Ver conversación', icon: '💬', onClick: () => navigate('conversaciones') }] : []),
+        { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
+      ],
     });
   }
 

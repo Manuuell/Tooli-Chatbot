@@ -16,17 +16,7 @@
       <div class="product">Tooli · Asesores</div>
     </div>
 
-    <nav id="nav">
-      <a data-route="home" class="active"><span class="icon">🏠</span>Inicio</a>
-      <a data-route="turno"><span class="icon">📋</span>Consultar turno</a>
-      <a data-route="recibo"><span class="icon">🧾</span>Descargar recibo</a>
-      <a data-route="metricas"><span class="icon">📊</span>Métricas</a>
-      <a data-route="botusers"><span class="icon">📱</span>Usuarios del bot</a>
-      <a data-route="posgrados"><span class="icon">🎓</span>Posgrados</a>
-      <a data-route="registros"><span class="icon">📝</span>Registros BD</a>
-      <a data-route="health"><span class="icon">❤️</span>Estado del sistema</a>
-      <a data-route="usuarios" id="navUsuarios" class="hidden"><span class="icon">👥</span>Asesores</a>
-    </nav>
+    <nav id="nav"></nav>
 
     <div class="user-block">
       <div class="name" id="userName">…</div>
@@ -38,6 +28,9 @@
   <main class="main" id="main"></main>
 </div>
 
+<nav class="tab-bar" id="tabBar"></nav>
+<div class="toast-stack" id="toastStack"></div>
+
 <script>
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -46,10 +39,342 @@ let currentUser = null;
 let publicUrls = { chatwoot: '#', grafana: '#' };
 let capabilities = { chatwootSso: false };
 
+/* ============= Microinteracciones: haptics, toast, action sheet, long-press ============= */
+function haptic(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+}
+
+function toast(msg, ms = 2200) {
+  const stack = $('#toastStack');
+  if (!stack) return;
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('hide');
+    setTimeout(() => el.remove(), 260);
+  }, ms);
+}
+
+function copyToClipboard(text, label = 'Copiado') {
+  try {
+    navigator.clipboard?.writeText(text);
+    toast(`${label} ✓`);
+    haptic(15);
+  } catch {
+    toast('No se pudo copiar');
+  }
+}
+
+/* Tooltip flotante ("ventana de texto") — hover en desktop, tap en touch */
+function attachTooltip(el, text) {
+  if (!text) return;
+  el.classList.add('tt-anchor');
+  const bubble = document.createElement('span');
+  bubble.className = 'tt-bubble';
+  bubble.textContent = text;
+  el.appendChild(bubble);
+  const show = () => el.classList.add('tt-visible');
+  const hide = () => el.classList.remove('tt-visible');
+  el.addEventListener('mouseenter', show);
+  el.addEventListener('mouseleave', hide);
+  el.addEventListener('touchstart', (e) => { e.stopPropagation(); show(); setTimeout(hide, 1800); }, { passive: true });
+}
+
+/* Control segmentado estilo iOS (reemplaza <select> simples) */
+function buildSegmented(options, activeValue, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'segmented';
+  const thumb = document.createElement('div');
+  thumb.className = 'segmented-thumb';
+  wrap.appendChild(thumb);
+  const buttons = options.map(opt => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = opt.label;
+    btn.dataset.value = opt.value;
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('active')) return;
+      haptic(10);
+      setActive(opt.value);
+      onChange(opt.value);
+    });
+    wrap.appendChild(btn);
+    return btn;
+  });
+  function setActive(value) {
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.value === value));
+    const activeBtn = buttons.find(b => b.dataset.value === value);
+    if (activeBtn) { thumb.style.left = `${activeBtn.offsetLeft}px`; thumb.style.width = `${activeBtn.offsetWidth}px`; }
+  }
+  requestAnimationFrame(() => setActive(activeValue));
+  return wrap;
+}
+
+/* Contador animado (ease-out cúbico) para los números de las stat cards */
+function countUp(el, to, duration = 650) {
+  const from = 0;
+  const t0 = performance.now();
+  function frame(now) {
+    const p = Math.min(1, (now - t0) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(from + (to - from) * eased);
+    if (p < 1) requestAnimationFrame(frame);
+    else el.textContent = to;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* Anillo de progreso circular (espera de descarga de recibo) */
+const RING_C = 150.8;
+function buildProgressRing(id) {
+  return `<div class="progress-ring" id="${id}">
+    <svg width="56" height="56" viewBox="0 0 56 56">
+      <circle class="track" cx="28" cy="28" r="24"></circle>
+      <circle class="fill" id="${id}-fill" cx="28" cy="28" r="24" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}"></circle>
+    </svg>
+    <span class="pct" id="${id}-pct">0%</span>
+  </div>`;
+}
+function setProgress(id, pct) {
+  const fill = document.getElementById(`${id}-fill`);
+  const label = document.getElementById(`${id}-pct`);
+  if (!fill) return;
+  fill.style.strokeDashoffset = String(RING_C - (RING_C * pct / 100));
+  if (label) label.textContent = `${Math.round(pct)}%`;
+}
+
+/* Check de éxito animado (el trazo del SVG se "dibuja" solo) */
+function successCheckSvg() {
+  return `<svg class="success-check" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="33" cy="33" r="28"></circle>
+    <path d="M19 34l10 10 18-19"></path>
+  </svg>`;
+}
+
+const HEALTH_LABELS = {
+  ok: 'Operativo', degraded: 'Degradado', down: 'Caído', skipped: 'No verificado',
+};
+
+const ActionSheet = {
+  _escHandler: null,
+  open({ title, subtitle, groups }) {
+    this.close();
+    haptic(12);
+    const backdrop = document.createElement('div');
+    backdrop.className = 'sheet-backdrop';
+    backdrop.id = 'activeSheet';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'action-sheet';
+
+    let html = '<div class="sheet-grabber"></div>';
+    if (title) {
+      html += `<div class="sheet-header"><div class="sheet-title">${title}</div>${subtitle ? `<div class="sheet-subtitle">${subtitle}</div>` : ''}</div>`;
+    }
+    const flat = [];
+    groups.forEach(group => {
+      html += '<div class="sheet-group">' + group.map(a => {
+        flat.push(a);
+        const cls = [a.destructive ? 'destructive' : '', a.cancel ? 'cancel' : ''].filter(Boolean).join(' ');
+        return `<button type="button" class="sheet-action ${cls}">${a.icon ? `<span class="sheet-icon">${a.icon}</span>` : ''}${a.label}</button>`;
+      }).join('') + '</div>';
+    });
+    sheet.innerHTML = html;
+    backdrop.appendChild(sheet);
+    document.body.appendChild(backdrop);
+
+    $$('.sheet-action', sheet).forEach((btn, i) => btn.addEventListener('click', () => {
+      this.close();
+      flat[i].onClick && flat[i].onClick();
+    }));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) this.close(); });
+
+    let startY = null;
+    sheet.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+    sheet.addEventListener('touchmove', e => {
+      if (startY == null) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 0) sheet.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+    sheet.addEventListener('touchend', e => {
+      const dy = e.changedTouches[0].clientY - startY;
+      sheet.style.transform = '';
+      startY = null;
+      if (dy > 80) this.close();
+    });
+
+    this._escHandler = (e) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this._escHandler);
+    requestAnimationFrame(() => backdrop.classList.add('open'));
+  },
+  close() {
+    const el = document.getElementById('activeSheet');
+    if (this._escHandler) { document.removeEventListener('keydown', this._escHandler); this._escHandler = null; }
+    if (!el) return;
+    el.classList.remove('open');
+    setTimeout(() => el.remove(), 260);
+  },
+};
+
+function contextSheet(el, { title, subtitle, actions }) {
+  attachLongPress(el, () => {
+    ActionSheet.open({
+      title, subtitle,
+      groups: [actions, [{ label: 'Cancelar', cancel: true }]],
+    });
+  });
+}
+
+function attachLongPress(el, handler, opts = {}) {
+  const delay = opts.delay ?? 460;
+  let timer = null, moved = false, startX = 0, startY = 0, active = false;
+  el.classList.add('longpressable');
+  const clear = () => {
+    clearTimeout(timer); timer = null;
+    if (active) { el.classList.remove('longpress-active'); active = false; }
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    moved = false; startX = e.clientX; startY = e.clientY;
+    timer = setTimeout(() => {
+      if (moved) return;
+      active = true;
+      el.classList.add('longpress-active');
+      const swallowClick = (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); };
+      el.addEventListener('click', swallowClick, { capture: true, once: true });
+      setTimeout(() => el.removeEventListener('click', swallowClick, { capture: true }), 700);
+      handler();
+    }, delay);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) { moved = true; clear(); }
+  });
+  el.addEventListener('pointerup', clear);
+  el.addEventListener('pointerleave', clear);
+  el.addEventListener('pointercancel', clear);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+/* ============= Íconos estilo iOS (SVG línea fina, sin dependencias) =============
+   Emojis se reservan para acentos con personalidad (saludo, badges); la
+   navegación y los controles de la interfaz usan este set, más consistente
+   y "nativo" que un emoji a distintos tamaños/plataformas. */
+const ICONS = {
+  home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/>',
+  clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9z"/><path d="M9 11h6M9 15h6"/>',
+  receipt: '<path d="M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5V3Z"/><path d="M9 8h6M9 12h6"/>',
+  chart: '<path d="M4 20V10M11 20V4M18 20v-7"/><path d="M3 20h18"/>',
+  message: '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>',
+  cap: '<path d="M2 9 12 4l10 5-10 5-10-5Z"/><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/><path d="M21 9v6"/>',
+  users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c2.5.4 4.5 2.6 4.5 5.3"/>',
+  pulse: '<path d="M3 12h4l2-7 4 14 2-7h6"/>',
+  chevronLeft: '<path d="M15 5 8 12l7 7"/>',
+  chevronRight: '<path d="M9 5l7 7-7 7"/>',
+  refresh: '<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>',
+  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/>',
+  link: '<path d="M9 12a3.5 3.5 0 0 0 5 3l3-3a3.5 3.5 0 0 0-5-5l-1 1"/><path d="M15 12a3.5 3.5 0 0 0-5-3l-3 3a3.5 3.5 0 0 0 5 5l1-1"/>',
+  trash: '<path d="M4 7h16"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M10 11v6M14 11v6"/>',
+  ban: '<circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/>',
+  logout: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M14 8l5 4-5 4"/><path d="M19 12H9"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="m5 13 4 4 10-10"/>',
+  x: '<path d="m6 6 12 12M18 6 6 18"/>',
+  bell: '<path d="M7 9a5 5 0 0 1 10 0v4l1.5 3h-13L7 13Z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+};
+function icon(name, size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon-svg">${ICONS[name] ?? ''}</svg>`;
+}
+
+/* ============= Tab bar móvil ============= */
+const TAB_ROUTES = [
+  { route: 'home', icon: 'home', label: 'Inicio' },
+  { route: 'turno', icon: 'clipboard', label: 'Turno' },
+  { route: 'recibo', icon: 'receipt', label: 'Recibo' },
+  { route: 'posgrados', icon: 'cap', label: 'Posgrados' },
+];
+function moreRoutes() {
+  const routes = [
+    { route: 'metricas', icon: '📊', label: 'Métricas' },
+    { route: 'conversaciones', icon: '💬', label: 'Conversaciones' },
+    { route: 'registros', icon: '📝', label: 'Registros BD' },
+    { route: 'health', icon: '❤️', label: 'Estado del sistema' },
+  ];
+  if (currentUser?.role === 'admin') routes.push({ route: 'usuarios', icon: '👥', label: 'Asesores' });
+  return routes;
+}
+
+function renderTabBar() {
+  const bar = $('#tabBar');
+  if (!bar) return;
+  const tabs = [...TAB_ROUTES, { route: '__more', icon: 'more', label: 'Más' }];
+  bar.innerHTML = tabs.map(t => `
+    <button type="button" class="tab-item" data-tab="${t.route}">
+      <span class="tab-notch"></span>
+      <span class="tab-icon">${icon(t.icon, 23)}</span>
+      <span class="tab-label">${t.label}</span>
+    </button>
+  `).join('');
+  $$('.tab-item', bar).forEach(btn => btn.addEventListener('click', () => {
+    haptic(10);
+    if (btn.dataset.tab === '__more') return openMoreSheet();
+    navigate(btn.dataset.tab);
+  }));
+  updateTabBar(location.hash.slice(1) || 'home');
+}
+
+function updateTabBar(route) {
+  const bar = $('#tabBar');
+  if (!bar) return;
+  const isMore = moreRoutes().some(r => r.route === route);
+  $$('.tab-item', bar).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === route || (btn.dataset.tab === '__more' && isMore));
+  });
+}
+
+function openMoreSheet() {
+  const actions = moreRoutes().map(r => ({ label: r.label, icon: r.icon, onClick: () => navigate(r.route) }));
+  actions.push({ label: 'Cerrar sesión', icon: '🚪', destructive: true, onClick: doLogout });
+  ActionSheet.open({
+    title: currentUser?.fullName ?? 'Más',
+    subtitle: currentUser?.role === 'admin' ? 'Administrador' : 'Asesor',
+    groups: [actions, [{ label: 'Cancelar', cancel: true }]],
+  });
+}
+
+async function doLogout() {
+  await api('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/app/login.html';
+}
+
 async function api(path, opts = {}) {
   const res = await fetch(path, { credentials: 'same-origin', ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
   if (res.status === 401) { window.location.href = '/app/login.html'; return; }
   return res;
+}
+
+const NAV_ROUTES = [
+  { route: 'home', icon: 'home', label: 'Inicio' },
+  { route: 'turno', icon: 'clipboard', label: 'Consultar turno' },
+  { route: 'recibo', icon: 'receipt', label: 'Descargar recibo' },
+  { route: 'metricas', icon: 'chart', label: 'Métricas' },
+  { route: 'conversaciones', icon: 'message', label: 'Conversaciones' },
+  { route: 'posgrados', icon: 'cap', label: 'Posgrados' },
+  { route: 'registros', icon: 'users', label: 'CRM · Prospectos' },
+  { route: 'health', icon: 'pulse', label: 'Estado del sistema' },
+];
+
+function renderSidebarNav() {
+  const nav = $('#nav');
+  nav.innerHTML = NAV_ROUTES.map(r => `<a data-route="${r.route}">${icon(r.icon)}${r.label}</a>`).join('')
+    + (currentUser?.role === 'admin' ? `<a data-route="usuarios" id="navUsuarios">${icon('users')}Asesores</a>` : '');
+  $$('#nav a').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    navigate(a.dataset.route);
+  }));
 }
 
 async function init() {
@@ -61,36 +386,31 @@ async function init() {
   if (data.capabilities) capabilities = data.capabilities;
   $('#userName').textContent = currentUser.fullName;
   $('#userRole').textContent = currentUser.role === 'admin' ? 'Administrador' : 'Asesor';
-  if (currentUser.role === 'admin') $('#navUsuarios').classList.remove('hidden');
+  renderSidebarNav();
 
-  $$('#nav a').forEach(a => a.addEventListener('click', e => {
-    e.preventDefault();
-    navigate(a.dataset.route);
-  }));
+  $('#logoutBtn').innerHTML = `${icon('logout', 15)}<span>Cerrar sesión</span>`;
+  $('#logoutBtn').addEventListener('click', doLogout);
 
-  $('#logoutBtn').addEventListener('click', async () => {
-    await api('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/app/login.html';
-  });
-
+  renderTabBar();
   navigate(location.hash.slice(1) || 'home');
   window.addEventListener('hashchange', () => navigate(location.hash.slice(1) || 'home'));
 }
 
 function navigate(route) {
+  ActionSheet.close();
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
+  updateTabBar(route);
   location.hash = route;
   const main = $('#main');
-  if (route === 'home') return renderHome(main);
-  if (route === 'turno') return renderTurno(main);
-  if (route === 'recibo') return renderRecibo(main);
-  if (route === 'metricas') return renderMetricas(main);
-  if (route === 'botusers') return renderBotUsers(main);
-  if (route === 'posgrados') return renderPosgrados(main);
-  if (route === 'registros') return renderRegistros(main);
-  if (route === 'health') return renderHealth(main);
-  if (route === 'usuarios') return renderUsuarios(main);
-  main.innerHTML = '<div class="card">Página no encontrada</div>';
+  main.classList.remove('page-enter');
+  const render = {
+    home: renderHome, turno: renderTurno, recibo: renderRecibo, metricas: renderMetricas,
+    conversaciones: renderConversaciones, posgrados: renderPosgrados, registros: renderRegistros,
+    health: renderHealth, usuarios: renderUsuarios,
+  }[route];
+  const result = render ? render(main) : (main.innerHTML = '<div class="card">Página no encontrada</div>');
+  requestAnimationFrame(() => main.classList.add('page-enter'));
+  return result;
 }
 
 /* ============= INICIO ============= */
@@ -104,17 +424,17 @@ async function renderHome(main) {
     </div>
 
     <div class="section-title">Plataformas principales</div>
-    <div class="hero-grid">
+    <div class="hero-grid stagger-in">
       <button class="hero-tile chatwoot" id="openChatwoot">
-        <div class="hero-icon">💬</div>
+        <div class="hero-icon">${icon('message', 28)}</div>
         <div class="hero-info">
           <h2>Abrir Chatwoot ${capabilities.chatwootSso ? '<span style="font-size: 11px; background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">SSO</span>' : ''}</h2>
           <p>Atiende conversaciones activas, responde a estudiantes y gestiona casos escalados desde el bot.</p>
           <p style="margin-top:6px;font-size:12px;opacity:0.8;">🎓 <a href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;" onclick="event.stopPropagation()">Ver prospectos posgrado →</a></p>
         </div>
       </button>
-      <a class="hero-tile grafana" href="${publicUrls.grafana}" target="_blank" rel="noopener">
-        <div class="hero-icon">📈</div>
+      <a class="hero-tile grafana" href="${publicUrls.grafana}" target="_blank" rel="noopener" id="openGrafana">
+        <div class="hero-icon">${icon('chart', 28)}</div>
         <div class="hero-info">
           <h2>Abrir Grafana</h2>
           <p>Visualiza métricas en vivo, latencia, errores y embudo del bot.</p>
@@ -123,46 +443,90 @@ async function renderHome(main) {
     </div>
 
     <div class="section-title">Resumen del día</div>
-    <div class="stats-grid" id="stats">
-      <div class="stat-card"><div class="label">Mensajes hoy</div><div class="value" data-stat="msgs">…</div></div>
-      <div class="stat-card"><div class="label">Preguntas IA</div><div class="value" data-stat="ai">…</div></div>
-      <div class="stat-card"><div class="label">Prospectos</div><div class="value" data-stat="prospectos">…</div></div>
-      <div class="stat-card"><div class="label">Registros BD</div><div class="value" data-stat="registros">…</div></div>
-      <div class="stat-card"><div class="label">Casos a asesor</div><div class="value" data-stat="handoffs">…</div></div>
-      <div class="stat-card"><div class="label">Recibos / Turnos</div><div class="value" data-stat="recibos">…</div></div>
+    <div class="stats-grid stagger-in" id="stats">
+      <div class="stat-card"><div class="label">Mensajes hoy</div><div class="value skeleton" data-stat="msgs">&nbsp;</div></div>
+      <div class="stat-card"><div class="label">Preguntas IA</div><div class="value skeleton" data-stat="ai">&nbsp;</div></div>
+      <div class="stat-card"><div class="label">Prospectos</div><div class="value skeleton" data-stat="prospectos">&nbsp;</div></div>
+      <div class="stat-card"><div class="label">Registros BD</div><div class="value skeleton" data-stat="registros">&nbsp;</div></div>
+      <div class="stat-card"><div class="label">Casos a asesor</div><div class="value skeleton" data-stat="handoffs">&nbsp;</div></div>
+      <div class="stat-card"><div class="label">Recibos / Turnos</div><div class="value skeleton" data-stat="recibos">&nbsp;</div></div>
     </div>
 
     <div class="section-title">Herramientas del bot</div>
-    <div class="tools-grid">
+    <div class="tools-grid stagger-in">
       <button class="tool-card" data-go="turno">
-        <div class="tool-icon">📋</div>
+        <span class="tool-hint">mantén para más</span>
+        <div class="tool-icon">${icon('clipboard', 21)}</div>
         <h3>Consultar turno</h3>
         <p>Busca el turno de matrícula de un estudiante.</p>
       </button>
       <button class="tool-card" data-go="recibo">
-        <div class="tool-icon accent">🧾</div>
+        <span class="tool-hint">mantén para más</span>
+        <div class="tool-icon accent">${icon('receipt', 21)}</div>
         <h3>Descargar recibo</h3>
         <p>Genera el PDF del recibo desde Iceberg.</p>
       </button>
       <button class="tool-card" data-go="metricas">
-        <div class="tool-icon">📊</div>
+        <span class="tool-hint">mantén para más</span>
+        <div class="tool-icon">${icon('chart', 21)}</div>
         <h3>Métricas (resumen)</h3>
         <p>Tabla de eventos de los últimos 7 días.</p>
       </button>
       <button class="tool-card" data-go="posgrados">
-        <div class="tool-icon">🎓</div>
+        <span class="tool-hint">mantén para más</span>
+        <div class="tool-icon">${icon('cap', 21)}</div>
         <h3>Posgrados</h3>
         <p>Gráficas de prospectos, registros y programas.</p>
       </button>
       <button class="tool-card" data-go="registros">
-        <div class="tool-icon accent">📝</div>
-        <h3>Registros BD</h3>
-        <p>Tabla completa de prospectos en Google Sheets.</p>
+        <span class="tool-hint">mantén para más</span>
+        <div class="tool-icon accent">${icon('users', 21)}</div>
+        <h3>CRM · Prospectos</h3>
+        <p>Tarjetas de prospectos con búsqueda y filtros.</p>
+      </button>
+      <button class="tool-card" data-go="conversaciones">
+        <span class="tool-hint">mantén para más</span>
+        <div class="tool-icon accent">${icon('message', 21)}</div>
+        <h3>Conversaciones</h3>
+        <p>Bandeja de WhatsApp — historial y acciones rápidas.</p>
       </button>
     </div>
   `;
 
-  $$('button.tool-card').forEach(b => b.addEventListener('click', () => navigate(b.dataset.go)));
+  const toolMeta = {
+    turno: { icon: '📋', label: 'Consultar turno' },
+    recibo: { icon: '🧾', label: 'Descargar recibo' },
+    metricas: { icon: '📊', label: 'Métricas' },
+    posgrados: { icon: '🎓', label: 'Posgrados' },
+    registros: { icon: '👥', label: 'CRM · Prospectos' },
+    conversaciones: { icon: '💬', label: 'Conversaciones' },
+  };
+  $$('button.tool-card').forEach(b => {
+    b.addEventListener('click', () => navigate(b.dataset.go));
+    const meta = toolMeta[b.dataset.go];
+    contextSheet(b, {
+      title: meta.label,
+      actions: [
+        { label: `Abrir ${meta.label}`, icon: meta.icon, onClick: () => navigate(b.dataset.go) },
+        { label: 'Abrir en pestaña nueva', icon: '↗️', onClick: () => window.open(`/app/#${b.dataset.go}`, '_blank') },
+      ],
+    });
+  });
+
+  contextSheet($('#openGrafana'), {
+    title: 'Grafana',
+    actions: [
+      { label: 'Abrir en pestaña nueva', icon: '↗️', onClick: () => window.open(publicUrls.grafana, '_blank', 'noopener') },
+      { label: 'Copiar enlace', icon: '🔗', onClick: () => copyToClipboard(publicUrls.grafana, 'Enlace copiado') },
+    ],
+  });
+  contextSheet($('#openChatwoot'), {
+    title: 'Chatwoot',
+    actions: [
+      { label: 'Ver prospectos posgrado', icon: '🎓', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
+      { label: 'Copiar enlace', icon: '🔗', onClick: () => copyToClipboard(publicUrls.chatwoot, 'Enlace copiado') },
+    ],
+  });
 
   $('#openChatwoot')?.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -184,19 +548,22 @@ async function renderHome(main) {
     const { metrics: m } = await r.json();
     const num = (k) => parseInt(m[k] ?? '0') || 0;
     const totalMsgs = num('menu_shown') + num('ai_request') + num('turno_consultado') + num('recibo_descargado');
-    document.querySelector('[data-stat="msgs"]').textContent = totalMsgs;
-    document.querySelector('[data-stat="ai"]').textContent = num('ai_request');
-    document.querySelector('[data-stat="prospectos"]').textContent = num('prospecto_completado');
-    document.querySelector('[data-stat="registros"]').textContent = num('registro_completado');
-    document.querySelector('[data-stat="handoffs"]').textContent = num('agent_handoff');
-    document.querySelector('[data-stat="recibos"]').textContent = num('recibo_descargado') + num('turno_consultado');
-  } catch {}
+    const setStat = (k, v) => { const el = document.querySelector(`[data-stat="${k}"]`); el.classList.remove('skeleton'); el.classList.add('count-up'); el.textContent = '0'; countUp(el, v); };
+    setStat('msgs', totalMsgs);
+    setStat('ai', num('ai_request'));
+    setStat('prospectos', num('prospecto_completado'));
+    setStat('registros', num('registro_completado'));
+    setStat('handoffs', num('agent_handoff'));
+    setStat('recibos', num('recibo_descargado') + num('turno_consultado'));
+  } catch {
+    $$('.stat-card .value').forEach(el => { el.classList.remove('skeleton'); el.textContent = '—'; });
+  }
 }
 
 /* ============= TURNO ============= */
 function renderTurno(main) {
   main.innerHTML = `
-    <button class="back-link" onclick="navigate('home')">← Volver al inicio</button>
+    <button class="back-link" onclick="navigate('home')">${icon('chevronLeft', 16)} Volver al inicio</button>
     <div class="tool-panel">
       <h2>📋 Consultar turno de matrícula</h2>
       <p class="desc">Ingresa el código estudiantil para buscar la información del turno.</p>
@@ -229,20 +596,32 @@ function renderTurno(main) {
         const msg = err.error === 'no_encontrado' ? `No se encontró información para ${codigo}.` :
                     err.error === 'codigo_invalido' ? 'Formato de código inválido.' : 'Error consultando el turno.';
         $('#turnoAlert').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+        haptic([20, 30, 20]);
         return;
       }
       const { turno } = await r.json();
+      const fields = [
+        ['Estudiante', `${turno.nombre} ${turno.apellido}`],
+        ['Programa', turno.programa],
+        ['Turno', turno.turno],
+        ['Fecha', turno.fecha],
+        ['Hora', turno.hora],
+      ];
       $('#turnoResult').innerHTML = `
         <div class="result-block">
-          <div class="row"><span class="label">Estudiante</span><span class="value">${turno.nombre} ${turno.apellido}</span></div>
-          <div class="row"><span class="label">Programa</span><span class="value">${turno.programa}</span></div>
-          <div class="row"><span class="label">Turno</span><span class="value">${turno.turno}</span></div>
-          <div class="row"><span class="label">Fecha</span><span class="value">${turno.fecha}</span></div>
-          <div class="row"><span class="label">Hora</span><span class="value">${turno.hora}</span></div>
+          ${fields.map(([label, value]) => `<div class="row" data-copy-row><span class="label">${label}</span><span class="value">${value}</span></div>`).join('')}
         </div>
+        <p style="font-size:11.5px;color:var(--text-muted);margin-top:8px;text-align:center;">Mantén presionado un dato para copiarlo</p>
       `;
+      $$('#turnoResult [data-copy-row]').forEach(row => {
+        const label = row.querySelector('.label').textContent;
+        const value = row.querySelector('.value').textContent;
+        contextSheet(row, { title: label, actions: [{ label: `Copiar "${value}"`, icon: '📋', onClick: () => copyToClipboard(value, `${label} copiado`) }] });
+      });
+      haptic([15, 40, 15]);
     } catch {
       $('#turnoAlert').innerHTML = `<div class="alert alert-error">Error de conexión.</div>`;
+      haptic([20, 30, 20]);
     } finally {
       btn.disabled = false; btn.textContent = 'Buscar';
     }
@@ -252,7 +631,7 @@ function renderTurno(main) {
 /* ============= RECIBO ============= */
 function renderRecibo(main) {
   main.innerHTML = `
-    <button class="back-link" onclick="navigate('home')">← Volver al inicio</button>
+    <button class="back-link" onclick="navigate('home')">${icon('chevronLeft', 16)} Volver al inicio</button>
     <div class="tool-panel">
       <h2>🧾 Descargar recibo de matrícula</h2>
       <p class="desc">Tooli ingresará al portal con las credenciales del estudiante y descargará el recibo.</p>
@@ -279,8 +658,21 @@ function renderRecibo(main) {
     const codigo = $('#rCodigo').value.trim().toUpperCase();
     const cedula = $('#rCedula').value.trim();
     const btn = $('#reciboBtn');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Descargando… (30-60s)';
-    $('#reciboAlert').innerHTML = '<div class="alert alert-info">El portal Iceberg puede tardar hasta un minuto. No cierres esta pestaña.</div>';
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Descargando…';
+    $('#reciboAlert').innerHTML = `
+      <div class="alert alert-info" style="display:flex;align-items:center;gap:16px;">
+        ${buildProgressRing('reciboProgress')}
+        <div>
+          <div style="font-weight:600;margin-bottom:2px;">Ingresando al portal Iceberg…</div>
+          <div style="font-size:12px;opacity:0.85;">Puede tardar hasta un minuto. No cierres esta pestaña.</div>
+        </div>
+      </div>`;
+    let pct = 4;
+    setProgress('reciboProgress', pct);
+    const progTimer = setInterval(() => {
+      pct = Math.min(92, pct + (Math.random() * 5 + 1));
+      setProgress('reciboProgress', pct);
+    }, 500);
     try {
       const res = await fetch('/api/tools/recibo', {
         method: 'POST',
@@ -288,6 +680,7 @@ function renderRecibo(main) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codigo, cedula }),
       });
+      clearInterval(progTimer);
       if (res.status === 401) { window.location.href = '/app/login.html'; return; }
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/pdf')) {
@@ -296,7 +689,9 @@ function renderRecibo(main) {
         const a = document.createElement('a');
         a.href = url; a.download = `recibo-${codigo}.pdf`; a.click();
         URL.revokeObjectURL(url);
-        $('#reciboAlert').innerHTML = '<div class="alert alert-success">✅ PDF descargado correctamente.</div>';
+        setProgress('reciboProgress', 100);
+        haptic([15, 40, 15]);
+        $('#reciboAlert').innerHTML = `<div class="alert alert-success" style="text-align:center;">${successCheckSvg()}<div style="margin-top:8px;font-weight:600;">PDF descargado correctamente</div></div>`;
       } else {
         const err = await res.json();
         const msg = err.noRecibos ? `No hay recibos pendientes${err.nombre ? ` para ${err.nombre}` : ''}.` :
@@ -304,9 +699,12 @@ function renderRecibo(main) {
                     err.error === 'codigo_invalido' ? 'Formato de código inválido.' :
                     err.error === 'cedula_invalida' ? 'Formato de cédula inválido.' :
                     'No se pudo descargar el recibo.';
+        haptic([20, 30, 20]);
         $('#reciboAlert').innerHTML = `<div class="alert alert-error">${msg}</div>`;
       }
     } catch {
+      clearInterval(progTimer);
+      haptic([20, 30, 20]);
       $('#reciboAlert').innerHTML = '<div class="alert alert-error">Error de conexión.</div>';
     } finally {
       btn.disabled = false; btn.textContent = 'Descargar PDF';
@@ -320,7 +718,11 @@ async function renderMetricas(main) {
     <div class="page-header">
       <div><h1>📊 Métricas del bot</h1><div class="subtitle">Actividad de los últimos 7 días</div></div>
     </div>
-    <div id="metricsContent" class="card"><span class="spinner"></span> Cargando…</div>
+    <div id="metricsContent" class="card">
+      <table class="skeleton-table"><tbody>
+        ${Array.from({ length: 6 }).map(() => `<tr><td><div class="skeleton skeleton-line" style="width:${120 + Math.random() * 100 | 0}px;"></div></td><td style="text-align:right"><div class="skeleton skeleton-line" style="width:36px;margin-left:auto;"></div></td></tr>`).join('')}
+      </tbody></table>
+    </div>
   `;
   try {
     const r = await api('/api/tools/metrics/range?days=7');
@@ -336,7 +738,7 @@ async function renderMetricas(main) {
     $('#metricsContent').innerHTML = `
       <table>
         <thead><tr><th>Evento</th><th style="text-align: right">Total 7 días</th></tr></thead>
-        <tbody>
+        <tbody class="stagger-in">
           ${rows.map(([k, v]) => `<tr><td>${k}</td><td style="text-align: right; font-weight: 600">${v}</td></tr>`).join('')}
         </tbody>
       </table>
@@ -388,6 +790,7 @@ async function renderUsuarios(main) {
   `;
 
   async function loadUsers() {
+    $('#usersTable').innerHTML = `<table class="skeleton-table"><tbody>${Array.from({ length: 4 }).map(() => `<tr>${Array.from({ length: 5 }).map(() => `<td><div class="skeleton skeleton-line" style="width:80%;"></div></td>`).join('')}<td></td></tr>`).join('')}</tbody></table>`;
     const r = await api('/api/auth/users');
     const { users } = await r.json();
     $('#usersTable').innerHTML = `
@@ -395,7 +798,7 @@ async function renderUsuarios(main) {
         <thead><tr><th>Usuario</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Área</th><th></th></tr></thead>
         <tbody>
           ${users.map(u => `
-            <tr>
+            <tr data-longpress data-username="${u.username}">
               <td><strong>${u.username}</strong></td>
               <td>${u.fullName}</td>
               <td>${u.email ?? '—'}</td>
@@ -411,11 +814,23 @@ async function renderUsuarios(main) {
         </tbody>
       </table>
     `;
-    $$('[data-del]').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm(`¿Eliminar usuario "${b.dataset.del}"?`)) return;
-      await api(`/api/auth/users/${b.dataset.del}`, { method: 'DELETE' });
+    const deleteUser = async (username) => {
+      if (!confirm(`¿Eliminar usuario "${username}"?`)) return;
+      await api(`/api/auth/users/${username}`, { method: 'DELETE' });
+      toast('Usuario eliminado');
       loadUsers();
-    }));
+    };
+    $$('[data-del]').forEach(b => b.addEventListener('click', () => deleteUser(b.dataset.del)));
+    $$('tr[data-longpress]').forEach(tr => {
+      const username = tr.dataset.username;
+      const u = users.find(x => x.username === username);
+      const actions = [
+        { label: 'Copiar usuario', icon: '🔗', onClick: () => copyToClipboard(username, 'Usuario copiado') },
+      ];
+      if (u.email) actions.push({ label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(u.email, 'Email copiado') });
+      if (username !== currentUser.username) actions.push({ label: 'Eliminar usuario', icon: '🗑️', destructive: true, onClick: () => deleteUser(username) });
+      contextSheet(tr, { title: u.fullName, subtitle: username, actions });
+    });
   }
 
   $('#newUserBtn').addEventListener('click', () => $('#newUserPanel').classList.remove('hidden'));
@@ -448,123 +863,260 @@ async function renderUsuarios(main) {
   loadUsers();
 }
 
-/* ============= USUARIOS DEL BOT ============= */
-async function renderBotUsers(main) {
+/* ============= CONVERSACIONES (bandeja WhatsApp) ============= */
+const AVATAR_TONES = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#db2777', '#0d9488'];
+function avatarTone(seed) {
+  let h = 0;
+  for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_TONES[h % AVATAR_TONES.length];
+}
+function initialsFor(phone, nombre) {
+  if (nombre) return nombre.trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  return String(phone).slice(-2);
+}
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  const min = Math.round(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `${min} min`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} h`;
+  const days = Math.round(hr / 24);
+  if (days < 7) return `${days} d`;
+  return new Date(ts).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+}
+
+let conversationsCache = [];
+
+async function renderConversaciones(main) {
   main.innerHTML = `
     <div class="page-header">
-      <div><h1>📱 Usuarios del bot</h1><div class="subtitle">Busca un número de WhatsApp para ver su sesión, historial y bloquearlo si es necesario.</div></div>
+      <div><h1>💬 Conversaciones</h1><div class="subtitle">Últimos usuarios que han escrito por WhatsApp — historial, sesión y acciones rápidas.</div></div>
     </div>
-
-    <div class="tool-panel" style="margin-bottom: 24px;">
-      <form id="searchForm">
-        <div class="field">
-          <label>Número de WhatsApp</label>
-          <input type="text" id="searchPhone" placeholder="573215640735" autofocus>
-          <div class="field-help">Solo dígitos, formato internacional (sin +)</div>
+    <div class="inbox" id="inbox">
+      <div class="inbox-list" id="inboxList">
+        <div class="inbox-search"><input type="text" id="inboxSearch" placeholder="Buscar por número o nombre…"></div>
+        <div class="inbox-rows" id="inboxRows">
+          ${Array.from({ length: 7 }).map(() => `
+            <div class="inbox-row">
+              <div class="skeleton" style="width:44px;height:44px;border-radius:50%;flex-shrink:0;"></div>
+              <div style="flex:1;min-width:0;">
+                <div class="skeleton skeleton-line" style="width:60%;height:13px;margin-bottom:8px;"></div>
+                <div class="skeleton skeleton-line" style="width:85%;height:11px;"></div>
+              </div>
+            </div>
+          `).join('')}
         </div>
-        <button type="submit" class="btn btn-primary">Buscar</button>
-      </form>
-    </div>
-
-    <div id="botUserResult"></div>
-
-    <div class="card" style="margin-top: 20px;">
-      <h2 style="font-size: 16px;">Usuarios activos recientes</h2>
-      <p class="desc" style="font-size: 13px;">Últimos 100 que han interactuado con el bot.</p>
-      <div id="activeUsers"><span class="spinner"></span> Cargando…</div>
+      </div>
+      <div class="inbox-thread" id="inboxThread">
+        <div class="inbox-empty"><div style="font-size:40px;">💬</div>Selecciona una conversación</div>
+      </div>
     </div>
   `;
 
-  $('#searchForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await loadBotUser($('#searchPhone').value.trim().replace(/\D/g, ''));
-  });
+  $('#inboxSearch').addEventListener('input', (e) => renderInboxRows(e.target.value.trim().toLowerCase()));
 
   try {
     const r = await api('/api/tools/bot-users');
     const { phones } = await r.json();
     if (!phones.length) {
-      $('#activeUsers').innerHTML = '<p style="font-size: 13px; color: var(--text-muted);">Aún no hay usuarios con actividad.</p>';
-    } else {
-      $('#activeUsers').innerHTML = `
-        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-          ${phones.map(p => `<button class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;" data-phone="${p}">+${p}</button>`).join('')}
-        </div>
-      `;
-      $$('[data-phone]').forEach(b => b.addEventListener('click', () => {
-        $('#searchPhone').value = b.dataset.phone;
-        loadBotUser(b.dataset.phone);
-      }));
+      $('#inboxRows').innerHTML = '<div class="inbox-empty" style="height:auto;padding:32px 16px;">Aún no hay conversaciones registradas.</div>';
+      return;
     }
+    const preview = phones.slice(0, 30);
+    const details = await Promise.all(preview.map(async (phone) => {
+      try { const rr = await api(`/api/tools/bot-users/${phone}`); return await rr.json(); }
+      catch { return { phone, recentMessages: [], banned: false, session: null }; }
+    }));
+    conversationsCache = details
+      .map(info => ({
+        phone: info.phone,
+        banned: info.banned,
+        nombre: info.session?.data?.nombre,
+        last: info.recentMessages[0] ?? null,
+      }))
+      .concat(phones.slice(30).map(phone => ({ phone, banned: false, nombre: undefined, last: null })))
+      .sort((a, b) => (b.last?.ts ?? 0) - (a.last?.ts ?? 0));
+    renderInboxRows('');
   } catch {
-    $('#activeUsers').innerHTML = '<div class="alert alert-error">No se pudo cargar la lista.</div>';
+    $('#inboxRows').innerHTML = '<div class="alert alert-error" style="margin:12px;">No se pudo cargar la lista.</div>';
   }
 }
 
-async function loadBotUser(phone) {
-  if (!phone) return;
-  const out = $('#botUserResult');
-  out.innerHTML = '<div class="card"><span class="spinner"></span> Cargando…</div>';
+function renderInboxRows(filter) {
+  const rowsEl = $('#inboxRows');
+  const list = conversationsCache.filter(c => !filter || c.phone.includes(filter) || c.nombre?.toLowerCase().includes(filter));
+  if (!list.length) { rowsEl.innerHTML = '<div class="inbox-empty" style="height:auto;padding:32px 16px;">Sin resultados.</div>'; return; }
+  rowsEl.innerHTML = list.map(c => `
+    <div class="swipe-row" data-phone="${c.phone}">
+      <div class="swipe-actions">
+        <button class="sw-primary" data-swipe-reset>🔄<span>Resetear</span></button>
+        <button class="sw-danger" data-swipe-ban>⛔<span>${c.banned ? 'Desbanear' : 'Banear'}</span></button>
+      </div>
+      <div class="swipe-content">
+        <button type="button" class="inbox-row" data-open="${c.phone}">
+          <div class="avatar" style="background:${avatarTone(c.phone)}">${initialsFor(c.phone, c.nombre)}</div>
+          <div class="inbox-row-body">
+            <div class="inbox-row-top">
+              <span class="inbox-row-name">${c.nombre ? escapeHtml(c.nombre) : `+${c.phone}`}</span>
+              ${c.last ? `<span class="inbox-row-time">${relativeTime(c.last.ts)}</span>` : ''}
+            </div>
+            <div class="inbox-row-preview">${c.banned ? '⛔ Baneado' : (c.last ? escapeHtml(c.last.text) : 'Sin mensajes registrados')}</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  $$('.inbox-row[data-open]', rowsEl).forEach(row => {
+    row.addEventListener('click', () => openThread(row.dataset.open));
+    contextSheet(row, {
+      title: row.dataset.open,
+      actions: [
+        { label: 'Copiar número', icon: '🔗', onClick: () => copyToClipboard(row.dataset.open, 'Número copiado') },
+        { label: 'Resetear sesión', icon: '🔄', onClick: () => quickAction(row.dataset.open, 'reset-session') },
+        { label: 'Banear', icon: '⛔', destructive: true, onClick: () => quickAction(row.dataset.open, 'ban') },
+      ],
+    });
+  });
+
+  $$('.swipe-row', rowsEl).forEach(attachSwipeRow);
+  $$('[data-swipe-reset]', rowsEl).forEach(b => b.addEventListener('click', () => quickAction(b.closest('.swipe-row').dataset.phone, 'reset-session')));
+  $$('[data-swipe-ban]', rowsEl).forEach(b => b.addEventListener('click', () => {
+    const row = b.closest('.swipe-row');
+    quickAction(row.dataset.phone, conversationsCache.find(c => c.phone === row.dataset.phone)?.banned ? 'unban' : 'ban');
+  }));
+}
+
+async function quickAction(phone, action) {
+  haptic(action === 'ban' ? [20, 30, 20] : 15);
+  await api(`/api/tools/bot-users/${phone}/${action}`, { method: 'POST', body: action === 'ban' ? JSON.stringify({ reason: 'Baneado por asesor' }) : undefined });
+  toast(action === 'ban' ? 'Usuario baneado' : action === 'unban' ? 'Usuario desbaneado' : 'Sesión reseteada');
+  const c = conversationsCache.find(x => x.phone === phone);
+  if (c && action !== 'reset-session') c.banned = action === 'ban';
+  renderInboxRows($('#inboxSearch')?.value.trim().toLowerCase() ?? '');
+}
+
+/* Swipe-to-reveal (patrón Mail/iOS): arrastra la fila para revelar acciones */
+function attachSwipeRow(row) {
+  const content = row.querySelector('.swipe-content');
+  const actionsEl = row.querySelector('.swipe-actions');
+  const REVEAL = Math.ceil(actionsEl?.getBoundingClientRect().width || 140);
+  let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, isHorizontal = false;
+
+  const closeAllOthers = () => $$('.swipe-row.swiped').forEach(r => { if (r !== row) { r.classList.remove('swiped'); r.style.setProperty('--swipe-x', '0px'); } });
+
+  row.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    startX = e.clientX; startY = e.clientY; dx = 0; dragging = true; decided = false; isHorizontal = false;
+    content.style.transition = 'none';
+  });
+  row.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const rawDx = e.clientX - startX;
+    const rawDy = e.clientY - startY;
+    if (!decided) {
+      if (Math.abs(rawDx) > 8 || Math.abs(rawDy) > 8) { decided = true; isHorizontal = Math.abs(rawDx) > Math.abs(rawDy); }
+      else return;
+    }
+    if (!isHorizontal) { dragging = false; return; }
+    e.preventDefault();
+    const base = row.classList.contains('swiped') ? -REVEAL : 0;
+    dx = Math.min(0, Math.max(-REVEAL - 24, base + rawDx));
+    content.style.transform = `translateX(${dx}px)`;
+  });
+  const finish = () => {
+    if (!dragging) return;
+    dragging = false;
+    content.style.transition = '';
+    content.style.transform = '';
+    if (dx < -REVEAL / 2) { row.classList.add('swiped'); row.style.setProperty('--swipe-x', `-${REVEAL}px`); haptic(10); closeAllOthers(); }
+    else { row.classList.remove('swiped'); row.style.setProperty('--swipe-x', '0px'); }
+  };
+  row.addEventListener('pointerup', finish);
+  row.addEventListener('pointercancel', finish);
+  content.querySelector('.inbox-row').addEventListener('click', (e) => {
+    if (row.classList.contains('swiped')) { e.preventDefault(); e.stopImmediatePropagation(); row.classList.remove('swiped'); row.style.setProperty('--swipe-x', '0px'); }
+  }, { capture: true });
+}
+
+async function openThread(phone) {
+  const thread = $('#inboxThread');
+  $('#inbox').classList.add('thread-open');
+  thread.innerHTML = `
+    <div class="inbox-thread-header">
+      <button type="button" class="mobile-only back-link" id="threadBack" style="margin:0;">${icon('chevronLeft', 18)}</button>
+      <div class="skeleton skeleton-line" style="width:140px;height:16px;"></div>
+    </div>
+    <div class="inbox-messages">${Array.from({ length: 4 }).map((_, i) => `<div class="skeleton" style="width:${50 + (i % 2) * 15}%;height:36px;border-radius:16px;margin:6px 0;${i % 2 ? 'margin-left:auto;' : ''}"></div>`).join('')}</div>
+  `;
+  $('#threadBack')?.addEventListener('click', () => $('#inbox').classList.remove('thread-open'));
+
   try {
     const r = await api(`/api/tools/bot-users/${phone}`);
     const info = await r.json();
-    const last = info.recentMessages[0];
-    const lastSeen = last ? new Date(last.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    const nombre = info.session?.data?.nombre;
+    const msgs = [...info.recentMessages].reverse();
 
-    out.innerHTML = `
-      <div class="tool-panel">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-          <div>
-            <h2>📱 +${info.phone}</h2>
-            <p class="desc">Última actividad: ${lastSeen}${info.banned ? ' · <span style="color: var(--danger); font-weight: 600;">⛔ BANEADO</span>' : ''}</p>
+    const GROUP_MS = 3 * 60 * 1000;
+    const groups = [];
+    msgs.forEach((m, i) => {
+      const prev = msgs[i - 1];
+      const sameGroup = prev && prev.direction === m.direction && (m.ts - prev.ts) < GROUP_MS;
+      if (sameGroup) groups[groups.length - 1].push(m); else groups.push([m]);
+    });
+
+    thread.innerHTML = `
+      <div class="inbox-thread-header">
+        <button type="button" class="mobile-only back-link" id="threadBack" style="margin:0;">${icon('chevronLeft', 18)}</button>
+        <div class="avatar" style="background:${avatarTone(phone)};width:36px;height:36px;font-size:13px;">${initialsFor(phone, nombre)}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;">${nombre ? escapeHtml(nombre) : `+${phone}`}</div>
+          <div class="pulse-dot ${info.banned ? 'down' : 'ok'}" style="font-size:11px;">${info.banned ? 'Baneado' : 'Activo'}</div>
+        </div>
+        <label class="ai-toggle" title="Si la apagas, Tooli deja de responder con IA y escala directo a un asesor">
+          <span class="ai-toggle-label">🤖 IA</span>
+          <span class="switch">
+            <input type="checkbox" id="aiToggleInput" ${info.aiDisabled ? '' : 'checked'}>
+            <span class="track"></span><span class="thumb"></span>
+          </span>
+        </label>
+        <button type="button" class="btn btn-ghost" id="threadMenuBtn" style="padding:8px;">${icon('more', 18)}</button>
+      </div>
+      <div class="inbox-messages" id="inboxMessages">
+        ${info.session?.step ? `<div class="thread-meta">Paso actual de la sesión: <strong>${escapeHtml(info.session.step)}</strong></div>` : ''}
+        ${groups.length === 0 ? '<div class="inbox-empty" style="height:auto;padding:40px 16px;">No hay mensajes registrados.</div>' : groups.map(g => g.map((m, i) => `
+          <div class="bubble-row ${m.direction === 'out' ? 'out' : 'in'} ${i === 0 ? 'group-start' : 'group-mid'}">
+            <div class="bubble ${m.direction === 'out' ? 'out' : 'in'} ${i !== 0 ? 'not-first' : ''} ${i !== g.length - 1 ? 'not-last' : ''}">
+              ${escapeHtml(m.text)}
+              ${i === g.length - 1 ? `<span class="bubble-time">${new Date(m.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
+            </div>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" id="resetBtn">Resetear sesión</button>
-            ${info.banned
-              ? `<button class="btn btn-secondary" id="unbanBtn">Desbanear</button>`
-              : `<button class="btn btn-danger" id="banBtn">Banear</button>`}
-          </div>
-        </div>
-
-        <div class="result-block" style="border-left-color: var(--utb-blue);">
-          <div class="row"><span class="label">Estado actual</span><span class="value">${info.session?.step ?? '<em>sin sesión</em>'}</span></div>
-          ${info.session?.data && Object.keys(info.session.data).length
-            ? Object.entries(info.session.data)
-                .filter(([k]) => !['aiHistory', 'aiAnswer'].includes(k))
-                .map(([k, v]) => `<div class="row"><span class="label">${k}</span><span class="value">${String(v).slice(0, 60)}</span></div>`).join('')
-            : ''}
-        </div>
-
-        <h3 style="font-size: 14px; margin-top: 24px; margin-bottom: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Últimos mensajes</h3>
-        <div style="max-height: 360px; overflow-y: auto;">
-          ${info.recentMessages.length === 0
-            ? '<p style="color: var(--text-muted); font-size: 13px;">No hay mensajes registrados.</p>'
-            : info.recentMessages.map(m => `
-                <div style="padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; background: ${m.direction === 'in' ? '#f0f9ff' : '#f9fafb'}; border-left: 3px solid ${m.direction === 'in' ? 'var(--utb-blue-light)' : 'var(--utb-accent-dark)'};">
-                  <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">${m.direction === 'in' ? '👤 Usuario' : '🤖 Bot'} · ${new Date(m.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</div>
-                  <div style="font-size: 14px; white-space: pre-wrap;">${escapeHtml(m.text)}</div>
-                </div>
-              `).join('')}
-        </div>
+        `).join('')).join('')}
+      </div>
+      <div class="inbox-thread-footer">
+        <a class="btn btn-secondary" href="${publicUrls.chatwoot}" target="_blank" rel="noopener" style="width:100%;justify-content:center;">💬 Responder en Chatwoot</a>
       </div>
     `;
-
-    $('#resetBtn')?.addEventListener('click', async () => {
-      if (!confirm('¿Resetear la sesión de este usuario? Volverá al menú principal.')) return;
-      await api(`/api/tools/bot-users/${phone}/reset-session`, { method: 'POST' });
-      loadBotUser(phone);
+    $('#threadBack')?.addEventListener('click', () => $('#inbox').classList.remove('thread-open'));
+    $('#aiToggleInput').addEventListener('change', async (e) => {
+      const enabled = e.target.checked;
+      haptic(enabled ? [10, 20, 10] : 15);
+      await api(`/api/tools/bot-users/${phone}/ai-toggle`, { method: 'POST', body: JSON.stringify({ enabled }) });
+      toast(enabled ? 'IA activada para esta conversación' : 'IA apagada — escalará a un asesor');
     });
-    $('#banBtn')?.addEventListener('click', async () => {
-      const reason = prompt('Razón del baneo (opcional):') ?? 'Baneado por asesor';
-      await api(`/api/tools/bot-users/${phone}/ban`, { method: 'POST', body: JSON.stringify({ reason }) });
-      loadBotUser(phone);
-    });
-    $('#unbanBtn')?.addEventListener('click', async () => {
-      await api(`/api/tools/bot-users/${phone}/unban`, { method: 'POST' });
-      loadBotUser(phone);
-    });
+    $('#threadMenuBtn').addEventListener('click', () => ActionSheet.open({
+      title: nombre ?? `+${phone}`,
+      groups: [[
+        { label: 'Copiar número', icon: '🔗', onClick: () => copyToClipboard(phone, 'Número copiado') },
+        { label: 'Resetear sesión', icon: '🔄', onClick: () => quickAction(phone, 'reset-session').then(() => openThread(phone)) },
+        { label: info.banned ? 'Desbanear' : 'Banear', icon: '⛔', destructive: !info.banned, onClick: () => quickAction(phone, info.banned ? 'unban' : 'ban').then(() => openThread(phone)) },
+      ], [{ label: 'Cancelar', cancel: true }]],
+    }));
+    const msgsEl = $('#inboxMessages');
+    msgsEl.scrollTop = msgsEl.scrollHeight;
   } catch {
-    out.innerHTML = '<div class="alert alert-error">Error consultando el usuario.</div>';
+    thread.innerHTML = '<div class="alert alert-error" style="margin:16px;">No se pudo cargar la conversación.</div>';
   }
 }
 
@@ -577,30 +1129,36 @@ async function renderHealth(main) {
   main.innerHTML = `
     <div class="page-header">
       <div><h1>❤️ Estado del sistema</h1><div class="subtitle">Verifica que todos los servicios externos estén respondiendo.</div></div>
-      <button class="btn btn-secondary" id="refreshHealth">🔄 Actualizar</button>
+      <button class="btn btn-secondary" id="refreshHealth"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
     </div>
     <div id="healthContent"><div class="card"><span class="spinner"></span> Verificando…</div></div>
   `;
   const load = async () => {
-    $('#healthContent').innerHTML = '<div class="card"><span class="spinner"></span> Verificando…</div>';
+    const refreshBtn = $('#refreshHealth');
+    refreshBtn.disabled = true;
+    refreshBtn.querySelector('.refresh-icon')?.classList.add('spin-once');
+    $('#healthContent').innerHTML = `
+      <div class="card">
+        <div class="skeleton skeleton-line" style="width:220px;height:20px;margin-bottom:18px;"></div>
+        ${Array.from({ length: 4 }).map(() => `<div style="display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--border);"><div class="skeleton skeleton-line" style="width:120px;"></div><div class="skeleton skeleton-line" style="width:80px;"></div><div class="skeleton skeleton-line" style="width:200px;"></div></div>`).join('')}
+      </div>`;
     try {
       const r = await fetch('/health/deep', { credentials: 'same-origin' });
       const data = await r.json();
-      const dot = (s) => ({
-        ok: '🟢', degraded: '🟡', down: '🔴', skipped: '⚪',
-      }[s] ?? '❓');
       $('#healthContent').innerHTML = `
         <div class="card">
-          <h2 style="font-size: 16px; margin-bottom: 16px;">Estado general: ${dot(data.status)} <span style="font-weight: 400; text-transform: uppercase; font-size: 13px; color: var(--text-muted);">${data.status}</span></h2>
+          <h2 style="font-size: 16px; margin-bottom: 16px;">Estado general —
+            <span class="pulse-dot ${data.status}">${(HEALTH_LABELS[data.status] ?? data.status)}</span>
+          </h2>
           <table>
             <thead><tr><th>Servicio</th><th>Estado</th><th>Latencia</th><th>Detalle</th></tr></thead>
-            <tbody>
+            <tbody class="stagger-in">
               ${Object.entries(data.checks).map(([name, c]) => `
-                <tr>
+                <tr data-service="${name}">
                   <td><strong>${name.replace(/_/g, ' ')}</strong></td>
-                  <td>${dot(c.status)} ${c.status}</td>
+                  <td><span class="pulse-dot ${c.status}">${HEALTH_LABELS[c.status] ?? c.status}</span></td>
                   <td>${c.latencyMs ? c.latencyMs + 'ms' : '—'}</td>
-                  <td style="font-size: 12px; color: var(--text-muted);">${c.detail ?? ''}</td>
+                  <td style="font-size: 12px; color: var(--text-muted);">${c.detail ?? '—'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -608,8 +1166,14 @@ async function renderHealth(main) {
           <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">Última verificación: ${new Date(data.timestamp).toLocaleString('es-CO')}</p>
         </div>
       `;
+      $$('tr[data-service]').forEach(tr => {
+        const c = data.checks[tr.dataset.service];
+        if (c?.detail) attachTooltip(tr.querySelector('strong'), c.detail);
+      });
     } catch {
       $('#healthContent').innerHTML = '<div class="alert alert-error">No se pudo verificar el estado.</div>';
+    } finally {
+      refreshBtn.disabled = false;
     }
   };
   $('#refreshHealth').addEventListener('click', load);
@@ -638,22 +1202,38 @@ async function renderPosgrados(main) {
   main.innerHTML = `
     <div class="page-header">
       <div><h1>🎓 Posgrados</h1><div class="subtitle">Métricas de prospectos, registros y programas consultados</div></div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
         <a class="btn btn-secondary" href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener">💬 Ver prospectos</a>
-        <select id="pgRange" style="background:var(--bg-subtle,#f1f5f9);color:var(--text-base,#1e293b);border:1px solid var(--border,#e2e8f0);padding:8px 12px;border-radius:6px;font-size:14px;cursor:pointer;">
-          <option value="7" selected>7 días</option>
-          <option value="14">14 días</option>
-          <option value="30">30 días</option>
-        </select>
+        <div id="pgRangeWrap"></div>
       </div>
     </div>
-    <div id="pgContent"><div class="card"><span class="spinner"></span> Cargando…</div></div>
+    <div id="pgContent">
+      <div class="stats-grid" style="margin-bottom:20px;">
+        ${Array.from({ length: 5 }).map(() => `<div class="stat-card"><div class="skeleton skeleton-line" style="width:70px;height:11px;margin-bottom:8px;"></div><div class="skeleton skeleton-line" style="width:50px;height:26px;"></div></div>`).join('')}
+      </div>
+      <div class="card"><div class="skeleton" style="height:220px;border-radius:12px;"></div></div>
+    </div>
   `;
+  let pgDays = '7';
+  $('#pgRangeWrap').appendChild(buildSegmented(
+    [{ value: '7', label: '7 días' }, { value: '14', label: '14 días' }, { value: '30', label: '30 días' }],
+    pgDays,
+    (value) => { pgDays = value; loadPg(); },
+  ));
+
+  function pgSkeleton() {
+    return `
+      <div class="stats-grid" style="margin-bottom:20px;">
+        ${Array.from({ length: 5 }).map(() => `<div class="stat-card"><div class="skeleton skeleton-line" style="width:70px;height:11px;margin-bottom:8px;"></div><div class="skeleton skeleton-line" style="width:50px;height:26px;"></div></div>`).join('')}
+      </div>
+      <div class="card"><div class="skeleton" style="height:220px;border-radius:12px;"></div></div>
+    `;
+  }
 
   async function loadPg() {
     destroyPgCharts();
-    const days = $('#pgRange').value;
-    $('#pgContent').innerHTML = '<div class="card"><span class="spinner"></span> Cargando…</div>';
+    $('#pgContent').innerHTML = pgSkeleton();
+    const days = pgDays;
     try {
       const r = await api(`/api/tools/metrics/range?days=${days}`);
       const { days: series } = await r.json();
@@ -767,73 +1347,115 @@ async function renderPosgrados(main) {
     }
   }
 
-  $('#pgRange').addEventListener('change', loadPg);
   loadPg();
 }
 
-/* ============= REGISTROS BD ============= */
+/* ============= REGISTROS BD (CRM de prospectos) ============= */
+function programaCategoria(programa) {
+  const p = (programa || '').toLowerCase();
+  if (p.includes('doctorado')) return 'doctorado';
+  if (p.includes('maestr')) return 'maestria';
+  if (p.includes('especial')) return 'especializacion';
+  return 'otro';
+}
+const PROGRAMA_LABELS = { especializacion: 'Especialización', maestria: 'Maestría', doctorado: 'Doctorado', otro: 'Otro' };
+const PROGRAMA_COLORS = { especializacion: '#0284c7', maestria: '#7c3aed', doctorado: '#db2777', otro: '#64748b' };
+
+let crmRows = [];
+let crmFilter = 'todos';
+
 async function renderRegistros(main) {
   main.innerHTML = `
     <div class="page-header">
-      <div><h1>📝 Registros BD — Posgrados</h1><div class="subtitle">Prospectos que completaron el formulario de registro vía WhatsApp</div></div>
-      <button class="btn btn-secondary" id="refreshReg">🔄 Actualizar</button>
+      <div><h1>📝 CRM — Prospectos de posgrado</h1><div class="subtitle">Quienes completaron el registro vía WhatsApp</div></div>
+      <button class="btn btn-secondary" id="refreshReg"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
     </div>
-    <div id="regContent"><div class="card"><span class="spinner"></span> Cargando…</div></div>
+    <div class="crm-toolbar">
+      <input type="text" id="crmSearch" placeholder="Buscar por nombre, email o programa…">
+      <div id="crmFilterWrap"></div>
+    </div>
+    <div id="regContent">
+      <div class="crm-grid stagger-in">
+        ${Array.from({ length: 6 }).map(() => `
+          <div class="crm-card">
+            <div class="skeleton" style="width:44px;height:44px;border-radius:50%;margin-bottom:12px;"></div>
+            <div class="skeleton skeleton-line" style="width:70%;height:14px;margin-bottom:8px;"></div>
+            <div class="skeleton skeleton-line" style="width:90%;height:11px;"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
   `;
 
+  $('#crmSearch').addEventListener('input', renderCrmGrid);
+
   async function loadReg() {
-    $('#regContent').innerHTML = '<div class="card"><span class="spinner"></span> Cargando…</div>';
+    $('#refreshReg').querySelector('.refresh-icon')?.classList.add('spin-once');
     try {
       const r = await api('/api/tools/registros-posgrado');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const { rows } = await r.json();
-      if (!rows || !rows.length) {
-        $('#regContent').innerHTML = `
-          <div class="card">
-            <p style="color:var(--text-muted);text-align:center;padding:24px 0;">
-              No hay registros aún. Cuando un prospecto complete el formulario del bot, aparecerá aquí.
-            </p>
-          </div>`;
+      crmRows = rows ?? [];
+      if (!crmRows.length) {
+        $('#regContent').innerHTML = `<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">No hay registros aún. Cuando un prospecto complete el formulario del bot, aparecerá aquí.</p></div>`;
+        $('#crmFilterWrap').innerHTML = '';
         return;
       }
-      $('#regContent').innerHTML = `
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <p style="font-size:13px;color:var(--text-muted);margin:0;">${rows.length} prospecto${rows.length !== 1 ? 's' : ''} registrado${rows.length !== 1 ? 's' : ''}</p>
-            <a class="btn btn-secondary" href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener" style="font-size:13px;">💬 Ver en Chatwoot</a>
-          </div>
-          <div style="overflow-x:auto;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Nombre</th>
-                  <th>Email</th>
-                  <th>WhatsApp</th>
-                  <th>Programa</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows.map(row => `
-                  <tr>
-                    <td style="white-space:nowrap;font-size:12px;color:var(--text-muted);">${escapeHtml(row[0] ?? '')}</td>
-                    <td style="font-weight:500;">${escapeHtml(row[1] ?? '—')}</td>
-                    <td><a href="mailto:${escapeHtml(row[2] ?? '')}" style="color:var(--utb-blue);">${escapeHtml(row[2] ?? '—')}</a></td>
-                    <td style="font-size:13px;">${escapeHtml(row[3] ?? '—')}</td>
-                    <td>
-                      ${row[4] ? `<span class="badge asesor" style="font-size:11px;background:rgba(56,189,248,.15);color:#0284c7;border:1px solid rgba(56,189,248,.3);">${escapeHtml(row[4])}</span>` : '<span style="color:var(--text-muted);font-size:12px;">—</span>'}
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
+      const counts = crmRows.reduce((acc, row) => { const c = programaCategoria(row[4]); acc[c] = (acc[c] ?? 0) + 1; return acc; }, {});
+      $('#crmFilterWrap').innerHTML = '';
+      $('#crmFilterWrap').appendChild(buildSegmented(
+        [
+          { value: 'todos', label: `Todos (${crmRows.length})` },
+          ...Object.keys(PROGRAMA_LABELS).filter(k => counts[k]).map(k => ({ value: k, label: `${PROGRAMA_LABELS[k]} (${counts[k]})` })),
+        ],
+        crmFilter, (v) => { crmFilter = v; renderCrmGrid(); },
+      ));
+      renderCrmGrid();
     } catch (err) {
       console.error(err);
       $('#regContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar los registros. Verifica que el Sheet esté configurado.</div>';
     }
+  }
+
+  function renderCrmGrid() {
+    const q = ($('#crmSearch')?.value ?? '').trim().toLowerCase();
+    const filtered = crmRows.filter((row, i) => {
+      row.__i = i;
+      if (crmFilter !== 'todos' && programaCategoria(row[4]) !== crmFilter) return false;
+      if (!q) return true;
+      return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
+    });
+    if (!filtered.length) { $('#regContent').innerHTML = '<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">Sin resultados.</p></div>'; return; }
+    $('#regContent').innerHTML = `
+      <div class="crm-grid stagger-in">
+        ${filtered.map(row => {
+          const cat = programaCategoria(row[4]);
+          const nombre = row[1] || 'Sin nombre';
+          return `
+          <div class="crm-card" data-longpress data-row="${row.__i}">
+            <div class="avatar" style="background:${avatarTone(nombre)};width:44px;height:44px;font-size:14px;margin-bottom:12px;">${initialsFor(row[3] || nombre, nombre)}</div>
+            <div class="crm-card-name">${escapeHtml(nombre)}</div>
+            ${row[4] ? `<span class="badge" style="background:${PROGRAMA_COLORS[cat]}22;color:${PROGRAMA_COLORS[cat]};margin-bottom:8px;">${escapeHtml(row[4])}</span>` : ''}
+            <div class="crm-card-row">✉️ ${escapeHtml(row[2] || '—')}</div>
+            <div class="crm-card-row">📱 ${escapeHtml(row[3] || '—')}</div>
+            <div class="crm-card-date">${escapeHtml(row[0] ?? '')}</div>
+          </div>
+        `; }).join('')}
+      </div>
+    `;
+    $$('.crm-card[data-longpress]').forEach(card => {
+      const row = crmRows[Number(card.dataset.row)];
+      contextSheet(card, {
+        title: row[1] || 'Prospecto',
+        subtitle: row[2] || undefined,
+        actions: [
+          { label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(row[2] ?? '', 'Email copiado') },
+          { label: 'Copiar WhatsApp', icon: '📱', onClick: () => copyToClipboard(row[3] ?? '', 'Número copiado') },
+          { label: 'Ver conversación', icon: '💬', onClick: () => navigate('conversaciones') },
+          { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
+        ],
+      });
+    });
   }
 
   $('#refreshReg').addEventListener('click', loadReg);

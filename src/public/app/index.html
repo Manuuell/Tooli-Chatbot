@@ -597,11 +597,10 @@ async function renderHome(main) {
 /* ============= TURNO ============= */
 function renderTurno(main) {
   main.innerHTML = `
-    <button class="back-link" onclick="navigate('home')">${icon('chevronLeft', 16)} Volver al inicio</button>
+    <div class="page-header">
+      <div><h1>📋 Consultar turno de matrícula</h1><div class="subtitle">Busca el turno asignado a un estudiante por su código.</div></div>
+    </div>
     <div class="tool-panel">
-      <h2>📋 Consultar turno de matrícula</h2>
-      <p class="desc">Ingresa el código estudiantil para buscar la información del turno.</p>
-
       <form id="turnoForm">
         <div class="field">
           <label for="codigo">Código estudiantil</label>
@@ -665,11 +664,10 @@ function renderTurno(main) {
 /* ============= RECIBO ============= */
 function renderRecibo(main) {
   main.innerHTML = `
-    <button class="back-link" onclick="navigate('home')">${icon('chevronLeft', 16)} Volver al inicio</button>
+    <div class="page-header">
+      <div><h1>🧾 Descargar recibo de matrícula</h1><div class="subtitle">Tooli ingresa al portal Iceberg con las credenciales del estudiante y descarga el recibo.</div></div>
+    </div>
     <div class="tool-panel">
-      <h2>🧾 Descargar recibo de matrícula</h2>
-      <p class="desc">Tooli ingresará al portal con las credenciales del estudiante y descargará el recibo.</p>
-
       <form id="reciboForm">
         <div class="field">
           <label>Código estudiantil</label>
@@ -1576,30 +1574,35 @@ async function renderHealth(main) {
     try {
       const r = await fetch('/health/deep', { credentials: 'same-origin' });
       const data = await r.json();
+      const entries = Object.entries(data.checks);
+      const byStatus = entries.reduce((acc, [, c]) => { acc[c.status] = (acc[c.status] ?? 0) + 1; return acc; }, {});
       $('#healthContent').innerHTML = `
-        <div class="card">
-          <h2 style="font-size: 16px; margin-bottom: 16px;">Estado general —
-            <span class="pulse-dot ${data.status}">${(HEALTH_LABELS[data.status] ?? data.status)}</span>
-          </h2>
-          <table>
-            <thead><tr><th>Servicio</th><th>Estado</th><th>Latencia</th><th>Detalle</th></tr></thead>
-            <tbody class="stagger-in">
-              ${Object.entries(data.checks).map(([name, c]) => `
-                <tr data-service="${name}">
-                  <td><strong>${name.replace(/_/g, ' ')}</strong></td>
-                  <td><span class="pulse-dot ${c.status}">${HEALTH_LABELS[c.status] ?? c.status}</span></td>
-                  <td>${c.latencyMs ? c.latencyMs + 'ms' : '—'}</td>
-                  <td style="font-size: 12px; color: var(--text-muted);">${c.detail ?? '—'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">Última verificación: ${new Date(data.timestamp).toLocaleString('es-CO')}</p>
+        <div class="widget-card" style="margin-bottom:16px;">
+          <div class="widget-card-head">
+            <h3>Estado general</h3>
+            <span class="pulse-dot ${data.status}" style="font-weight:700;">${HEALTH_LABELS[data.status] ?? data.status}</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-muted);padding:0 4px;">
+            ${['ok', 'degraded', 'down'].filter(s => byStatus[s]).map(s => `${byStatus[s]} ${HEALTH_LABELS[s]?.toLowerCase() ?? s}`).join(' · ')}
+            · Última verificación: ${new Date(data.timestamp).toLocaleTimeString('es-CO')}
+          </div>
+        </div>
+        <div class="crm-grid stagger-in">
+          ${entries.map(([name, c]) => `
+            <div class="crm-card health-card" data-service="${name}">
+              <div class="health-card-top">
+                <span class="pulse-dot ${c.status}">${HEALTH_LABELS[c.status] ?? c.status}</span>
+                ${c.latencyMs ? `<span class="health-latency">${c.latencyMs}ms</span>` : ''}
+              </div>
+              <div class="crm-card-name" style="text-transform:capitalize;">${escapeHtml(name.replace(/_/g, ' '))}</div>
+              <div class="crm-card-row" data-detail>${escapeHtml(c.detail ?? 'Sin detalle adicional')}</div>
+            </div>
+          `).join('')}
         </div>
       `;
-      $$('tr[data-service]').forEach(tr => {
-        const c = data.checks[tr.dataset.service];
-        if (c?.detail) attachTooltip(tr.querySelector('strong'), c.detail);
+      $$('.health-card[data-service]').forEach(card => {
+        const c = data.checks[card.dataset.service];
+        if (c?.detail) attachTooltip(card.querySelector('.crm-card-name'), c.detail);
       });
     } catch {
       $('#healthContent').innerHTML = '<div class="alert alert-error">No se pudo verificar el estado.</div>';

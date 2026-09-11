@@ -986,3 +986,9 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 }
 .offline-banner.show { transform: translateX(-50%) translateY(0); }
 .offline-banner .pulse-dot { gap: 0; }
+
+/* Tarjetas de estado de servicios (Estado del sistema) */
+.health-card { cursor: default; }
+.health-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.health-latency { font-size: 11px; font-weight: 700; color: var(--text-muted); background: #f1f5f9; padding: 2px 7px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.health-card [data-detail] { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }

@@ -18,6 +18,7 @@ export type MetricEvent =
   | 'ai_resolved'
   | 'ai_failed'
   | 'ai_escalated_to_agent'
+  | 'ai_disabled_escalation'
   | 'ai_used_tool'
   | 'ai_identity_verification_started'
   | 'agent_handoff'

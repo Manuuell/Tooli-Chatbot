@@ -1933,6 +1933,36 @@ async function renderRegistros(main) {
   loadReg();
 }
 
+/* ============= MODO SIN CONEXIÓN ============= */
+/* Cache del app shell vía Service Worker (ver sw.js) para que la app cargue
+   rápido y siga disponible con mala conexión. Los datos (todo lo que pasa
+   por /api/) nunca se cachean — cuando no hay red, cada pantalla ya muestra
+   su propio estado de error, esto solo evita que la app en sí quede en blanco. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {});
+  });
+}
+
+function updateOfflineBanner() {
+  let banner = $('#offlineBanner');
+  if (navigator.onLine) {
+    banner?.classList.remove('show');
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'offlineBanner';
+    banner.className = 'offline-banner';
+    banner.innerHTML = `<span class="pulse-dot down"></span> Sin conexión — mostrando lo último guardado`;
+    document.body.appendChild(banner);
+  }
+  requestAnimationFrame(() => banner.classList.add('show'));
+}
+window.addEventListener('online', updateOfflineBanner);
+window.addEventListener('offline', updateOfflineBanner);
+updateOfflineBanner();
+
 init();
 </script>
 

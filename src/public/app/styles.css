@@ -729,6 +729,18 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .attention-text { flex: 1; min-width: 0; font-size: 13px; }
 .attention-text strong { font-weight: 600; }
 
+/* Métricas — ranking de eventos con barras */
+.event-bars { display: flex; flex-direction: column; }
+.event-bar-row { display: flex; align-items: center; gap: 12px; padding: 9px 6px; border-radius: var(--radius-sm); transition: background 0.15s ease; }
+.event-bar-row:hover { background: #f8fafc; }
+.event-bar-icon { font-size: 17px; flex-shrink: 0; width: 22px; text-align: center; }
+.event-bar-body { flex: 1; min-width: 0; }
+.event-bar-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.event-bar-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.event-bar-value { font-size: 13px; font-weight: 700; color: var(--utb-blue); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.event-bar-track { height: 6px; border-radius: 999px; background: #eef1f6; overflow: hidden; }
+.event-bar-fill { height: 100%; border-radius: 999px; transition: width 0.6s var(--ease-spring); }
+
 .activity-row { display: flex; align-items: center; gap: 10px; padding: 7px 6px; font-size: 12.5px; }
 .activity-row .activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--utb-accent-dark); flex-shrink: 0; }
 .activity-row .activity-text { flex: 1; min-width: 0; color: var(--text); }

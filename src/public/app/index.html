@@ -303,7 +303,10 @@ function moreRoutes() {
     { route: 'registros', icon: '📝', label: 'Registros BD' },
     { route: 'health', icon: '❤️', label: 'Estado del sistema' },
   ];
-  if (currentUser?.role === 'admin') routes.push({ route: 'usuarios', icon: '👥', label: 'Asesores' });
+  if (currentUser?.role === 'admin') {
+    routes.push({ route: 'actividad', icon: '📈', label: 'Actividad de asesores' });
+    routes.push({ route: 'usuarios', icon: '👥', label: 'Asesores' });
+  }
   return routes;
 }
 
@@ -370,7 +373,7 @@ const NAV_ROUTES = [
 function renderSidebarNav() {
   const nav = $('#nav');
   nav.innerHTML = NAV_ROUTES.map(r => `<a data-route="${r.route}">${icon(r.icon)}${r.label}</a>`).join('')
-    + (currentUser?.role === 'admin' ? `<a data-route="usuarios" id="navUsuarios">${icon('users')}Asesores</a>` : '');
+    + (currentUser?.role === 'admin' ? `<a data-route="actividad">${icon('pulse')}Actividad de asesores</a><a data-route="usuarios" id="navUsuarios">${icon('users')}Asesores</a>` : '');
   $$('#nav a').forEach(a => a.addEventListener('click', e => {
     e.preventDefault();
     navigate(a.dataset.route);
@@ -406,7 +409,7 @@ function navigate(route) {
   const render = {
     home: renderHome, turno: renderTurno, recibo: renderRecibo, metricas: renderMetricas,
     conversaciones: renderConversaciones, posgrados: renderPosgrados, registros: renderRegistros,
-    health: renderHealth, usuarios: renderUsuarios,
+    health: renderHealth, usuarios: renderUsuarios, actividad: renderActividad,
   }[route];
   const result = render ? render(main) : (main.innerHTML = '<div class="card">Página no encontrada</div>');
   requestAnimationFrame(() => main.classList.add('page-enter'));
@@ -414,134 +417,160 @@ function navigate(route) {
 }
 
 /* ============= INICIO ============= */
+const AUDIT_LABELS = {
+  login: { label: 'Inició sesión', icon: '🔑' },
+  turno_consultado: { label: 'Consultó un turno', icon: '📋' },
+  recibo_descargado: { label: 'Descargó un recibo', icon: '🧾' },
+  sesion_reseteada: { label: 'Reseteó una sesión', icon: '🔄' },
+  usuario_baneado: { label: 'Baneó un usuario', icon: '⛔' },
+  usuario_desbaneado: { label: 'Desbaneó un usuario', icon: '✅' },
+  ia_activada: { label: 'Activó la IA', icon: '🤖' },
+  ia_desactivada: { label: 'Apagó la IA', icon: '🤖' },
+  usuario_creado: { label: 'Creó un usuario', icon: '➕' },
+  usuario_eliminado: { label: 'Eliminó un usuario', icon: '🗑️' },
+};
+
+function dateLabelToday() {
+  const s = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 async function renderHome(main) {
+  const isAdmin = currentUser.role === 'admin';
   main.innerHTML = `
     <div class="page-header">
       <div>
+        <div class="subtitle" style="margin-bottom: 2px;">${dateLabelToday()}</div>
         <h1>Hola, ${currentUser.fullName.split(' ')[0]} 👋</h1>
-        <div class="subtitle">Centro de servicios — accesos rápidos a todas las herramientas</div>
+        <div class="subtitle">${isAdmin ? 'Este es el estado general del equipo hoy.' : 'Esto es lo que tienes disponible hoy.'}</div>
       </div>
     </div>
 
-    <div class="section-title">Plataformas principales</div>
-    <div class="hero-grid stagger-in">
-      <button class="hero-tile chatwoot" id="openChatwoot">
-        <div class="hero-icon">${icon('message', 28)}</div>
-        <div class="hero-info">
-          <h2>Abrir Chatwoot ${capabilities.chatwootSso ? '<span style="font-size: 11px; background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">SSO</span>' : ''}</h2>
-          <p>Atiende conversaciones activas, responde a estudiantes y gestiona casos escalados desde el bot.</p>
-          <p style="margin-top:6px;font-size:12px;opacity:0.8;">🎓 <a href="${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;" onclick="event.stopPropagation()">Ver prospectos posgrado →</a></p>
-        </div>
-      </button>
-      <a class="hero-tile grafana" href="${publicUrls.grafana}" target="_blank" rel="noopener" id="openGrafana">
-        <div class="hero-icon">${icon('chart', 28)}</div>
-        <div class="hero-info">
-          <h2>Abrir Grafana</h2>
-          <p>Visualiza métricas en vivo, latencia, errores y embudo del bot.</p>
-        </div>
-      </a>
-    </div>
-
-    <div class="section-title">Resumen del día</div>
-    <div class="stats-grid stagger-in" id="stats">
+    <div class="stats-grid stagger-in" id="stats" style="margin-bottom: 16px;">
       <div class="stat-card"><div class="label">Mensajes hoy</div><div class="value skeleton" data-stat="msgs">&nbsp;</div></div>
       <div class="stat-card"><div class="label">Preguntas IA</div><div class="value skeleton" data-stat="ai">&nbsp;</div></div>
       <div class="stat-card"><div class="label">Prospectos</div><div class="value skeleton" data-stat="prospectos">&nbsp;</div></div>
-      <div class="stat-card"><div class="label">Registros BD</div><div class="value skeleton" data-stat="registros">&nbsp;</div></div>
       <div class="stat-card"><div class="label">Casos a asesor</div><div class="value skeleton" data-stat="handoffs">&nbsp;</div></div>
-      <div class="stat-card"><div class="label">Recibos / Turnos</div><div class="value skeleton" data-stat="recibos">&nbsp;</div></div>
     </div>
 
-    <div class="section-title">Herramientas del bot</div>
-    <div class="tools-grid stagger-in">
-      <button class="tool-card" data-go="turno">
-        <span class="tool-hint">mantén para más</span>
-        <div class="tool-icon">${icon('clipboard', 21)}</div>
-        <h3>Consultar turno</h3>
-        <p>Busca el turno de matrícula de un estudiante.</p>
-      </button>
-      <button class="tool-card" data-go="recibo">
-        <span class="tool-hint">mantén para más</span>
-        <div class="tool-icon accent">${icon('receipt', 21)}</div>
-        <h3>Descargar recibo</h3>
-        <p>Genera el PDF del recibo desde Iceberg.</p>
-      </button>
-      <button class="tool-card" data-go="metricas">
-        <span class="tool-hint">mantén para más</span>
-        <div class="tool-icon">${icon('chart', 21)}</div>
-        <h3>Métricas (resumen)</h3>
-        <p>Tabla de eventos de los últimos 7 días.</p>
-      </button>
-      <button class="tool-card" data-go="posgrados">
-        <span class="tool-hint">mantén para más</span>
-        <div class="tool-icon">${icon('cap', 21)}</div>
-        <h3>Posgrados</h3>
-        <p>Gráficas de prospectos, registros y programas.</p>
-      </button>
-      <button class="tool-card" data-go="registros">
-        <span class="tool-hint">mantén para más</span>
-        <div class="tool-icon accent">${icon('users', 21)}</div>
-        <h3>CRM · Prospectos</h3>
-        <p>Tarjetas de prospectos con búsqueda y filtros.</p>
-      </button>
-      <button class="tool-card" data-go="conversaciones">
-        <span class="tool-hint">mantén para más</span>
-        <div class="tool-icon accent">${icon('message', 21)}</div>
-        <h3>Conversaciones</h3>
-        <p>Bandeja de WhatsApp — historial y acciones rápidas.</p>
-      </button>
+    <div class="home-grid stagger-in" style="display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 14px;">
+      <div class="widget-card">
+        <div class="widget-card-head"><h3>Requiere atención</h3></div>
+        <div id="attentionList">${Array.from({ length: 3 }).map(() => `<div class="skeleton skeleton-line" style="height:13px;margin:10px 8px;"></div>`).join('')}</div>
+      </div>
+      <div class="widget-card">
+        <div class="widget-card-head"><h3>Accesos rápidos</h3></div>
+        <div id="quickAccess"></div>
+      </div>
+    </div>
+
+    <div class="widget-card stagger-in" id="roleWidget">
+      <div class="widget-card-head"><h3>${isAdmin ? 'Actividad de asesores' : 'Tu actividad reciente'}</h3>${isAdmin ? `<button type="button" class="widget-link" id="seeAllActivity">Ver todo ${icon('chevronRight', 13)}</button>` : ''}</div>
+      <div id="roleWidgetBody">${Array.from({ length: 4 }).map(() => `<div class="skeleton skeleton-line" style="height:12px;margin:8px 6px;"></div>`).join('')}</div>
     </div>
   `;
 
-  const toolMeta = {
-    turno: { icon: '📋', label: 'Consultar turno' },
-    recibo: { icon: '🧾', label: 'Descargar recibo' },
-    metricas: { icon: '📊', label: 'Métricas' },
-    posgrados: { icon: '🎓', label: 'Posgrados' },
-    registros: { icon: '👥', label: 'CRM · Prospectos' },
-    conversaciones: { icon: '💬', label: 'Conversaciones' },
-  };
-  $$('button.tool-card').forEach(b => {
-    b.addEventListener('click', () => navigate(b.dataset.go));
-    const meta = toolMeta[b.dataset.go];
-    contextSheet(b, {
-      title: meta.label,
-      actions: [
-        { label: `Abrir ${meta.label}`, icon: meta.icon, onClick: () => navigate(b.dataset.go) },
-        { label: 'Abrir en pestaña nueva', icon: '↗️', onClick: () => window.open(`/app/#${b.dataset.go}`, '_blank') },
-      ],
-    });
-  });
+  const QUICK_ITEMS = [
+    { icon: 'message', label: 'Conversaciones', sub: 'Bandeja de WhatsApp', go: () => navigate('conversaciones') },
+    { icon: 'clipboard', label: 'Consultar turno', sub: 'Turno de matrícula por código', go: () => navigate('turno') },
+    { icon: 'receipt', label: 'Descargar recibo', sub: 'PDF desde Iceberg', go: () => navigate('recibo') },
+    { icon: 'users', label: 'CRM · Prospectos', sub: 'Búsqueda y filtros', go: () => navigate('registros') },
+    { icon: 'cap', label: 'Posgrados', sub: 'Gráficas y embudo', go: () => navigate('posgrados') },
+    { icon: 'chart', label: 'Métricas', sub: 'Actividad de los últimos días', go: () => navigate('metricas') },
+    { icon: 'message', label: `Abrir Chatwoot${capabilities.chatwootSso ? ' · SSO' : ''}`, sub: 'Atender conversaciones humanas', go: () => openChatwootExternal() },
+    { icon: 'chart', label: 'Abrir Grafana', sub: 'Métricas técnicas en vivo', go: () => window.open(publicUrls.grafana, '_blank', 'noopener') },
+  ];
+  $('#quickAccess').innerHTML = QUICK_ITEMS.map((item, i) => `
+    <button type="button" class="quick-row" data-qi="${i}">
+      <span class="quick-icon">${icon(item.icon, 17)}</span>
+      <span class="quick-body"><div class="quick-title">${item.label}</div><div class="quick-sub">${item.sub}</div></span>
+      <span class="quick-chevron">${icon('chevronRight', 15)}</span>
+    </button>
+  `).join('');
+  $$('#quickAccess .quick-row').forEach((b, i) => b.addEventListener('click', () => QUICK_ITEMS[i].go()));
 
-  contextSheet($('#openGrafana'), {
-    title: 'Grafana',
-    actions: [
-      { label: 'Abrir en pestaña nueva', icon: '↗️', onClick: () => window.open(publicUrls.grafana, '_blank', 'noopener') },
-      { label: 'Copiar enlace', icon: '🔗', onClick: () => copyToClipboard(publicUrls.grafana, 'Enlace copiado') },
-    ],
-  });
-  contextSheet($('#openChatwoot'), {
-    title: 'Chatwoot',
-    actions: [
-      { label: 'Ver prospectos posgrado', icon: '🎓', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
-      { label: 'Copiar enlace', icon: '🔗', onClick: () => copyToClipboard(publicUrls.chatwoot, 'Enlace copiado') },
-    ],
-  });
-
-  $('#openChatwoot')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    const btn = e.currentTarget;
-    btn.style.opacity = '0.7';
+  async function openChatwootExternal() {
     try {
       const r = await api('/api/auth/chatwoot-sso');
       const { url } = await r.json();
       window.open(url, '_blank', 'noopener');
     } catch {
       window.open(publicUrls.chatwoot, '_blank', 'noopener');
-    } finally {
-      btn.style.opacity = '1';
     }
-  });
+  }
+
+  $('#seeAllActivity')?.addEventListener('click', () => navigate('actividad'));
+
+  // ── "Requiere atención": combina datos reales de bot-users, Chatwoot y salud ──
+  (async () => {
+    const rows = [];
+    try {
+      const [botUsersRes, chatwootRes, healthRes] = await Promise.allSettled([
+        api('/api/tools/bot-users').then(r => r.json()),
+        api('/api/tools/chatwoot/summary').then(r => r.json()),
+        fetch('/health/deep', { credentials: 'same-origin' }).then(r => r.json()),
+      ]);
+      if (chatwootRes.status === 'fulfilled') {
+        const cw = chatwootRes.value;
+        if (cw.unassigned > 0) rows.push({ tone: 'danger', html: `<strong>${cw.unassigned}</strong> conversación${cw.unassigned !== 1 ? 'es' : ''} sin asignar en Chatwoot`, go: 'conversaciones' });
+        if (cw.pending > 0) rows.push({ tone: 'warning', html: `<strong>${cw.pending}</strong> conversación${cw.pending !== 1 ? 'es' : ''} pendiente${cw.pending !== 1 ? 's' : ''} de responder`, go: 'conversaciones' });
+      }
+      if (healthRes.status === 'fulfilled') {
+        const bad = Object.entries(healthRes.value.checks ?? {}).filter(([, c]) => c.status === 'down' || c.status === 'degraded');
+        bad.forEach(([name, c]) => rows.push({ tone: c.status === 'down' ? 'danger' : 'warning', html: `Servicio <strong>${name.replace(/_/g, ' ')}</strong> ${c.status === 'down' ? 'caído' : 'degradado'}`, go: 'health' }));
+      }
+      if (botUsersRes.status === 'fulfilled' && botUsersRes.value.phones?.length) {
+        // No hay endpoint de conteo de baneados; se omite salvo que ya se vea en la bandeja.
+      }
+    } catch { /* noop */ }
+
+    const list = $('#attentionList');
+    if (!rows.length) {
+      list.innerHTML = `<div class="widget-empty">${icon('check', 16)} Todo al día — nada requiere atención ahora mismo.</div>`;
+      return;
+    }
+    list.innerHTML = rows.slice(0, 6).map(r => `
+      <button type="button" class="attention-row" data-go="${r.go}" style="width:100%;background:none;border:none;text-align:left;cursor:pointer;font-family:inherit;">
+        <span class="attention-dot ${r.tone}"></span>
+        <span class="attention-text">${r.html}</span>
+        <span class="quick-chevron">${icon('chevronRight', 14)}</span>
+      </button>
+    `).join('');
+    $$('#attentionList [data-go]').forEach(b => b.addEventListener('click', () => navigate(b.dataset.go)));
+  })();
+
+  // ── Widget de rol: admin ve actividad del equipo, asesor ve la suya ──
+  (async () => {
+    const body = $('#roleWidgetBody');
+    try {
+      if (isAdmin) {
+        const r = await api('/api/tools/audit/summary?days=7');
+        const { summary } = await r.json();
+        const rows = Object.entries(summary).map(([username, counts]) => ({
+          username, total: Object.values(counts).reduce((a, b) => a + b, 0),
+        })).sort((a, b) => b.total - a.total);
+        if (!rows.length) { body.innerHTML = `<div class="widget-empty">${icon('check', 16)} Aún no hay actividad registrada esta semana.</div>`; return; }
+        const max = Math.max(...rows.map(r => r.total), 1);
+        body.innerHTML = rows.slice(0, 6).map(r => `
+          <div class="advisor-bar-row">
+            <div class="advisor-bar-name">${escapeHtml(r.username)}</div>
+            <div class="advisor-bar-track"><div class="advisor-bar-fill" style="width:${Math.round(r.total / max * 100)}%"></div></div>
+            <div class="advisor-bar-value">${r.total}</div>
+          </div>
+        `).join('');
+      } else {
+        const r = await api('/api/tools/audit/me');
+        const { entries } = await r.json();
+        if (!entries.length) { body.innerHTML = `<div class="widget-empty">${icon('check', 16)} Aún no has hecho acciones en el panel hoy.</div>`; return; }
+        body.innerHTML = entries.slice(0, 6).map(e => {
+          const meta = AUDIT_LABELS[e.action] ?? { label: e.action, icon: '•' };
+          return `<div class="activity-row"><span class="activity-dot"></span><span class="activity-text">${meta.icon} ${meta.label}${e.detail ? ` — ${escapeHtml(e.detail)}` : ''}</span><span class="activity-time">${relativeTime(e.ts)}</span></div>`;
+        }).join('');
+      }
+    } catch {
+      body.innerHTML = '<div class="alert alert-error" style="margin:4px;">No se pudo cargar la actividad.</div>';
+    }
+  })();
 
   try {
     const r = await api('/api/tools/metrics/today');
@@ -552,9 +581,7 @@ async function renderHome(main) {
     setStat('msgs', totalMsgs);
     setStat('ai', num('ai_request'));
     setStat('prospectos', num('prospecto_completado'));
-    setStat('registros', num('registro_completado'));
     setStat('handoffs', num('agent_handoff'));
-    setStat('recibos', num('recibo_descargado') + num('turno_consultado'));
   } catch {
     $$('.stat-card .value').forEach(el => { el.classList.remove('skeleton'); el.textContent = '—'; });
   }
@@ -861,6 +888,57 @@ async function renderUsuarios(main) {
   });
 
   loadUsers();
+}
+
+/* ============= ACTIVIDAD DE ASESORES (admin) ============= */
+async function renderActividad(main) {
+  if (currentUser.role !== 'admin') { navigate('home'); return; }
+
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>📈 Actividad de asesores</h1><div class="subtitle">Quién hizo qué en el panel — últimos días</div></div>
+      <div id="actRangeWrap"></div>
+    </div>
+    <div id="actContent" class="widget-card">
+      ${Array.from({ length: 5 }).map(() => `<div class="skeleton skeleton-line" style="height:14px;margin:10px 6px;"></div>`).join('')}
+    </div>
+  `;
+
+  let actDays = '7';
+  $('#actRangeWrap').appendChild(buildSegmented(
+    [{ value: '1', label: 'Hoy' }, { value: '7', label: '7 días' }, { value: '30', label: '30 días' }],
+    actDays, (v) => { actDays = v; load(); },
+  ));
+
+  async function load() {
+    $('#actContent').innerHTML = `${Array.from({ length: 5 }).map(() => `<div class="skeleton skeleton-line" style="height:14px;margin:10px 6px;"></div>`).join('')}`;
+    try {
+      const r = await api(`/api/tools/audit/summary?days=${actDays}`);
+      const { summary } = await r.json();
+      const advisors = Object.entries(summary);
+      if (!advisors.length) {
+        $('#actContent').innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:24px 0;">No hay actividad registrada en este rango.</p>`;
+        return;
+      }
+      const actionKeys = Array.from(new Set(advisors.flatMap(([, c]) => Object.keys(c))));
+      $('#actContent').innerHTML = `
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Asesor</th>${actionKeys.map(k => `<th style="text-align:center;">${AUDIT_LABELS[k]?.icon ?? ''} ${AUDIT_LABELS[k]?.label ?? k}</th>`).join('')}<th style="text-align:right;">Total</th></tr></thead>
+            <tbody class="stagger-in">
+              ${advisors.sort((a, b) => Object.values(b[1]).reduce((x, y) => x + y, 0) - Object.values(a[1]).reduce((x, y) => x + y, 0)).map(([username, counts]) => {
+                const total = Object.values(counts).reduce((a, b) => a + b, 0);
+                return `<tr><td><strong>${escapeHtml(username)}</strong></td>${actionKeys.map(k => `<td style="text-align:center;">${counts[k] ?? '—'}</td>`).join('')}<td style="text-align:right;font-weight:700;color:var(--utb-blue);">${total}</td></tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch {
+      $('#actContent').innerHTML = '<div class="alert alert-error">No se pudo cargar la actividad.</div>';
+    }
+  }
+  load();
 }
 
 /* ============= CONVERSACIONES (bandeja WhatsApp) ============= */

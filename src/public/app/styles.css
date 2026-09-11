@@ -529,6 +529,7 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
   .app { flex-direction: column; padding: var(--page-gutter); gap: 12px; }
   .sidebar { display: none; }
   .main { padding: 0 2px calc(var(--tab-bar-height) + var(--safe-bottom) + 22px); width: 100%; }
+  .home-grid { grid-template-columns: 1fr !important; }
 
   /* Tab bar flotante en píldora, centrada y separada del borde — igual al
      patrón de Renova (fixed, w-fit, rounded-full, glass, shadow), no una
@@ -585,7 +586,7 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .inbox-row {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px;
   background: transparent; border: none; text-align: left; cursor: pointer; font-family: inherit;
-  border-radius: var(--radius-lg); margin-bottom: 2px;
+  border-radius: var(--radius-lg);
   transition: background 0.18s var(--ease-out);
 }
 .inbox-row:hover { background: rgba(0, 48, 135, 0.06); }
@@ -687,6 +688,59 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .crm-card-date { font-size: 11px; color: var(--text-muted); opacity: 0.75; margin-top: 10px; }
 
 /* ===================================================================
+   Fila de acceso rápido compacta (patrón Renova QuickActionRow) —
+   ícono en círculo + texto + chevron, resalta con fondo al hover, sin
+   tiles gigantes de color.
+   =================================================================== */
+.quick-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px;
+  background: transparent; border: none; text-align: left; cursor: pointer; font-family: inherit;
+  border-radius: var(--radius-lg); color: inherit;
+  transition: background 0.18s var(--ease-out), transform 0.18s var(--ease-spring);
+}
+.quick-row:hover { background: rgba(0, 48, 135, 0.06); }
+.quick-row:active { background: rgba(0, 48, 135, 0.1); transform: scale(0.98); }
+.quick-row .quick-icon {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center;
+  justify-content: center; color: var(--utb-blue); background: rgba(0, 48, 135, 0.1);
+}
+.quick-row .quick-body { flex: 1; min-width: 0; }
+.quick-row .quick-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quick-row .quick-sub { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quick-row .quick-chevron { color: var(--text-muted); flex-shrink: 0; }
+.quick-row .quick-badge {
+  flex-shrink: 0; font-size: 11px; font-weight: 700; color: white; background: var(--danger);
+  border-radius: 999px; padding: 1px 7px; min-width: 18px; text-align: center;
+}
+
+/* Widget "Card" simple con header — usado en el nuevo Inicio y en Actividad */
+.widget-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05); padding: 16px; }
+.widget-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 4px; }
+.widget-card-head h3 { font-size: 14.5px; font-weight: 700; }
+.widget-card-head a, .widget-card-head .widget-link { font-size: 12px; font-weight: 600; color: var(--utb-blue); display: inline-flex; align-items: center; gap: 3px; cursor: pointer; background: none; border: none; font-family: inherit; }
+.widget-empty { color: var(--text-muted); font-size: 13px; padding: 10px 6px; display: flex; align-items: center; gap: 8px; }
+
+.attention-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: var(--radius-md); }
+.attention-row:hover { background: #f8fafc; }
+.attention-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.attention-dot.danger { background: var(--danger); }
+.attention-dot.warning { background: var(--warning); }
+.attention-dot.info { background: var(--utb-blue-light); }
+.attention-text { flex: 1; min-width: 0; font-size: 13px; }
+.attention-text strong { font-weight: 600; }
+
+.activity-row { display: flex; align-items: center; gap: 10px; padding: 7px 6px; font-size: 12.5px; }
+.activity-row .activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--utb-accent-dark); flex-shrink: 0; }
+.activity-row .activity-text { flex: 1; min-width: 0; color: var(--text); }
+.activity-row .activity-time { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+
+.advisor-bar-row { display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
+.advisor-bar-name { width: 110px; flex-shrink: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.advisor-bar-track { flex: 1; height: 8px; border-radius: 999px; background: rgba(0, 48, 135, 0.08); overflow: hidden; }
+.advisor-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--utb-blue-light), var(--utb-blue)); transition: width 0.6s var(--ease-spring); }
+.advisor-bar-value { width: 28px; text-align: right; flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--utb-blue); }
+
+/* ===================================================================
    Tooltip flotante ("ventana de texto") — hover en desktop, tap-hold
    en touch. Aparece con un pequeño pop, como los tooltips de iPadOS.
    =================================================================== */
@@ -747,7 +801,7 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
    Swipe-to-reveal — desliza una fila hacia la izquierda en móvil para
    revelar acciones rápidas (patrón Mail/iOS), sin librerías.
    =================================================================== */
-.swipe-row { position: relative; overflow: hidden; touch-action: pan-y; }
+.swipe-row { position: relative; overflow: hidden; touch-action: pan-y; margin-bottom: 2px; border-radius: var(--radius-lg); }
 .swipe-row .swipe-content {
   position: relative; z-index: 1; background: white; transition: transform 0.3s var(--ease-spring);
 }

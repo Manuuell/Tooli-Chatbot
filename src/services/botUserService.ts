@@ -5,20 +5,28 @@ const redis = new Redis(config.redis.url);
 
 export interface BotUserInfo {
   phone: string;
+  // `session.data` solo trae lo que los flujos actuales capturan (nombre,
+  // correo, programa de interés) — no hay semestre/carrera todavía porque
+  // ningún flujo los pregunta ni hay sistema universitario conectado del que
+  // traerlos. Ver PENDIENTES_PANEL_ASESORES.md (sección 1) antes de agregar
+  // esos campos aquí o en el CRM del panel.
   session: { step: string; data: Record<string, string> } | null;
   banned: boolean;
   banReason?: string;
+  aiDisabled: boolean;
   recentMessages: Array<{ ts: number; direction: 'in' | 'out'; text: string }>;
 }
 
 const BAN_KEY = (phone: string) => `ban:${phone}`;
 const ACTIVITY_KEY = (phone: string) => `activity:${phone}`;
+const AI_DISABLED_KEY = (phone: string) => `ai_disabled:${phone}`;
 
 export async function getBotUser(phone: string): Promise<BotUserInfo> {
-  const [sessionRaw, banRaw, activityRaw] = await Promise.all([
+  const [sessionRaw, banRaw, activityRaw, aiDisabledRaw] = await Promise.all([
     redis.get(`session:${phone}`),
     redis.get(BAN_KEY(phone)),
     redis.lrange(ACTIVITY_KEY(phone), 0, 49),
+    redis.get(AI_DISABLED_KEY(phone)),
   ]);
 
   return {
@@ -26,12 +34,28 @@ export async function getBotUser(phone: string): Promise<BotUserInfo> {
     session: sessionRaw ? JSON.parse(sessionRaw) : null,
     banned: !!banRaw,
     banReason: banRaw ?? undefined,
+    aiDisabled: !!aiDisabledRaw,
     recentMessages: activityRaw
       .map(s => {
         try { return JSON.parse(s); } catch { return null; }
       })
       .filter(Boolean),
   };
+}
+
+/**
+ * Enciende/apaga la IA para un usuario puntual — cuando está apagada, el flujo
+ * de chat (aiChat.ts) escala directo a un asesor humano en vez de responder
+ * con el modelo. Pensado para que un asesor tome el control de una conversación
+ * sin tener que banear al usuario (patrón "IA on/off" por conversación).
+ */
+export async function setAiEnabled(phone: string, enabled: boolean): Promise<void> {
+  if (enabled) await redis.del(AI_DISABLED_KEY(phone));
+  else await redis.set(AI_DISABLED_KEY(phone), '1');
+}
+
+export async function isAiDisabled(phone: string): Promise<boolean> {
+  return (await redis.exists(AI_DISABLED_KEY(phone))) === 1;
 }
 
 export async function resetSession(phone: string): Promise<void> {

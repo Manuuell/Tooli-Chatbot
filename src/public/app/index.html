@@ -894,7 +894,7 @@ async function renderConversaciones(main) {
       <div><h1>💬 Conversaciones</h1><div class="subtitle">Últimos usuarios que han escrito por WhatsApp — historial, sesión y acciones rápidas.</div></div>
     </div>
     <div class="inbox" id="inbox">
-      <div class="inbox-list" id="inboxList">
+      <div class="inbox-list glass" id="inboxList">
         <div class="inbox-search"><input type="text" id="inboxSearch" placeholder="Buscar por número o nombre…"></div>
         <div class="inbox-rows" id="inboxRows">
           ${Array.from({ length: 7 }).map(() => `
@@ -908,7 +908,7 @@ async function renderConversaciones(main) {
           `).join('')}
         </div>
       </div>
-      <div class="inbox-thread" id="inboxThread">
+      <div class="inbox-thread glass" id="inboxThread">
         <div class="inbox-empty"><div style="font-size:40px;">💬</div>Selecciona una conversación</div>
       </div>
     </div>

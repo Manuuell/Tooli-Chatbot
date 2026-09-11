@@ -925,3 +925,53 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 @media (max-width: 420px) {
   .phone-frame { width: 100%; max-width: 300px; height: 78vh; }
 }
+
+/* ===================================================================
+   Tarjetas de perfil (asesores) — estilo Cubi/Renova: avatar + stats
+   directamente en la tarjeta, en vez de una fila de tabla plana.
+   =================================================================== */
+.advisor-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.advisor-stat-strip { display: flex; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.advisor-stat { flex: 1; min-width: 0; }
+.advisor-stat-value { font-size: 15px; font-weight: 700; color: var(--utb-blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.advisor-stat-label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; }
+
+/* ===================================================================
+   Modal de perfil genérico (asesor / estudiante) — avatar grande,
+   insignias, métricas y una lista de datos reales.
+   =================================================================== */
+.profile-sheet-overlay {
+  position: fixed; inset: 0; z-index: 480; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 23, 42, 0); backdrop-filter: blur(0px);
+  opacity: 0; transition: background 0.28s var(--ease-out), backdrop-filter 0.28s var(--ease-out), opacity 0.28s var(--ease-out);
+  padding: 20px;
+}
+.profile-sheet-overlay.open { background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(8px) saturate(150%); opacity: 1; }
+.profile-sheet {
+  width: 380px; max-width: 100%; max-height: 86vh; overflow-y: auto; background: var(--surface, white);
+  border-radius: var(--radius-xl); box-shadow: 0 30px 70px -25px rgba(0, 20, 80, 0.45); padding: 28px 22px 22px;
+  position: relative; transform: scale(0.94) translateY(14px); opacity: 0;
+  transition: transform 0.36s var(--ease-spring), opacity 0.28s var(--ease-out);
+}
+.profile-sheet-overlay.open .profile-sheet { transform: scale(1) translateY(0); opacity: 1; }
+.profile-sheet-close {
+  position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05); border: none; color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.profile-sheet-close:hover { background: rgba(0, 0, 0, 0.1); }
+.profile-sheet-header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; margin-bottom: 18px; }
+.profile-sheet-header .avatar { margin-bottom: 8px; font-weight: 700; }
+.profile-sheet-title { font-size: 17px; font-weight: 700; color: var(--text); }
+.profile-sheet-subtitle { font-size: 13px; color: var(--text-muted); }
+.profile-sheet-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.profile-sheet-stats { display: flex; gap: 8px; margin-bottom: 16px; }
+.profile-sheet-stat { flex: 1; background: #f8fafc; border-radius: var(--radius-md); padding: 10px; text-align: center; }
+.profile-sheet-stat .value { font-size: 20px; font-weight: 700; color: var(--utb-blue); font-variant-numeric: tabular-nums; }
+.profile-sheet-stat .label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+.profile-sheet-rows { border-top: 1px solid var(--border); padding-top: 8px; margin-bottom: 16px; }
+.profile-sheet-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; font-size: 13px; }
+.profile-sheet-row-icon { flex-shrink: 0; width: 18px; text-align: center; }
+.profile-sheet-row-label { flex: 1; color: var(--text-muted); }
+.profile-sheet-row-value { font-weight: 600; color: var(--text); max-width: 55%; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-sheet-actions { display: flex; flex-direction: column; gap: 8px; }
+.profile-sheet-actions .btn { width: 100%; justify-content: center; }

@@ -132,7 +132,10 @@ form.addEventListener('submit', async (e) => {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      showError(err.error === 'invalid_credentials' ? 'Usuario o contraseña incorrectos.' : 'No se pudo iniciar sesión. Intenta de nuevo.');
+      const msg = err.error === 'invalid_credentials' ? 'Usuario o contraseña incorrectos.'
+        : err.error === 'too_many_attempts' ? `Demasiados intentos. Espera ${Math.ceil((err.retryAfterSec ?? 60) / 60)} minuto(s) e inténtalo de nuevo.`
+        : 'No se pudo iniciar sesión. Intenta de nuevo.';
+      showError(msg);
       setLoading(false);
       return;
     }

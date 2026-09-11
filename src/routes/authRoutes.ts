@@ -19,8 +19,12 @@ import {
 import { config } from '../config';
 import { getChatwootSsoUrl, isChatwootSsoEnabled } from '../services/chatwootSsoService';
 import { logAudit } from '../services/auditService';
+import { checkRateLimit } from '../services/rateLimit';
 
 export const authRouter = Router();
+
+const LOGIN_MAX_ATTEMPTS = 8;
+const LOGIN_WINDOW_SEC = 5 * 60;
 
 authRouter.post('/login', async (req, res) => {
   const { username, password } = req.body ?? {};
@@ -28,6 +32,16 @@ authRouter.post('/login', async (req, res) => {
     res.status(400).json({ error: 'missing_credentials' });
     return;
   }
+
+  // Por IP+usuario: evita fuerza bruta sobre una cuenta puntual sin bloquear
+  // a todos los asesores que comparten salida a internet en la universidad.
+  const attemptKey = `login:${req.ip}:${String(username).toLowerCase()}`;
+  const limit = await checkRateLimit(attemptKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC);
+  if (!limit.allowed) {
+    res.status(429).json({ error: 'too_many_attempts', retryAfterSec: limit.retryAfterSec });
+    return;
+  }
+
   const user = await verifyPassword(username, password);
   if (!user) {
     res.status(401).json({ error: 'invalid_credentials' });

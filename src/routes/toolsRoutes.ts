@@ -15,6 +15,7 @@ import {
   setAiEnabled,
 } from '../services/botUserService';
 import { leerRegistrosPosgrado } from '../services/registroService';
+import { leerRegistrosEventoPosgrado, actualizarSeguimientoEvento } from '../services/posgradosEventoSheets';
 import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSheets';
 import { getCodigoNutria, canjearCodigoNutria, getCanjesRecientes } from '../services/nutriaCodigoService';
 
@@ -275,6 +276,35 @@ toolsRouter.get('/registros-posgrado', async (_req, res) => {
     res.json({ rows });
   } catch (err: any) {
     console.error('[tools/registros-posgrado] error:', err);
+    res.status(500).json({ error: 'internal_error', message: err?.message });
+  }
+});
+
+/* ===== Registros del evento de posgrados (meetup, Google Sheets aparte) ===== */
+/* Antes solo se veían los del menú normal del bot (registro.ts) — los que
+   se registraron desde la campaña del evento quedaban invisibles en el
+   panel aunque ya se estaban guardando en Sheets + HubSpot. */
+
+toolsRouter.get('/registros-evento-posgrado', async (_req, res) => {
+  try {
+    const rows = await leerRegistrosEventoPosgrado();
+    res.json({ rows });
+  } catch (err: any) {
+    console.error('[tools/registros-evento-posgrado] error:', err);
+    res.status(500).json({ error: 'internal_error', message: err?.message });
+  }
+});
+
+toolsRouter.post('/registros-evento-posgrado/:fila/seguimiento', async (req: AuthedRequest, res: Response) => {
+  const fila = parseInt(req.params.fila, 10);
+  const { estado } = req.body ?? {};
+  if (!fila || !estado) { res.status(400).json({ error: 'missing_fields' }); return; }
+  try {
+    await actualizarSeguimientoEvento(fila, estado);
+    await logAudit(req.user!.username, 'seguimiento_evento_actualizado');
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[tools/registros-evento-posgrado/seguimiento] error:', err);
     res.status(500).json({ error: 'internal_error', message: err?.message });
   }
 });

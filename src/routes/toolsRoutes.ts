@@ -1,5 +1,7 @@
 import { Router, Response } from 'express';
-import { requireAuth, AuthedRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, AuthedRequest } from '../middleware/auth';
+import { getUserAudit, getAdvisorSummary, logAudit } from '../services/auditService';
+import { getConversationStats } from '../services/chatwootService';
 import { consultarTurno } from '../services/turnosService';
 import { loginAndDownloadReceipt } from '../services/icebergService';
 import { getMetrics } from '../services/metrics';
@@ -112,6 +114,7 @@ toolsRouter.get('/turno/:codigo', async (req: AuthedRequest, res: Response) => {
       res.status(404).json({ error: 'no_encontrado' });
       return;
     }
+    await logAudit(req.user!.username, 'turno_consultado', codigo);
     res.json({ turno });
   } catch (err: any) {
     console.error('[tools/turno] error:', err);
@@ -150,6 +153,7 @@ toolsRouter.post('/recibo', async (req: AuthedRequest, res: Response) => {
       res.status(500).json({ error: 'no_pdf' });
       return;
     }
+    await logAudit(req.user!.username, 'recibo_descargado', codigo.toUpperCase());
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="recibo-${codigo}.pdf"`);
     res.send(result.pdf);
@@ -212,6 +216,7 @@ toolsRouter.get('/bot-users/:phone', async (req: AuthedRequest, res: Response) =
 toolsRouter.post('/bot-users/:phone/reset-session', async (req: AuthedRequest, res: Response) => {
   const phone = normalizePhone(req.params.phone);
   await resetSession(phone);
+  await logAudit(req.user!.username, 'sesion_reseteada', phone.slice(-4));
   console.log(`[asesor] ${req.user?.username} reseteó sesión de ${phone.slice(-4)}`);
   res.json({ ok: true });
 });
@@ -220,6 +225,7 @@ toolsRouter.post('/bot-users/:phone/ban', async (req: AuthedRequest, res: Respon
   const phone = normalizePhone(req.params.phone);
   const reason = req.body?.reason ?? `Baneado por ${req.user?.username}`;
   await banUser(phone, reason);
+  await logAudit(req.user!.username, 'usuario_baneado', phone.slice(-4));
   console.log(`[asesor] ${req.user?.username} baneó ${phone.slice(-4)}: ${reason}`);
   res.json({ ok: true });
 });
@@ -227,6 +233,7 @@ toolsRouter.post('/bot-users/:phone/ban', async (req: AuthedRequest, res: Respon
 toolsRouter.post('/bot-users/:phone/unban', async (req: AuthedRequest, res: Response) => {
   const phone = normalizePhone(req.params.phone);
   await unbanUser(phone);
+  await logAudit(req.user!.username, 'usuario_desbaneado', phone.slice(-4));
   console.log(`[asesor] ${req.user?.username} desbaneó ${phone.slice(-4)}`);
   res.json({ ok: true });
 });
@@ -235,8 +242,29 @@ toolsRouter.post('/bot-users/:phone/ai-toggle', async (req: AuthedRequest, res: 
   const phone = normalizePhone(req.params.phone);
   const enabled = !!req.body?.enabled;
   await setAiEnabled(phone, enabled);
+  await logAudit(req.user!.username, enabled ? 'ia_activada' : 'ia_desactivada', phone.slice(-4));
   console.log(`[asesor] ${req.user?.username} ${enabled ? 'activó' : 'apagó'} la IA para ${phone.slice(-4)}`);
   res.json({ ok: true, enabled });
+});
+
+/* ===== Auditoría de asesores ===== */
+
+toolsRouter.get('/audit/me', async (req: AuthedRequest, res: Response) => {
+  const entries = await getUserAudit(req.user!.username, 50);
+  res.json({ entries });
+});
+
+toolsRouter.get('/audit/summary', requireAdmin, async (req, res) => {
+  const days = Math.min(30, Math.max(1, parseInt(String(req.query.days ?? '7')) || 7));
+  const summary = await getAdvisorSummary(days);
+  res.json({ days, summary });
+});
+
+/* ===== Chatwoot en vivo ===== */
+
+toolsRouter.get('/chatwoot/summary', async (_req, res) => {
+  const stats = await getConversationStats();
+  res.json(stats);
 });
 
 /* ===== Registros de prospectos de posgrado (Google Sheets) ===== */

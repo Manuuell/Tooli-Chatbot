@@ -164,6 +164,57 @@ export async function resolveConversation(conversationId: number): Promise<void>
   await cw().post(`/conversations/${conversationId}/toggle_status`, { status: 'resolved' }).catch(() => {});
 }
 
+export interface ChatwootStats {
+  open: number;
+  unassigned: number;
+  pending: number;
+  resolvedToday: number;
+  agents: Array<{ name: string; status: 'online' | 'busy' | 'offline'; assignedConversations: number }>;
+}
+
+/**
+ * Trae contadores reales de Chatwoot (conversaciones abiertas, sin asignar,
+ * pendientes, resueltas hoy) y el estado de los agentes conectados — para
+ * mostrar un resumen en vivo en el panel de asesores sin tener que abrir
+ * Chatwoot. Usa la misma API que ya consume el resto de este servicio.
+ * Si Chatwoot no responde, no rompe el dashboard: devuelve ceros.
+ */
+export async function getConversationStats(): Promise<ChatwootStats> {
+  const zero: ChatwootStats = { open: 0, unassigned: 0, pending: 0, resolvedToday: 0, agents: [] };
+  try {
+    const [openRes, unassignedRes, pendingRes, resolvedRes, agentsRes] = await Promise.all([
+      cw().get('/conversations', { params: { status: 'open' } }),
+      cw().get('/conversations', { params: { status: 'open', assignee_type: 'unassigned' } }),
+      cw().get('/conversations', { params: { status: 'pending' } }),
+      cw().get('/conversations', { params: { status: 'resolved' } }),
+      cw().get('/agents').catch(() => ({ data: [] })),
+    ]);
+
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const resolvedToday = (resolvedRes.data?.data?.payload ?? []).filter((c: any) => {
+      const ts = (c.last_activity_at ?? c.updated_at ?? 0) * 1000;
+      return ts >= todayStart.getTime();
+    }).length;
+
+    const agents = (agentsRes.data ?? []).map((a: any) => ({
+      name: a.name ?? a.available_name ?? 'Agente',
+      status: (a.availability_status ?? 'offline') as 'online' | 'busy' | 'offline',
+      assignedConversations: a.assigned_conversations_count ?? 0,
+    }));
+
+    return {
+      open: openRes.data?.data?.meta?.all_count ?? openRes.data?.data?.payload?.length ?? 0,
+      unassigned: unassignedRes.data?.data?.meta?.all_count ?? unassignedRes.data?.data?.payload?.length ?? 0,
+      pending: pendingRes.data?.data?.meta?.all_count ?? pendingRes.data?.data?.payload?.length ?? 0,
+      resolvedToday,
+      agents,
+    };
+  } catch (err: any) {
+    console.error('[chatwoot] error obteniendo estadísticas:', err?.response?.data ?? err?.message);
+    return zero;
+  }
+}
+
 /**
  * Verifica si la fecha actual está dentro del horario de atención
  * Lunes a viernes, 8:00 AM – 8:00 PM hora de Bogotá (UTC-5).

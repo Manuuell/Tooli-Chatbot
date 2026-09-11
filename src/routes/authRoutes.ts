@@ -18,6 +18,7 @@ import {
 } from '../middleware/auth';
 import { config } from '../config';
 import { getChatwootSsoUrl, isChatwootSsoEnabled } from '../services/chatwootSsoService';
+import { logAudit } from '../services/auditService';
 
 export const authRouter = Router();
 
@@ -34,6 +35,7 @@ authRouter.post('/login', async (req, res) => {
   }
   const token = signSession({ username: user.username, role: user.role, fullName: user.fullName });
   setSessionCookie(res, token);
+  await logAudit(user.username, 'login');
   res.json({ user: toPublic(user) });
 });
 
@@ -111,6 +113,7 @@ authRouter.post('/users', requireAuth, requireAdmin, async (req: AuthedRequest, 
       return;
     }
     const user = await createUser({ username, password, fullName, email, role, area });
+    await logAudit(req.user!.username, 'usuario_creado', username);
     res.json({ user });
   } catch (err: any) {
     res.status(400).json({ error: err?.message ?? 'create_failed' });
@@ -123,5 +126,6 @@ authRouter.delete('/users/:username', requireAuth, requireAdmin, async (req: Aut
     return;
   }
   await deleteUser(req.params.username);
+  await logAudit(req.user!.username, 'usuario_eliminado', req.params.username);
   res.json({ ok: true });
 });

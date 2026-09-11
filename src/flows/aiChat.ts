@@ -1,6 +1,7 @@
 import { setSession } from '../services/session';
 import { preguntarAI, AIUnavailableError, ChatTurn } from '../services/aiAssistant';
 import { track } from '../services/metrics';
+import { isAiDisabled } from '../services/botUserService';
 import { FlowContext, messaging, sendAiHint, normalize } from './shared';
 import { iniciarConversacionAsesor, iniciarVerificacionIdentidad } from './agentHandoff';
 
@@ -9,6 +10,15 @@ const TURN_LIMIT_SUGGEST_AGENT = 15;
 export async function handleChattingWithAI(ctx: FlowContext): Promise<void> {
   const { from, text, session } = ctx;
   const input = normalize(text);
+
+  // Un asesor apagó la IA para esta conversación puntual (toggle en el panel
+  // de Conversaciones) — en vez de responder con el modelo, escala directo a
+  // atención humana sin necesidad de banear al usuario.
+  if (await isAiDisabled(from)) {
+    await track('ai_disabled_escalation', {});
+    await iniciarConversacionAsesor(from, session?.data ?? {}, { aiNoResolvio: false });
+    return;
+  }
 
   if (
     input === 'salir' ||

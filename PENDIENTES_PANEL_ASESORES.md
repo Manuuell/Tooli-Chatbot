@@ -43,14 +43,40 @@ la universidad (para que no caiga en spam / no se use una cuenta personal).
 Una vez se tenga eso, un botón "Enviar correo" en el CRM (ya tiene el email
 del prospecto) es sencillo de conectar.
 
-## 4. Actividad / rendimiento de asesores (sí es viable ya)
+## 4. Actividad / rendimiento de asesores — ✅ implementado
 
-A diferencia de los tres anteriores, esto **no depende de nada externo** —
-solo falta un registro de auditoría de las acciones que ya se hacen desde el
-panel (reset de sesión, baneos, descargas de recibo, toggle de IA). Se puede
-construir con el mismo patrón de `metrics.ts` (contadores en Redis) pero
-etiquetado por `req.user.username`. Cuando se priorice, es la primera de esta
-lista que se puede construir de punta a punta sin pedirle nada a nadie.
+Construido de punta a punta: `auditService.ts` registra cada acción (login,
+turno consultado, recibo descargado, reset de sesión, baneos, toggle de IA)
+etiquetada por `req.user.username`, expuesto en `/api/tools/audit/summary` y
+mostrado en el panel como un dashboard real (podio + gráfico de barras +
+detalle por tipo de acción) en `renderActividad` dentro de
+`src/public/app/index.html`.
+
+## 6. Mensajes masivos / campañas nativas (reemplazar el uso de Chatwoot para esto)
+
+Pedido explícito: tener dentro del panel lo que hoy se hace en Chatwoot para
+enviar mensajes a varios contactos a la vez, e idealmente mejor. Antes de
+construirlo hay una restricción real de WhatsApp que no se puede evitar con
+código: el adaptador de mensajería actual es `meta` (WhatsApp Business
+Platform — ver `config.messagingAdapter` en `src/flows/shared.ts`), y Meta
+**no permite enviar texto libre fuera de una ventana de 24h desde el último
+mensaje del usuario** — un envío masivo real solo es posible usando
+*message templates* pre-aprobados por Meta (ej. "Recordatorio de cita",
+"Nueva convocatoria de posgrado"), cada uno sujeto a revisión y aprobación
+de Meta antes de poder usarse.
+
+Camino natural para construirlo bien (no como un botón que technically no
+funciona):
+- Backend: un servicio `broadcastService.ts` que use la Graph API de Meta
+  para (a) listar los templates ya aprobados en el Business Manager de la
+  universidad, y (b) enviarlos a una lista de números.
+- Frontend: en el CRM (`renderRegistros`) ya existen los filtros por
+  categoría de programa — se puede agregar un modo "seleccionar varios" +
+  botón "Enviar plantilla a los seleccionados", reutilizando el mismo
+  segmentado y las tarjetas que ya existen.
+- Requisito externo real: acceso al Business Manager / WABA de la
+  universidad para ver o crear los templates — sin eso se puede dejar la
+  UI lista pero no probarla contra un envío real.
 
 ## 5. Multi-universidad / integración con la app móvil de la UTB
 

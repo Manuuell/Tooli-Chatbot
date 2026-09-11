@@ -397,10 +397,16 @@ async function init() {
 
   renderTabBar();
   navigate(location.hash.slice(1) || 'home');
-  window.addEventListener('hashchange', () => navigate(location.hash.slice(1) || 'home'));
+  window.addEventListener('hashchange', () => {
+    const route = location.hash.slice(1) || 'home';
+    if (route === currentRoute) return; // ya renderizada por navigate() al fijar el hash — evita doble render
+    navigate(route);
+  });
 }
 
+let currentRoute = null;
 function navigate(route) {
+  currentRoute = route;
   ActionSheet.close();
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
   updateTabBar(route);
@@ -1069,6 +1075,25 @@ function friendlyDate(raw) {
 }
 
 let conversationsCache = [];
+let inboxFilter = 'todos';
+
+/* Categoriza la conversación según el paso de flujo real (no es un campo
+   inventado: son los mismos nombres de `step` que usan los flujos en
+   src/flows — programas/registro/prospecto son de posgrado, turno/recibo
+   son de pregrado/matrícula). Si no hay sesión activa, queda "Sin flujo". */
+const FLOW_CATEGORIES = {
+  posgrado: { label: 'Posgrado', color: '#7c3aed', prefixes: ['programas_', 'registro_', 'prospecto_'] },
+  pregrado: { label: 'Pregrado', color: '#0284c7', prefixes: ['esperando_codigo', 'recibo_'] },
+  evento: { label: 'Evento', color: '#db2777', prefixes: ['evento_'] },
+  soporte: { label: 'Soporte', color: '#64748b', prefixes: ['agent_', 'ti_', 'with_agent', 'chatting_with_ai'] },
+};
+function flowCategory(step) {
+  if (!step || step === 'menu') return null;
+  for (const [key, cat] of Object.entries(FLOW_CATEGORIES)) {
+    if (cat.prefixes.some(p => step.startsWith(p))) return { key, ...cat };
+  }
+  return null;
+}
 
 async function renderConversaciones(main) {
   main.innerHTML = `
@@ -1078,6 +1103,7 @@ async function renderConversaciones(main) {
     <div class="inbox" id="inbox">
       <div class="inbox-list glass" id="inboxList">
         <div class="inbox-search"><input type="text" id="inboxSearch" placeholder="Buscar por número o nombre…"></div>
+        <div class="inbox-filter-wrap" id="inboxFilterWrap"></div>
         <div class="inbox-rows" id="inboxRows">
           ${Array.from({ length: 7 }).map(() => `
             <div class="inbox-row">
@@ -1116,9 +1142,20 @@ async function renderConversaciones(main) {
         banned: info.banned,
         nombre: info.session?.data?.nombre,
         last: info.recentMessages[0] ?? null,
+        cat: flowCategory(info.session?.step),
       }))
-      .concat(phones.slice(30).map(phone => ({ phone, banned: false, nombre: undefined, last: null })))
+      .concat(phones.slice(30).map(phone => ({ phone, banned: false, nombre: undefined, last: null, cat: null })))
       .sort((a, b) => (b.last?.ts ?? 0) - (a.last?.ts ?? 0));
+
+    const counts = conversationsCache.reduce((acc, c) => { const k = c.cat?.key ?? 'otro'; acc[k] = (acc[k] ?? 0) + 1; return acc; }, {});
+    inboxFilter = 'todos';
+    $('#inboxFilterWrap').appendChild(buildSegmented(
+      [
+        { value: 'todos', label: `Todos (${conversationsCache.length})` },
+        ...Object.entries(FLOW_CATEGORIES).filter(([k]) => counts[k]).map(([k, cat]) => ({ value: k, label: `${cat.label} (${counts[k]})` })),
+      ],
+      inboxFilter, (v) => { inboxFilter = v; renderInboxRows($('#inboxSearch')?.value.trim().toLowerCase() ?? ''); },
+    ));
     renderInboxRows('');
   } catch {
     $('#inboxRows').innerHTML = '<div class="alert alert-error" style="margin:12px;">No se pudo cargar la lista.</div>';
@@ -1127,7 +1164,10 @@ async function renderConversaciones(main) {
 
 function renderInboxRows(filter) {
   const rowsEl = $('#inboxRows');
-  const list = conversationsCache.filter(c => !filter || c.phone.includes(filter) || c.nombre?.toLowerCase().includes(filter));
+  const list = conversationsCache.filter(c => {
+    if (inboxFilter !== 'todos' && c.cat?.key !== inboxFilter) return false;
+    return !filter || c.phone.includes(filter) || c.nombre?.toLowerCase().includes(filter);
+  });
   if (!list.length) { rowsEl.innerHTML = '<div class="inbox-empty" style="height:auto;padding:32px 16px;">Sin resultados.</div>'; return; }
   rowsEl.innerHTML = list.map(c => `
     <div class="swipe-row" data-phone="${c.phone}">
@@ -1143,7 +1183,10 @@ function renderInboxRows(filter) {
               <span class="inbox-row-name">${c.nombre ? escapeHtml(c.nombre) : `+${c.phone}`}</span>
               ${c.last ? `<span class="inbox-row-time">${relativeTime(c.last.ts)}</span>` : ''}
             </div>
-            <div class="inbox-row-preview">${c.banned ? '⛔ Baneado' : (c.last ? escapeHtml(c.last.text) : 'Sin mensajes registrados')}</div>
+            <div class="inbox-row-preview">
+              ${c.cat ? `<span class="flow-badge" style="background:${c.cat.color}1a;color:${c.cat.color};">${c.cat.label}</span>` : ''}
+              ${c.banned ? '⛔ Baneado' : (c.last ? escapeHtml(c.last.text) : 'Sin mensajes registrados')}
+            </div>
           </div>
         </button>
       </div>

@@ -10,6 +10,7 @@ import {
   banUser,
   unbanUser,
   listActiveUsers,
+  setAiEnabled,
 } from '../services/botUserService';
 import { leerRegistrosPosgrado } from '../services/registroService';
 import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSheets';
@@ -228,6 +229,14 @@ toolsRouter.post('/bot-users/:phone/unban', async (req: AuthedRequest, res: Resp
   await unbanUser(phone);
   console.log(`[asesor] ${req.user?.username} desbaneó ${phone.slice(-4)}`);
   res.json({ ok: true });
+});
+
+toolsRouter.post('/bot-users/:phone/ai-toggle', async (req: AuthedRequest, res: Response) => {
+  const phone = normalizePhone(req.params.phone);
+  const enabled = !!req.body?.enabled;
+  await setAiEnabled(phone, enabled);
+  console.log(`[asesor] ${req.user?.username} ${enabled ? 'activó' : 'apagó'} la IA para ${phone.slice(-4)}`);
+  res.json({ ok: true, enabled });
 });
 
 /* ===== Registros de prospectos de posgrado (Google Sheets) ===== */

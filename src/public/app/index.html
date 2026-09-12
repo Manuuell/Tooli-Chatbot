@@ -302,6 +302,7 @@ function moreRoutes() {
     { route: 'metricas', icon: '📊', label: 'Métricas' },
     { route: 'conversaciones', icon: '💬', label: 'Conversaciones' },
     { route: 'registros', icon: '📝', label: 'Registros BD' },
+    { route: 'evento-posgrado', icon: '🔔', label: 'Evento posgrados' },
     { route: 'health', icon: '❤️', label: 'Estado del sistema' },
   ];
   if (currentUser?.role === 'admin') {
@@ -368,6 +369,7 @@ const NAV_ROUTES = [
   { route: 'conversaciones', icon: 'message', label: 'Conversaciones' },
   { route: 'posgrados', icon: 'cap', label: 'Posgrados' },
   { route: 'registros', icon: 'users', label: 'CRM · Prospectos' },
+  { route: 'evento-posgrado', icon: 'bell', label: 'Evento posgrados' },
   { route: 'health', icon: 'pulse', label: 'Estado del sistema' },
 ];
 
@@ -416,6 +418,7 @@ function navigate(route) {
   const render = {
     home: renderHome, turno: renderTurno, recibo: renderRecibo, metricas: renderMetricas,
     conversaciones: renderConversaciones, posgrados: renderPosgrados, registros: renderRegistros,
+    'evento-posgrado': renderEventoPosgrado,
     health: renderHealth, usuarios: renderUsuarios, actividad: renderActividad,
   }[route];
   const result = render ? render(main) : (main.innerHTML = '<div class="card">Página no encontrada</div>');
@@ -1935,6 +1938,172 @@ async function renderRegistros(main) {
 
   $('#refreshReg').addEventListener('click', loadReg);
   loadReg();
+}
+
+/* ============= EVENTO POSGRADOS (meetup) ============= */
+/* Registros de la campaña "Retos del Management Digital" — vienen de un
+   Google Sheet aparte del CRM normal (ver src/flows/posgrados-evento).
+   Columnas: 0 fecha, 1 whatsapp, 2 nombre, 3 correo, 4 interésFinanciación,
+   5 programa, 6 autorizaContacto, 7 seguimiento (agregada para el panel). */
+const SEGUIMIENTO_ESTADOS = [
+  { value: 'Contactado', icon: '📞', color: '#0284c7' },
+  { value: 'Interesado', icon: '⭐', color: '#7c3aed' },
+  { value: 'Inscrito', icon: '🎓', color: '#16a34a' },
+  { value: 'Invitado a próximo evento', icon: '📅', color: '#d97706' },
+  { value: 'No interesado', icon: '✖️', color: '#64748b' },
+];
+function seguimientoMeta(valor) {
+  return SEGUIMIENTO_ESTADOS.find(s => s.value === valor) ?? { value: valor || 'Sin contactar', icon: '⏳', color: '#94a3b8' };
+}
+
+let eventoRows = [];
+let eventoFilter = 'todos';
+
+async function renderEventoPosgrado(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>🔔 Evento Posgrados</h1><div class="subtitle">Prospectos del meetup "Retos del Management Digital" — dales seguimiento e invítalos a lo que sigue</div></div>
+      <button class="btn btn-secondary" id="refreshEvento"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
+    </div>
+    <div class="crm-toolbar">
+      <input type="text" id="eventoSearch" placeholder="Buscar por nombre, email o programa…">
+      <div id="eventoFilterWrap"></div>
+    </div>
+    <div id="eventoContent">
+      <div class="crm-grid stagger-in">
+        ${Array.from({ length: 6 }).map(() => `
+          <div class="crm-card">
+            <div class="skeleton" style="width:44px;height:44px;border-radius:50%;margin-bottom:12px;"></div>
+            <div class="skeleton skeleton-line" style="width:70%;height:14px;margin-bottom:8px;"></div>
+            <div class="skeleton skeleton-line" style="width:90%;height:11px;"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  $('#eventoSearch').addEventListener('input', renderEventoGrid);
+
+  async function loadEvento() {
+    $('#refreshEvento').querySelector('.refresh-icon')?.classList.add('spin-once');
+    try {
+      const r = await api('/api/tools/registros-evento-posgrado');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const { rows } = await r.json();
+      eventoRows = rows ?? [];
+      if (!eventoRows.length) {
+        $('#eventoContent').innerHTML = `<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">Aún no hay registros de este evento. Cuando alguien complete el flujo del meetup por WhatsApp, aparecerá aquí.</p></div>`;
+        $('#eventoFilterWrap').innerHTML = '';
+        return;
+      }
+      const counts = eventoRows.reduce((acc, row) => { const k = row[7] || 'pendiente'; acc[k] = (acc[k] ?? 0) + 1; return acc; }, {});
+      $('#eventoFilterWrap').innerHTML = '';
+      $('#eventoFilterWrap').appendChild(buildSegmented(
+        [
+          { value: 'todos', label: `Todos (${eventoRows.length})` },
+          ...(counts.pendiente ? [{ value: 'pendiente', label: `Sin contactar (${counts.pendiente})` }] : []),
+          ...SEGUIMIENTO_ESTADOS.filter(s => counts[s.value]).map(s => ({ value: s.value, label: `${s.value} (${counts[s.value]})` })),
+        ],
+        eventoFilter, (v) => { eventoFilter = v; renderEventoGrid(); },
+      ));
+      renderEventoGrid();
+    } catch (err) {
+      console.error(err);
+      $('#eventoContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar los registros del evento. Verifica que el Sheet esté configurado.</div>';
+    }
+  }
+
+  function renderEventoGrid() {
+    const q = ($('#eventoSearch')?.value ?? '').trim().toLowerCase();
+    const filtered = eventoRows.filter((row, i) => {
+      row.__i = i;
+      const estado = row[7] || 'pendiente';
+      if (eventoFilter !== 'todos' && estado !== eventoFilter) return false;
+      if (!q) return true;
+      return [row[2], row[3], row[5]].some(v => (v ?? '').toLowerCase().includes(q));
+    });
+    if (!filtered.length) { $('#eventoContent').innerHTML = '<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">Sin resultados.</p></div>'; return; }
+    $('#eventoContent').innerHTML = `
+      <div class="crm-grid stagger-in">
+        ${filtered.map(row => {
+          const nombre = row[2] || 'Sin nombre';
+          const autoriza = (row[6] || '').toLowerCase().startsWith('s');
+          const meta = seguimientoMeta(row[7]);
+          return `
+          <div class="crm-card" data-longpress data-row="${row.__i}">
+            <div class="advisor-card-top">
+              <div class="avatar" style="background:${avatarTone(nombre)};width:44px;height:44px;font-size:14px;">${initialsFor(row[1] || nombre, nombre)}</div>
+              <span class="badge" style="background:${meta.color}22;color:${meta.color};">${meta.icon} ${escapeHtml(meta.value)}</span>
+            </div>
+            <div class="crm-card-name">${escapeHtml(nombre)}</div>
+            ${row[5] ? `<span class="badge" style="background:#7c3aed22;color:#7c3aed;margin-bottom:8px;">${escapeHtml(row[5])}</span>` : ''}
+            <div class="crm-card-row">✉️ ${escapeHtml(row[3] || '—')}</div>
+            <div class="crm-card-row">📱 ${escapeHtml(row[1] || '—')}</div>
+            ${!autoriza ? `<div class="crm-card-row" style="color:var(--danger);font-weight:600;">🔒 No autorizó contacto</div>` : ''}
+            <div class="crm-card-date">${escapeHtml(friendlyDate(row[0]))}</div>
+          </div>
+        `; }).join('')}
+      </div>
+    `;
+    $$('.crm-card[data-longpress]').forEach(card => {
+      const row = eventoRows[Number(card.dataset.row)];
+      card.addEventListener('click', () => openEventoProfile(row));
+      contextSheet(card, {
+        title: row[2] || 'Prospecto',
+        subtitle: row[3] || undefined,
+        actions: [
+          { label: 'Ver perfil', icon: '👤', onClick: () => openEventoProfile(row) },
+          ...(row[1] ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(row[1]) }] : []),
+          { label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(row[3] ?? '', 'Email copiado') },
+          { label: 'Copiar WhatsApp', icon: '📱', onClick: () => copyToClipboard(row[1] ?? '', 'Número copiado') },
+        ],
+      });
+    });
+  }
+
+  async function setSeguimiento(row, estado) {
+    const fila = row.__i + 2; // el Sheet arranca a leer en A2
+    try {
+      await api(`/api/tools/registros-evento-posgrado/${fila}/seguimiento`, { method: 'POST', body: JSON.stringify({ estado }) });
+      row[7] = estado;
+      haptic([10, 20, 10]);
+      toast(`Marcado como "${estado}"`);
+      renderEventoGrid();
+    } catch {
+      toast('No se pudo actualizar el seguimiento');
+    }
+  }
+
+  function openEventoProfile(row) {
+    const [fecha, whatsapp, nombre, correo, interesFin, programa, autorizaRaw, seguimiento] = row;
+    const autoriza = (autorizaRaw || '').toLowerCase().startsWith('s');
+    const meta = seguimientoMeta(seguimiento);
+    openProfileSheet({
+      avatarBg: avatarTone(nombre || whatsapp), avatarText: initialsFor(whatsapp || nombre, nombre),
+      title: nombre || 'Prospecto', subtitle: correo || (whatsapp ? `+${whatsapp}` : undefined),
+      badges: [
+        ...(programa ? [{ label: programa, color: '#7c3aed' }] : []),
+        { label: `${meta.icon} ${meta.value}`, color: meta.color },
+        ...(!autoriza ? [{ label: '🔒 No autorizó contacto', color: '#dc2626' }] : []),
+      ],
+      rows: [
+        ...(correo ? [{ icon: '📧', label: 'Email', value: correo }] : []),
+        ...(whatsapp ? [{ icon: '📱', label: 'WhatsApp', value: `+${whatsapp}` }] : []),
+        ...(programa ? [{ icon: '🎓', label: 'Programa de interés', value: programa }] : []),
+        ...(interesFin ? [{ icon: '💰', label: 'Interés en financiación', value: interesFin }] : []),
+        { icon: '🗓️', label: 'Registrado', value: friendlyDate(fecha) },
+      ],
+      actions: autoriza ? [
+        ...(whatsapp ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(whatsapp), closeAfter: false }] : []),
+        ...SEGUIMIENTO_ESTADOS.filter(s => s.value !== seguimiento).map(s => ({
+          label: `Marcar: ${s.value}`, icon: s.icon, onClick: () => setSeguimiento(row, s.value),
+        })),
+      ] : [],
+    });
+  }
+
+  $('#refreshEvento').addEventListener('click', loadEvento);
+  loadEvento();
 }
 
 /* ============= MODO SIN CONEXIÓN ============= */

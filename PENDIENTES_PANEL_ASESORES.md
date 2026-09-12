@@ -9,9 +9,10 @@ funciona de verdad.
 
 ## 1. Semestre y carrera del estudiante
 
-Hoy el bot **no pregunta** semestre ni carrera en ningún flujo — solo captura
-nombre, correo y programa de interés (ver `src/flows/registro.ts`,
-`src/flows/prospecto.ts`, `src/flows/posgrados-evento/flow.ts`). El campo
+Hoy el bot **no pregunta** semestre ni carrera *actual* (la de un estudiante ya
+matriculado) en ningún flujo — solo captura nombre, correo y programa/carrera
+*de interés* de un aspirante (ver `src/flows/registro.ts`, `src/flows/prospecto.ts`,
+`src/flows/pregrado.ts`, `src/flows/posgrados-evento/flow.ts`). El campo
 `session.data` en `botUserService.ts` solo tiene lo que esos flujos guardan.
 
 Cuando la universidad tenga un sistema (SIA, Banner, etc.) con el que
@@ -87,3 +88,30 @@ existente de la UTB implicaría exponer parte de esta API REST (`toolsRoutes.ts`
 con autenticación de esa app — es una conversación de arquitectura/seguridad
 con quien mantenga esa app, no un cambio que se pueda improvisar sin ese
 contacto.
+
+## 7. Flujo de Pregrado en WhatsApp — ✅ implementado (pendiente probar en producción)
+
+El bot completo estaba marcado como "Posgrados UTB" — no existía registro de
+interés ni asesor propio para aspirantes de pregrado, solo Turno/Recibo de
+matrícula. Se agregó (`src/flows/pregrado.ts`, `src/flows/menu.ts`,
+`src/flows/shared.ts`): el menú inicial ahora pregunta Pregrado o Posgrado
+primero, y cada rama tiene su propio registro de interés (carrera como texto
+libre — no hay un listado de carreras de pregrado en el sistema, así que no
+se inventó uno) y su propio asesor vía Chatwoot (etiqueta `pregrado-prospecto`).
+El asistente IA de pregrado reutiliza el área `admisiones` de `aiAssistant.ts`,
+que ya tenía su propia base de conocimiento y busca páginas `/pregrado/` — no
+se creó una nueva.
+
+Los prospectos de pregrado y posgrado ahora comparten el mismo Google Sheet,
+distinguidos por una columna de área nueva (retrocompatible: filas viejas sin
+esa columna se leen como "Posgrado"). El panel (CRM, Actividad de asesores,
+bandeja de Conversaciones) ya distingue el área en badges y filtros.
+
+**Honestidad sobre las pruebas:** se verificó con `tsc --noEmit` (compila
+limpio) y revisión manual cuidadosa, y se probó en navegador la parte del
+panel (CRM). **No se pudo probar el flujo conversacional real de WhatsApp
+end-to-end** en este entorno porque no hay Redis ni credenciales de Meta
+disponibles aquí — antes de considerar esto "en producción", conviene
+probarlo manualmente por WhatsApp (o en el ambiente de staging que exista)
+siguiendo el camino completo: menú → elegir Pregrado → registrarse → ver
+que la fila aparece en el CRM con área "Pregrado".

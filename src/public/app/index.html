@@ -1212,8 +1212,8 @@ let inboxFilter = 'todos';
    src/flows — programas/registro/prospecto son de posgrado, turno/recibo
    son de pregrado/matrícula). Si no hay sesión activa, queda "Sin flujo". */
 const FLOW_CATEGORIES = {
-  posgrado: { label: 'Posgrado', color: '#7c3aed', prefixes: ['programas_', 'registro_', 'prospecto_'] },
-  pregrado: { label: 'Pregrado', color: '#0284c7', prefixes: ['esperando_codigo', 'recibo_'] },
+  posgrado: { label: 'Posgrado', color: '#7c3aed', prefixes: ['menu_posgrado', 'programas_', 'registro_', 'prospecto_'] },
+  pregrado: { label: 'Pregrado', color: '#0284c7', prefixes: ['menu_pregrado', 'pregrado_', 'esperando_codigo', 'recibo_'] },
   evento: { label: 'Evento', color: '#db2777', prefixes: ['evento_'] },
   soporte: { label: 'Soporte', color: '#64748b', prefixes: ['agent_', 'ti_', 'with_agent', 'chatting_with_ai'] },
 };
@@ -1839,8 +1839,13 @@ function programaCategoria(programa) {
   if (p.includes('especial')) return 'especializacion';
   return 'otro';
 }
-const PROGRAMA_LABELS = { especializacion: 'Especialización', maestria: 'Maestría', doctorado: 'Doctorado', otro: 'Otro' };
-const PROGRAMA_COLORS = { especializacion: '#0284c7', maestria: '#7c3aed', doctorado: '#db2777', otro: '#64748b' };
+const PROGRAMA_LABELS = { pregrado: 'Pregrado', especializacion: 'Especialización', maestria: 'Maestría', doctorado: 'Doctorado', otro: 'Otro' };
+const PROGRAMA_COLORS = { pregrado: '#0284c7', especializacion: '#0369a1', maestria: '#7c3aed', doctorado: '#db2777', otro: '#64748b' };
+/* Columna F del sheet = área (agregada para distinguir prospectos de
+   pregrado y posgrado que ahora comparten el mismo registro) — las filas
+   guardadas antes de esa columna vienen vacías y se tratan como Posgrado. */
+function areaOf(row) { return row[5] || 'Posgrado'; }
+function crmCategoria(row) { return areaOf(row) === 'Pregrado' ? 'pregrado' : programaCategoria(row[4]); }
 
 let crmRows = [];
 let crmFilter = 'todos';
@@ -1848,7 +1853,7 @@ let crmFilter = 'todos';
 async function renderRegistros(main) {
   main.innerHTML = `
     <div class="page-header">
-      <div><h1>📝 CRM — Prospectos de posgrado</h1><div class="subtitle">Quienes completaron el registro vía WhatsApp</div></div>
+      <div><h1>📝 CRM — Prospectos</h1><div class="subtitle">Pregrado y posgrado — quienes completaron el registro de interés vía WhatsApp</div></div>
       <button class="btn btn-secondary" id="refreshReg"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
     </div>
     <div class="crm-toolbar">
@@ -1882,7 +1887,7 @@ async function renderRegistros(main) {
         $('#crmFilterWrap').innerHTML = '';
         return;
       }
-      const counts = crmRows.reduce((acc, row) => { const c = programaCategoria(row[4]); acc[c] = (acc[c] ?? 0) + 1; return acc; }, {});
+      const counts = crmRows.reduce((acc, row) => { const c = crmCategoria(row); acc[c] = (acc[c] ?? 0) + 1; return acc; }, {});
       $('#crmFilterWrap').innerHTML = '';
       $('#crmFilterWrap').appendChild(buildSegmented(
         [
@@ -1902,7 +1907,7 @@ async function renderRegistros(main) {
     const q = ($('#crmSearch')?.value ?? '').trim().toLowerCase();
     const filtered = crmRows.filter((row, i) => {
       row.__i = i;
-      if (crmFilter !== 'todos' && programaCategoria(row[4]) !== crmFilter) return false;
+      if (crmFilter !== 'todos' && crmCategoria(row) !== crmFilter) return false;
       if (!q) return true;
       return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
     });
@@ -1910,11 +1915,14 @@ async function renderRegistros(main) {
     $('#regContent').innerHTML = `
       <div class="crm-grid stagger-in">
         ${filtered.map(row => {
-          const cat = programaCategoria(row[4]);
+          const cat = crmCategoria(row);
           const nombre = row[1] || 'Sin nombre';
           return `
           <div class="crm-card" data-longpress data-row="${row.__i}">
-            <div class="avatar" style="background:${avatarTone(nombre)};width:44px;height:44px;font-size:14px;margin-bottom:12px;">${initialsFor(row[3] || nombre, nombre)}</div>
+            <div class="advisor-card-top">
+              <div class="avatar" style="background:${avatarTone(nombre)};width:44px;height:44px;font-size:14px;">${initialsFor(row[3] || nombre, nombre)}</div>
+              <span class="badge" style="background:${areaOf(row) === 'Pregrado' ? '#0284c722' : '#7c3aed22'};color:${areaOf(row) === 'Pregrado' ? '#0284c7' : '#7c3aed'};">${areaOf(row)}</span>
+            </div>
             <div class="crm-card-name">${escapeHtml(nombre)}</div>
             ${row[4] ? `<span class="badge" style="background:${PROGRAMA_COLORS[cat]}22;color:${PROGRAMA_COLORS[cat]};margin-bottom:8px;">${escapeHtml(row[4])}</span>` : ''}
             <div class="crm-card-row">✉️ ${escapeHtml(row[2] || '—')}</div>
@@ -1936,7 +1944,7 @@ async function renderRegistros(main) {
           { label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(row[2] ?? '', 'Email copiado') },
           { label: 'Copiar WhatsApp', icon: '📱', onClick: () => copyToClipboard(row[3] ?? '', 'Número copiado') },
           { label: 'Ver conversación', icon: '💬', onClick: () => navigate('conversaciones') },
-          { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
+          { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/${areaOf(row) === 'Pregrado' ? 'pregrado-prospecto' : 'posgrado-prospecto'}`, '_blank', 'noopener') },
         ],
       });
     });
@@ -1947,7 +1955,8 @@ async function renderRegistros(main) {
      último mensaje) — todo dato real, nada inventado tipo Savia. */
   async function openStudentProfile(row) {
     const [fecha, nombre, email, phone, programa] = row;
-    const cat = programaCategoria(programa);
+    const area = areaOf(row);
+    const cat = crmCategoria(row);
     let flowInfo = null;
     if (phone) {
       try {
@@ -1960,6 +1969,7 @@ async function renderRegistros(main) {
       avatarBg: avatarTone(nombre || phone), avatarText: initialsFor(phone || nombre, nombre),
       title: nombre || 'Prospecto', subtitle: email || (phone ? `+${phone}` : undefined),
       badges: [
+        { label: area, color: area === 'Pregrado' ? '#0284c7' : '#7c3aed' },
         ...(programa ? [{ label: programa, color: PROGRAMA_COLORS[cat] }] : []),
         ...(flowInfo?.step ? [{ label: flowInfo.step.label, color: flowInfo.step.color }] : []),
         ...(flowInfo?.banned ? [{ label: 'Baneado', color: '#dc2626' }] : []),
@@ -1967,14 +1977,14 @@ async function renderRegistros(main) {
       rows: [
         ...(email ? [{ icon: '📧', label: 'Email', value: email }] : []),
         ...(phone ? [{ icon: '📱', label: 'WhatsApp', value: `+${phone}` }] : []),
-        ...(programa ? [{ icon: '🎓', label: 'Programa de interés', value: programa }] : []),
+        ...(programa ? [{ icon: '🎓', label: area === 'Pregrado' ? 'Carrera de interés' : 'Programa de interés', value: programa }] : []),
         { icon: '🗓️', label: 'Registrado', value: friendlyDate(fecha) },
         ...(flowInfo?.last ? [{ icon: '💬', label: 'Último mensaje', value: flowInfo.last.text }] : []),
       ],
       actions: [
         ...(phone ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(phone), closeAfter: false }] : []),
         ...(phone ? [{ label: 'Ver conversación', icon: '💬', onClick: () => navigate('conversaciones') }] : []),
-        { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/posgrado-prospecto`, '_blank', 'noopener') },
+        { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${publicUrls.chatwoot}/app/accounts/1/label/${area === 'Pregrado' ? 'pregrado-prospecto' : 'posgrado-prospecto'}`, '_blank', 'noopener') },
       ],
     });
   }

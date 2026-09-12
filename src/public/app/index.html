@@ -441,6 +441,20 @@ const AUDIT_LABELS = {
   seguimiento_evento_actualizado: { label: 'Actualizó seguimiento de un prospecto', icon: '🎯' },
 };
 
+/* Agrupa cada acción de auditoría por área real de negocio, para poder
+   comparar carga de trabajo Pregrado vs Posgrado vs Administración en el
+   dashboard de rendimiento — no es un campo que exista en el dato crudo,
+   se deriva de qué acción es (turno/recibo = trámites de pregrado). */
+const AUDIT_AREAS = {
+  pregrado: { label: 'Pregrado', color: '#0284c7', actions: ['turno_consultado', 'recibo_descargado'] },
+  posgrado: { label: 'Posgrado', color: '#7c3aed', actions: ['seguimiento_evento_actualizado'] },
+  administracion: { label: 'Administración', color: '#d97706', actions: ['sesion_reseteada', 'usuario_baneado', 'usuario_desbaneado', 'usuario_creado', 'usuario_eliminado', 'ia_activada', 'ia_desactivada'] },
+  sistema: { label: 'Sistema', color: '#64748b', actions: ['login'] },
+};
+function areaForAction(action) {
+  return Object.entries(AUDIT_AREAS).find(([, a]) => a.actions.includes(action))?.[0] ?? 'sistema';
+}
+
 function dateLabelToday() {
   const s = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -1078,6 +1092,19 @@ async function renderActividad(main) {
       const actionKeys = Array.from(new Set(advisors.flatMap(a => Object.keys(a.counts))));
       const maxTotal = Math.max(1, ...advisors.map(a => a.total));
 
+      const areaTotals = {};
+      for (const a of advisors) {
+        for (const [action, n] of Object.entries(a.counts)) {
+          const area = areaForAction(action);
+          areaTotals[area] = (areaTotals[area] ?? 0) + n;
+        }
+      }
+      const grandTotal = Math.max(1, Object.values(areaTotals).reduce((a, b) => a + b, 0));
+      const areaRows = Object.entries(AUDIT_AREAS)
+        .map(([key, meta]) => ({ key, ...meta, count: areaTotals[key] ?? 0 }))
+        .filter(a => a.count > 0)
+        .sort((a, b) => b.count - a.count);
+
       $('#actContent').innerHTML = `
         <div class="stats-grid stagger-in" style="margin-bottom:16px;">
           ${advisors.slice(0, 3).map((a, i) => `
@@ -1087,6 +1114,22 @@ async function renderActividad(main) {
               <div style="font-size:12px;color:var(--text-muted);">acciones registradas</div>
             </div>
           `).join('')}
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Carga de trabajo por área</h3>
+          ${areaRows.map(a => {
+            const pct = Math.round(a.count / grandTotal * 100);
+            return `
+              <div style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+                  <span style="font-weight:600;color:var(--text-main);">${a.label}</span>
+                  <span style="color:var(--text-muted);">${a.count} · ${pct}%</span>
+                </div>
+                <div class="event-bar-track"><div class="event-bar-fill" style="width:${pct}%;background:${a.color};"></div></div>
+              </div>
+            `;
+          }).join('')}
         </div>
 
         <div class="card" style="margin-bottom:16px;">

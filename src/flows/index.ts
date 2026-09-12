@@ -1,9 +1,13 @@
 import { getSession } from '../services/session';
 import { FlowContext, sendMenu } from './shared';
-import { handleMenu } from './menu';
+import { handleMenu, handleMenuPosgrado, handleMenuPregrado } from './menu';
 import { handleProgramasCategoria, handleProgramasDetalle } from './programas';
 import { handleProspectoNombre, handleProspectoEmail, handleProspectoPrograma } from './prospecto';
 import { handleRegistroNombre, handleRegistroEmail, handleRegistroPrograma } from './registro';
+import {
+  handlePregradoRegistroNombre, handlePregradoRegistroEmail, handlePregradoRegistroCarrera,
+  handlePregradoProspectoNombre, handlePregradoProspectoEmail, handlePregradoProspectoCarrera,
+} from './pregrado';
 import { handleChattingWithAI } from './aiChat';
 import { handleWithAgent } from './withAgent';
 // Flujos legacy (turno, recibo, TI) — se mantienen por si algún usuario tiene sesión activa
@@ -21,8 +25,10 @@ import {
 import { handleTiCollectEmail, handleTiCollectCodigo, handleTiCollectCedula } from './identity';
 
 const HANDLERS: Record<string, (ctx: FlowContext) => Promise<void>> = {
-  // ── Posgrados ────────────────────────────────────────────────────────────────
+  // ── Inicio (elige Pregrado / Posgrado) ──────────────────────────────────────
   menu: handleMenu,
+  // ── Posgrados ────────────────────────────────────────────────────────────────
+  menu_posgrado: handleMenuPosgrado,
   programas_categoria: handleProgramasCategoria,
   programas_detalle: handleProgramasDetalle,
   prospecto_nombre: handleProspectoNombre,
@@ -31,6 +37,15 @@ const HANDLERS: Record<string, (ctx: FlowContext) => Promise<void>> = {
   registro_nombre: handleRegistroNombre,
   registro_email: handleRegistroEmail,
   registro_programa: handleRegistroPrograma,
+  // ── Pregrado ─────────────────────────────────────────────────────────────────
+  menu_pregrado: handleMenuPregrado,
+  pregrado_registro_nombre: handlePregradoRegistroNombre,
+  pregrado_registro_email: handlePregradoRegistroEmail,
+  pregrado_registro_carrera: handlePregradoRegistroCarrera,
+  pregrado_prospecto_nombre: handlePregradoProspectoNombre,
+  pregrado_prospecto_email: handlePregradoProspectoEmail,
+  pregrado_prospecto_carrera: handlePregradoProspectoCarrera,
+  // ── Compartido ───────────────────────────────────────────────────────────────
   chatting_with_ai: handleChattingWithAI,
   with_agent: handleWithAgent,
   // ── Legacy (sesiones activas anteriores) ────────────────────────────────────

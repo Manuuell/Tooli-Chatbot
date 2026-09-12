@@ -45,7 +45,10 @@ export async function handleChattingWithAI(ctx: FlowContext): Promise<void> {
   const turnCount = parseInt(session?.data.aiTurnCount ?? '0');
   const areaRaw = session?.data.area ?? 'posgrados';
   const area = (['ti', 'admisiones', 'posgrados'].includes(areaRaw) ? areaRaw : 'posgrados') as 'ti' | 'admisiones' | 'posgrados';
-  const tituloAsistente = area === 'ti' ? '🤖 *Asistente TI*' : '🤖 *Asistente Posgrados UTB*';
+  const tituloAsistente =
+    area === 'ti' ? '🤖 *Asistente TI*' :
+    area === 'admisiones' ? '🤖 *Asistente Admisiones UTB*' :
+    '🤖 *Asistente Posgrados UTB*';
 
   await track('ai_request', { area: area as 'ti' | 'admisiones' | 'posgrados' });
 

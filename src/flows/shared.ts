@@ -76,16 +76,33 @@ export async function sendAreaPrompt(to: string): Promise<void> {
   });
 }
 
+/** Punto de entrada del bot: primero se identifica si es un contacto de
+ * Pregrado o Posgrado, porque cada uno tiene su propio menú, registro y
+ * equipo de asesores — antes todo el bot estaba forzado bajo la marca
+ * "Posgrados UTB" aunque Turno/Recibo son trámites de pregrado. */
 export async function sendMenu(to: string): Promise<void> {
+  await messaging.sendButtons({
+    to,
+    title: '🎓 Tooli UTB',
+    description: 'Hola 👋 Soy el asistente virtual de la Universidad Tecnológica de Bolívar.\n\n¿Sobre qué quieres información?',
+    footer: 'Universidad Tecnológica de Bolívar',
+    buttons: [
+      { id: '1', displayText: '🏫 Pregrado' },
+      { id: '2', displayText: '🎓 Posgrado' },
+    ],
+  });
+}
+
+export async function sendMenuPosgrado(to: string): Promise<void> {
   await messaging.sendList({
     to,
-    title: '🎓 Tooli Posgrados UTB',
-    description: 'Hola 👋 Soy el asistente virtual de Posgrados UTB.\n\n¿En qué te puedo ayudar hoy?',
+    title: '🎓 Posgrados UTB',
+    description: '¿En qué te puedo ayudar hoy?',
     footer: 'Universidad Tecnológica de Bolívar',
     buttonText: 'Ver opciones',
     sections: [
       {
-        title: 'Menú principal',
+        title: 'Menú de posgrados',
         rows: [
           { id: '1', title: '🎓 Ver programas',       description: 'Especializaciones, maestrías y doctorados' },
           { id: '2', title: '🤖 Asistente IA',         description: 'Costos, requisitos, diferencias de programas' },
@@ -93,6 +110,30 @@ export async function sendMenu(to: string): Promise<void> {
           { id: '4', title: '📋 Turno matrícula',       description: 'Consulta tu turno y fecha asignada' },
           { id: '5', title: '🧾 Recibo matrícula',      description: 'Descarga el PDF de tu recibo de pago' },
           { id: '6', title: '👤 Hablar con asesor',     description: 'Conecta con el equipo de admisiones' },
+          { id: '0', title: '🔙 Cambiar a Pregrado',    description: 'Volver al menú de inicio' },
+        ],
+      },
+    ],
+  });
+}
+
+export async function sendMenuPregrado(to: string): Promise<void> {
+  await messaging.sendList({
+    to,
+    title: '🏫 Pregrado UTB',
+    description: '¿En qué te puedo ayudar hoy?',
+    footer: 'Universidad Tecnológica de Bolívar',
+    buttonText: 'Ver opciones',
+    sections: [
+      {
+        title: 'Menú de pregrado',
+        rows: [
+          { id: '1', title: '🤖 Asistente IA',         description: 'Carreras, admisiones, costos, proceso de inscripción' },
+          { id: '2', title: '📬 Registrarme',           description: 'Cuéntanos qué carrera te interesa' },
+          { id: '3', title: '📋 Turno matrícula',       description: 'Consulta tu turno y fecha asignada' },
+          { id: '4', title: '🧾 Recibo matrícula',      description: 'Descarga el PDF de tu recibo de pago' },
+          { id: '5', title: '👤 Hablar con asesor',     description: 'Conecta con el equipo de admisiones' },
+          { id: '0', title: '🔙 Cambiar a Posgrado',    description: 'Volver al menú de inicio' },
         ],
       },
     ],

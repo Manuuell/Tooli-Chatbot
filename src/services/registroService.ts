@@ -5,14 +5,16 @@ export interface RegistroProspecto {
   nombre: string;
   email: string;
   whatsapp: string;   // número E.164 sin +, ej: 573215640735
-  programa?: string;  // programa de interés (si viene del flujo de programas)
+  programa?: string;  // programa/carrera de interés (si viene del flujo de programas)
+  area?: 'Pregrado' | 'Posgrado'; // por defecto Posgrado — las filas históricas no tenían esta columna
 }
 
 /**
- * Agrega una fila al Google Sheet de registro de prospectos de posgrado.
+ * Agrega una fila al Google Sheet de registro de prospectos (pregrado y posgrado
+ * comparten el mismo sheet, distinguidos por la columna F).
  *
  * Estructura del sheet (crear manualmente):
- *   A: Fecha y hora   B: Nombre   C: Email   D: WhatsApp   E: Programa de interés
+ *   A: Fecha y hora   B: Nombre   C: Email   D: WhatsApp   E: Programa/carrera de interés   F: Área
  *
  * IMPORTANTE: compartir el sheet con el service account con permisos de Editor:
  *   tooli-sheets-reader@crucial-minutia-489517-c8.iam.gserviceaccount.com
@@ -40,7 +42,7 @@ export async function guardarRegistroProspecto(data: RegistroProspecto): Promise
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Registros!A:E',
+    range: 'Registros!A:F',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
@@ -50,6 +52,7 @@ export async function guardarRegistroProspecto(data: RegistroProspecto): Promise
         data.email,
         `+${data.whatsapp}`,
         data.programa ?? '',
+        data.area ?? 'Posgrado',
       ]],
     },
   });
@@ -59,7 +62,9 @@ export async function guardarRegistroProspecto(data: RegistroProspecto): Promise
 
 /**
  * Lee todas las filas de la pestaña "Registros" del Google Sheet.
- * Devuelve array de arrays: [fecha, nombre, email, whatsapp, programa]
+ * Devuelve array de arrays: [fecha, nombre, email, whatsapp, programa, área]
+ * (las filas guardadas antes de la columna F vienen con área vacía → el
+ * panel las trata como "Posgrado" para no perder el histórico).
  */
 export async function leerRegistrosPosgrado(): Promise<string[][]> {
   const sheetId = config.google.registroPosgradoSheetId;
@@ -74,7 +79,7 @@ export async function leerRegistrosPosgrado(): Promise<string[][]> {
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Registros!A2:E',
+    range: 'Registros!A2:F',
   });
 
   return response.data.values as string[][] ?? [];

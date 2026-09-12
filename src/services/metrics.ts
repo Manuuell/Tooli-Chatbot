@@ -32,7 +32,13 @@ export type MetricEvent =
   | 'programas_maestrias'
   | 'programas_doctorados'
   | 'registro_iniciado'
-  | 'registro_completado';
+  | 'registro_completado'
+  // Pregrado
+  | 'menu_pregrado_shown'
+  | 'prospecto_pregrado_iniciado'
+  | 'prospecto_pregrado_completado'
+  | 'registro_pregrado_iniciado'
+  | 'registro_pregrado_completado';
 
 export interface MetricProps {
   area?: 'ti' | 'admisiones' | 'posgrados';

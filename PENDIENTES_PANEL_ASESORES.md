@@ -115,3 +115,59 @@ disponibles aquí — antes de considerar esto "en producción", conviene
 probarlo manualmente por WhatsApp (o en el ambiente de staging que exista)
 siguiendo el camino completo: menú → elegir Pregrado → registrarse → ver
 que la fila aparece en el CRM con área "Pregrado".
+
+---
+
+## Actualización — 14 de septiembre de 2026
+
+### 8. Hub "Mi vida académica" en WhatsApp — ✅ implementado (con un límite honesto)
+
+El bot solo servía a *aspirantes*. Un estudiante ya matriculado que preguntaba por
+sus notas, su horario o una tarea no tenía a dónde ir. Se agregó
+`src/flows/academico.ts` + `src/services/academicoLinks.ts`: un hub que lo lleva a
+la plataforma correcta diciéndole con qué credenciales entra y qué va a encontrar.
+
+Las URLs **no son inventadas**: salen de `src/services/knowledgeBaseTI.ts`, que ya
+documentaba las plataformas reales de la universidad (Banner/autoservicio, Savio,
+Iceberg, Office 365) y de los enlaces institucionales que ya usaban otros flujos.
+
+**Lo que sigue sin ser posible:** consultar la nota o el horario *en vivo*. No hay
+API académica accesible desde este repo. La costura está definida en la interfaz
+`AcademicoProvider` (en `academicoLinks.ts`) y deliberadamente **no tiene
+implementación**: el día que exista el acceso se implementa ese contrato y el flujo
+pasa a mostrar el dato donde hoy entrega el enlace. No implementarlo con datos
+simulados — un estudiante decidiendo con una nota inventada es un daño real.
+
+### 9. Recordatorios programados — ✅ implementado (el disparo por datos académicos sigue pendiente)
+
+Antes solo se podía enviar un recordatorio "ahora mismo". Ahora
+`src/services/reminderService.ts` los programa para una fecha futura con una cola
+en Redis y un worker que los dispara solo, con endpoints
+`POST/GET/DELETE /api/tools/recordatorios` y pantalla propia en el panel.
+
+**Lo que sigue sin ser posible:** que el disparo salga automáticamente de un dato
+académico ("se vence tu tarea", "subieron tus notas") — eso depende del mismo
+sistema universitario del punto 1. Cuando exista, solo tiene que llamar a
+`scheduleReminder()`; no hay que reescribir nada.
+
+### 10. Responder por WhatsApp desde el panel — ✅ implementado (limitado por Meta, no por el código)
+
+La bandeja era de solo lectura. Ahora el asesor responde desde el panel
+(`POST /api/tools/bot-users/:phone/reply`) y el mensaje aparece en el hilo.
+
+**Límite real de la plataforma:** fuera de las 24h desde el último mensaje del
+estudiante, Meta no acepta texto libre. El endpoint valida esa ventana ANTES de
+intentar el envío y responde 409 explicando cuántas horas pasaron, en vez de
+fallar con un error críptico de la Graph API. Para retomar contacto fuera de esa
+ventana hace falta una plantilla aprobada — ver el punto 6.
+
+### 11. Fichas de seguimiento del CRM — ✅ implementado
+
+`src/services/crmService.ts`: notas del equipo, estado del embudo, etiquetas y
+asignación por prospecto, en Redis e indexadas por teléfono. Visible en el CRM
+(badge y filtros), en el hilo de conversación y en la vista de asesores (cartera
+de cada uno).
+
+**Ojo con la honestidad aquí:** lo que un asesor escribe en una nota es una nota,
+no un dato del sistema académico. No usar estos campos para "rellenar" semestre o
+carrera del punto 1.

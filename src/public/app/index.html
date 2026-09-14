@@ -168,6 +168,12 @@ const ActionSheet = {
 
     const sheet = document.createElement('div');
     sheet.className = 'action-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    if (title) sheet.setAttribute('aria-label', String(title).replace(/<[^>]*>/g, ''));
+    // Se recuerda quién tenía el foco para devolvérselo al cerrar: si no, el
+    // teclado queda "perdido" al principio de la página tras cada sheet.
+    this._focoPrevio = document.activeElement;
 
     let html = '<div class="sheet-grabber"></div>';
     if (title) {
@@ -208,10 +214,16 @@ const ActionSheet = {
     this._escHandler = (e) => { if (e.key === 'Escape') this.close(); };
     document.addEventListener('keydown', this._escHandler);
     requestAnimationFrame(() => backdrop.classList.add('open'));
+    // El foco va con temporizador y no con otro requestAnimationFrame: rAF no
+    // corre cuando la pestaña está en segundo plano, y entonces el sheet se
+    // quedaría sin foco de teclado al volver a ella.
+    setTimeout(() => sheet.querySelector('.sheet-action:not(.cancel)')?.focus({ preventScroll: true }), 60);
   },
   close() {
     const el = document.getElementById('activeSheet');
     if (this._escHandler) { document.removeEventListener('keydown', this._escHandler); this._escHandler = null; }
+    if (this._focoPrevio?.isConnected) { this._focoPrevio.focus({ preventScroll: true }); }
+    this._focoPrevio = null;
     if (!el) return;
     el.classList.remove('open');
     setTimeout(() => el.remove(), 260);
@@ -1672,7 +1684,7 @@ async function openThread(phone) {
   $('#inbox').classList.add('thread-open');
   thread.innerHTML = `
     <div class="inbox-thread-header">
-      <button type="button" class="mobile-only back-link" id="threadBack" style="margin:0;">${icon('chevronLeft', 18)}</button>
+      <button type="button" class="mobile-only back-link" id="threadBack" aria-label="Volver a la lista de conversaciones" style="margin:0;">${icon('chevronLeft', 18)}</button>
       <div class="skeleton skeleton-line" style="width:140px;height:16px;"></div>
     </div>
     <div class="inbox-messages">${Array.from({ length: 4 }).map((_, i) => `<div class="skeleton" style="width:${50 + (i % 2) * 15}%;height:36px;border-radius:16px;margin:6px 0;${i % 2 ? 'margin-left:auto;' : ''}"></div>`).join('')}</div>
@@ -1695,7 +1707,7 @@ async function openThread(phone) {
 
     thread.innerHTML = `
       <div class="inbox-thread-header">
-        <button type="button" class="mobile-only back-link" id="threadBack" style="margin:0;">${icon('chevronLeft', 18)}</button>
+        <button type="button" class="mobile-only back-link" id="threadBack" aria-label="Volver a la lista de conversaciones" style="margin:0;">${icon('chevronLeft', 18)}</button>
         <div class="avatar" style="background:${avatarTone(phone)};width:36px;height:36px;font-size:13px;">${initialsFor(phone, nombre)}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;font-size:14px;">${nombre ? escapeHtml(nombre) : `+${phone}`}</div>
@@ -1708,8 +1720,8 @@ async function openThread(phone) {
             <span class="track"></span><span class="thumb"></span>
           </span>
         </label>
-        <button type="button" class="btn btn-ghost" id="threadPhoneBtn" title="Ver cómo lo ve el estudiante" style="padding:8px;">${icon('phone', 18)}</button>
-        <button type="button" class="btn btn-ghost" id="threadMenuBtn" style="padding:8px;">${icon('more', 18)}</button>
+        <button type="button" class="btn btn-ghost" id="threadPhoneBtn" title="Ver cómo lo ve el estudiante" aria-label="Ver la conversación como la ve el estudiante" style="padding:8px;">${icon('phone', 18)}</button>
+        <button type="button" class="btn btn-ghost" id="threadMenuBtn" aria-label="Más acciones de esta conversación" style="padding:8px;">${icon('more', 18)}</button>
       </div>
       ${(() => {
         if (!ficha || (ficha.estado === 'nuevo' && !ficha.notas?.length && !ficha.asignadoA && !ficha.etiquetas?.length)) return '';
@@ -1924,6 +1936,9 @@ function openProfileSheet({ avatarBg, avatarText, title, subtitle, badges = [], 
   haptic(15);
   const overlay = document.createElement('div');
   overlay.className = 'profile-sheet-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', String(title));
   overlay.innerHTML = `
     <div class="profile-sheet">
       <button type="button" class="profile-sheet-close" aria-label="Cerrar">${icon('x', 16)}</button>

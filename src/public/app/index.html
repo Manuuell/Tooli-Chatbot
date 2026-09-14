@@ -299,15 +299,15 @@ const TAB_ROUTES = [
 ];
 function moreRoutes() {
   const routes = [
-    { route: 'metricas', icon: '📊', label: 'Métricas' },
-    { route: 'conversaciones', icon: '💬', label: 'Conversaciones' },
-    { route: 'registros', icon: '📝', label: 'Registros BD' },
-    { route: 'evento-posgrado', icon: '🔔', label: 'Evento posgrados' },
-    { route: 'health', icon: '❤️', label: 'Estado del sistema' },
+    { route: 'metricas', icon: 'chart', label: 'Métricas' },
+    { route: 'conversaciones', icon: 'message', label: 'Conversaciones' },
+    { route: 'registros', icon: 'users', label: 'Registros BD' },
+    { route: 'evento-posgrado', icon: 'bell', label: 'Evento posgrados' },
+    { route: 'health', icon: 'pulse', label: 'Estado del sistema' },
   ];
   if (currentUser?.role === 'admin') {
-    routes.push({ route: 'actividad', icon: '📈', label: 'Actividad de asesores' });
-    routes.push({ route: 'usuarios', icon: '👥', label: 'Asesores' });
+    routes.push({ route: 'actividad', icon: 'chart', label: 'Actividad de asesores' });
+    routes.push({ route: 'usuarios', icon: 'users', label: 'Asesores' });
   }
   return routes;
 }
@@ -341,8 +341,8 @@ function updateTabBar(route) {
 }
 
 function openMoreSheet() {
-  const actions = moreRoutes().map(r => ({ label: r.label, icon: r.icon, onClick: () => navigate(r.route) }));
-  actions.push({ label: 'Cerrar sesión', icon: '🚪', destructive: true, onClick: doLogout });
+  const actions = moreRoutes().map(r => ({ label: r.label, icon: icon(r.icon, 16), onClick: () => navigate(r.route) }));
+  actions.push({ label: 'Cerrar sesión', icon: icon('logout', 16), destructive: true, onClick: doLogout });
   ActionSheet.open({
     title: currentUser?.fullName ?? 'Más',
     subtitle: currentUser?.role === 'admin' ? 'Administrador' : 'Asesor',
@@ -914,16 +914,8 @@ async function renderUsuarios(main) {
         <div class="field"><label>Nombre completo</label><input type="text" id="nFullName" required></div>
         <div class="field"><label>Email (opcional)</label><input type="email" id="nEmail"></div>
         <div class="field"><label>Contraseña inicial</label><input type="password" id="nPassword" minlength="6" required></div>
-        <div class="field"><label>Rol</label>
-          <select id="nRole"><option value="asesor">Asesor</option><option value="admin">Administrador</option></select>
-        </div>
-        <div class="field"><label>Área</label>
-          <select id="nArea">
-            <option value="all">Todas</option>
-            <option value="ti">TI</option>
-            <option value="admisiones">Admisiones</option>
-          </select>
-        </div>
+        <div class="field"><label>Rol</label><div id="nRoleWrap"></div></div>
+        <div class="field"><label>Área</label><div id="nAreaWrap"></div></div>
         <div id="newUserAlert"></div>
         <div style="display: flex; gap: 8px;">
           <button type="submit" class="btn btn-primary">Crear usuario</button>
@@ -1015,7 +1007,27 @@ async function renderUsuarios(main) {
     });
   }
 
-  $('#newUserBtn').addEventListener('click', () => $('#newUserPanel').classList.remove('hidden'));
+  let nRoleVal = 'asesor';
+  let nAreaVal = 'all';
+  const nRoleSeg = buildSegmented(
+    [{ value: 'asesor', label: 'Asesor' }, { value: 'admin', label: 'Admin' }],
+    nRoleVal, v => { nRoleVal = v; },
+  );
+  const nAreaSeg = buildSegmented(
+    [{ value: 'all', label: 'Todas' }, { value: 'ti', label: 'TI' }, { value: 'admisiones', label: 'Admisiones' }],
+    nAreaVal, v => { nAreaVal = v; },
+  );
+  $('#nRoleWrap').appendChild(nRoleSeg);
+  $('#nAreaWrap').appendChild(nAreaSeg);
+  function fixSegThumb(seg) {
+    const active = seg.querySelector('button.active');
+    const thumb = seg.querySelector('.segmented-thumb');
+    if (active && thumb) { thumb.style.left = `${active.offsetLeft}px`; thumb.style.width = `${active.offsetWidth}px`; }
+  }
+  $('#newUserBtn').addEventListener('click', () => {
+    $('#newUserPanel').classList.remove('hidden');
+    requestAnimationFrame(() => { fixSegThumb(nRoleSeg); fixSegThumb(nAreaSeg); });
+  });
   $('#cancelNewUser').addEventListener('click', () => $('#newUserPanel').classList.add('hidden'));
 
   $('#newUserForm').addEventListener('submit', async (e) => {
@@ -1028,8 +1040,8 @@ async function renderUsuarios(main) {
         fullName: $('#nFullName').value,
         email: $('#nEmail').value || undefined,
         password: $('#nPassword').value,
-        role: $('#nRole').value,
-        area: $('#nArea').value,
+        role: nRoleVal,
+        area: nAreaVal,
       }),
     });
     if (!r.ok) {
@@ -1607,7 +1619,12 @@ async function renderHealth(main) {
       <div><h1>❤️ Estado del sistema</h1><div class="subtitle">Verifica que todos los servicios externos estén respondiendo.</div></div>
       <button class="btn btn-secondary" id="refreshHealth"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
     </div>
-    <div id="healthContent"><div class="card"><span class="spinner"></span> Verificando…</div></div>
+    <div id="healthContent">
+      <div class="card">
+        <div class="skeleton skeleton-line" style="width:180px;height:18px;margin-bottom:16px;"></div>
+        ${Array.from({ length: 4 }).map(() => `<div style="display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--border);"><div class="skeleton skeleton-line" style="width:110px;height:12px;"></div><div class="skeleton skeleton-line" style="width:70px;height:12px;"></div><div class="skeleton skeleton-line" style="flex:1;height:12px;"></div></div>`).join('')}
+      </div>
+    </div>
   `;
   const load = async () => {
     const refreshBtn = $('#refreshHealth');
@@ -1766,7 +1783,7 @@ async function renderPosgrados(main) {
           <div style="position:relative;height:240px;"><canvas id="pgChartDaily"></canvas></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="posgrados-split" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
           <div class="card">
             <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Programas consultados</h3>
             <div style="position:relative;height:200px;"><canvas id="pgChartProgramas"></canvas></div>

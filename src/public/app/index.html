@@ -848,7 +848,9 @@ function renderTurno(main) {
       }
       const { turno } = await r.json();
       const fields = [
-        ['Estudiante', `${turno.nombre} ${turno.apellido}`],
+        // Si a la hoja le falta la columna de apellido, no debe salir "undefined"
+        // pegado al nombre del estudiante.
+        ['Estudiante', [turno.nombre, turno.apellido].filter(Boolean).join(' ') || '—'],
         ['Programa', turno.programa],
         ['Turno', turno.turno],
         ['Fecha', turno.fecha],

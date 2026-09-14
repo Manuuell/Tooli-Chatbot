@@ -448,6 +448,14 @@ const AUDIT_LABELS = {
   usuario_eliminado: { label: 'Eliminó un usuario', icon: '🗑️' },
   seguimiento_evento_actualizado: { label: 'Actualizó seguimiento de un prospecto', icon: '🎯' },
   invitacion_evento_enviada: { label: 'Invitó a próximo evento por WhatsApp', icon: '📨' },
+  broadcast_enviado: { label: 'Envió una plantilla masiva', icon: '📣' },
+  recordatorio_enviado: { label: 'Envió un recordatorio', icon: '🔔' },
+  recordatorio_programado: { label: 'Programó un recordatorio', icon: '⏰' },
+  recordatorio_cancelado: { label: 'Canceló un recordatorio', icon: '✖️' },
+  mensaje_enviado: { label: 'Respondió por WhatsApp', icon: '💬' },
+  crm_nota_agregada: { label: 'Agregó una nota al CRM', icon: '📝' },
+  crm_estado_actualizado: { label: 'Movió un prospecto en el embudo', icon: '🎯' },
+  crm_asignado: { label: 'Asignó un prospecto', icon: '🙋' },
 };
 
 /* Agrupa cada acción de auditoría por área real de negocio, para poder
@@ -457,6 +465,7 @@ const AUDIT_LABELS = {
 const AUDIT_AREAS = {
   pregrado: { label: 'Pregrado', color: '#0284c7', actions: ['turno_consultado', 'recibo_descargado'] },
   posgrado: { label: 'Posgrado', color: '#7c3aed', actions: ['seguimiento_evento_actualizado', 'invitacion_evento_enviada'] },
+  atencion: { label: 'Atención directa', color: '#16a34a', actions: ['mensaje_enviado', 'recordatorio_enviado', 'recordatorio_programado', 'recordatorio_cancelado', 'broadcast_enviado', 'crm_nota_agregada', 'crm_estado_actualizado', 'crm_asignado'] },
   administracion: { label: 'Administración', color: '#d97706', actions: ['sesion_reseteada', 'usuario_baneado', 'usuario_desbaneado', 'usuario_creado', 'usuario_eliminado', 'ia_activada', 'ia_desactivada'] },
   sistema: { label: 'Sistema', color: '#64748b', actions: ['login'] },
 };
@@ -827,6 +836,21 @@ const EVENT_META = {
   programas_especializaciones: { label: 'Especializaciones consultadas', icon: '🎓', color: '#38bdf8' },
   programas_maestrias:      { label: 'Maestrías consultadas', icon: '🎓', color: '#a855f7' },
   programas_doctorados:     { label: 'Doctorados consultados', icon: '🎓', color: '#ec4899' },
+  menu_pregrado_shown:       { label: 'Menú de pregrado',      icon: '🏫', color: '#0284c7' },
+  prospecto_pregrado_iniciado:   { label: 'Prospectos pregrado iniciados',   icon: '🏫', color: '#38bdf8' },
+  prospecto_pregrado_completado: { label: 'Prospectos pregrado completados', icon: '🏫', color: '#22c55e' },
+  registro_pregrado_iniciado:    { label: 'Registros pregrado iniciados',    icon: '📝', color: '#eab308' },
+  registro_pregrado_completado:  { label: 'Registros pregrado completados',  icon: '📝', color: '#16a34a' },
+  // Hub "Mi vida académica": qué plataforma busca realmente la gente
+  academico_menu_shown:      { label: 'Abrió Mi vida académica', icon: '🎒', color: '#6366f1' },
+  academico_notas:           { label: 'Buscó sus notas',        icon: '📊', color: '#6366f1' },
+  academico_horario:         { label: 'Buscó su horario',       icon: '🗓️', color: '#6366f1' },
+  academico_savio:           { label: 'Fue a Savio (cursos)',   icon: '📚', color: '#6366f1' },
+  academico_calendario:      { label: 'Calendario académico',   icon: '📅', color: '#8b5cf6' },
+  academico_recibo:          { label: 'Recibos (Iceberg)',      icon: '🧾', color: '#0ea5e9' },
+  academico_correo:          { label: 'Correo institucional',   icon: '✉️', color: '#8b5cf6' },
+  academico_becas:           { label: 'Becas y apoyo financiero', icon: '🎁', color: '#eab308' },
+  academico_derechos:        { label: 'Costos y derechos',      icon: '💳', color: '#f97316' },
 };
 function eventMeta(key) {
   return EVENT_META[key] ?? { label: key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()), icon: '📊', color: '#64748b' };

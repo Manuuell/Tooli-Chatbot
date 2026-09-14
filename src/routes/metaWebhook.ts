@@ -4,6 +4,7 @@ import { claimMessageId } from '../services/session';
 import { checkUserRateLimit } from '../services/rateLimit';
 import { track } from '../services/metrics';
 import { isBanned, recordActivity } from '../services/botUserService';
+import { describeText, maskPhone } from '../services/logSafe';
 import { config } from '../config';
 import { messaging } from '../flows/shared';
 import { handleMessage } from '../flows';
@@ -47,9 +48,10 @@ metaWebhookRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
+  // Ver la nota en logSafe.ts: el contenido de la conversación no va al log.
   console.log('[meta-webhook] inbound:', {
-    from: inbound.from,
-    text: inbound.text,
+    from: maskPhone(inbound.from),
+    text: describeText(inbound.text),
     id: inbound.messageId,
   });
 

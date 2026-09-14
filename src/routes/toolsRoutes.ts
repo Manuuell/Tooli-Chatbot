@@ -20,6 +20,7 @@ import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSh
 import { getCodigoNutria, canjearCodigoNutria, getCanjesRecientes } from '../services/nutriaCodigoService';
 import { enviarRecordatorio } from '../flows/recordatorios';
 import { messaging } from '../flows/shared';
+import { maskCode } from '../services/logSafe';
 
 export const toolsRouter = Router();
 
@@ -140,7 +141,7 @@ toolsRouter.post('/recibo', async (req: AuthedRequest, res: Response) => {
     return;
   }
 
-  console.log(`[tools/recibo] solicitud de asesor ${req.user?.username} para código ${codigo}`);
+  console.log(`[tools/recibo] solicitud de asesor ${req.user?.username} para código ${maskCode(codigo)}`);
 
   try {
     const result = await loginAndDownloadReceipt(codigo.toUpperCase(), cedula);

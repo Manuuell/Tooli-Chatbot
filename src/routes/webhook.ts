@@ -4,6 +4,7 @@ import { claimMessageId } from '../services/session';
 import { checkUserRateLimit } from '../services/rateLimit';
 import { track } from '../services/metrics';
 import { isBanned, recordActivity } from '../services/botUserService';
+import { describeText, maskPhone } from '../services/logSafe';
 import { config } from '../config';
 import { messaging } from '../flows/shared';
 import { handleMessage } from '../flows';
@@ -38,7 +39,9 @@ webhookRouter.post(['/', '/:event'], async (req: Request, res: Response) => {
     return;
   }
 
-  console.log('[webhook] inbound:', { from: inbound.from, text: inbound.text, id: inbound.messageId });
+  // Nunca el número ni el texto completos: son datos personales y el log se
+  // rota, se copia y a veces se envía a un servicio externo.
+  console.log('[webhook] inbound:', { from: maskPhone(inbound.from), text: describeText(inbound.text), id: inbound.messageId });
 
   res.sendStatus(200);
 
@@ -57,7 +60,7 @@ webhookRouter.post(['/', '/:event'], async (req: Request, res: Response) => {
         return;
       }
       if (resolvedFrom !== inbound.from) {
-        console.log('[webhook] resolved', inbound.from, '→', resolvedFrom);
+        console.log('[webhook] resolved', maskPhone(inbound.from), '→', maskPhone(resolvedFrom));
       }
 
       if (await isBanned(resolvedFrom)) {

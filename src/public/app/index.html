@@ -2510,6 +2510,29 @@ function csvEscape(v) {
   return /[",\n;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 }
 
+/** Arma el CSV y lo descarga. Separador ";" y BOM: es lo que espera Excel en
+    configuración regional de Colombia. */
+function descargarCsv(nombreArchivo, cabecera, filas) {
+  const lineas = [cabecera.join(';'), ...filas.map(f => f.map(csvEscape).join(';'))];
+  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  haptic([10, 20, 10]);
+}
+
+/** Fecha legible para Excel: el ISO crudo con T y Z no ordena bien en español. */
+function fechaParaCsv(raw) {
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function exportarCrmCsv() {
   const q = ($('#crmSearch')?.value ?? '').trim().toLowerCase();
   const filas = crmRows.filter((row) => {
@@ -2523,37 +2546,41 @@ function exportarCrmCsv() {
   if (!filas.length) { toast('No hay nada que exportar con estos filtros'); haptic([20, 30, 20]); return; }
 
   const cabecera = ['Fecha de registro', 'Nombre', 'Correo', 'WhatsApp', 'Programa de interés', 'Área', 'Etapa', 'Asesor', 'Etiquetas', 'Notas'];
-  const lineas = [cabecera.join(';')];
-  filas.forEach((row) => {
+  const datos = filas.map((row) => {
     const f = crmFichas[row[3]];
-    // Fecha en "YYYY-MM-DD HH:mm": Excel la reconoce y además ordena bien,
-    // cosa que el ISO crudo con la T y la Z no hace en configuración española.
-    const d = new Date(row[0]);
-    const fecha = Number.isNaN(d.getTime())
-      ? row[0]
-      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    lineas.push([
-      fecha, row[1], row[2], row[3], row[4], areaOf(row),
+    return [
+      fechaParaCsv(row[0]), row[1], row[2], row[3], row[4], areaOf(row),
       crmEstadoMeta(f?.estado ?? 'nuevo').label,
       f?.asignadoA ?? '',
       (f?.etiquetas ?? []).join(', '),
       f?.notas?.length ?? 0,
-    ].map(csvEscape).join(';'));
+    ];
   });
 
-  // BOM para que Excel en Windows abra bien las tildes, y ";" como separador
-  // porque es lo que espera Excel en configuración regional de Colombia.
-  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `prospectos-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  haptic([10, 20, 10]);
+  descargarCsv(`prospectos-${new Date().toISOString().slice(0, 10)}.csv`, cabecera, datos);
   toast(`${filas.length} prospecto${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
+}
+
+/** Mismo patrón para los prospectos del evento de posgrados. */
+function exportarEventoCsv() {
+  const q = ($('#eventoSearch')?.value ?? '').trim().toLowerCase();
+  const filas = eventoRows.filter((row) => {
+    const estado = row[7] || 'pendiente';
+    if (becaVista === 'beca' && estado !== 'Interesado en beca') return false;
+    if (eventoFilter !== 'todos' && estado !== eventoFilter) return false;
+    if (!q) return true;
+    return [row[2], row[3], row[5]].some(v => (v ?? '').toLowerCase().includes(q));
+  });
+
+  if (!filas.length) { toast('No hay nada que exportar con estos filtros'); haptic([20, 30, 20]); return; }
+
+  const cabecera = ['Fecha', 'WhatsApp', 'Nombre', 'Correo', 'Interés en financiación', 'Programa', 'Autoriza contacto', 'Seguimiento'];
+  const datos = filas.map((row) => [
+    fechaParaCsv(row[0]), row[1], row[2], row[3], row[4], row[5], row[6], row[7] || 'Sin contactar',
+  ]);
+
+  descargarCsv(`evento-posgrados-${new Date().toISOString().slice(0, 10)}.csv`, cabecera, datos);
+  toast(`${filas.length} registro${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
 }
 
 /* ============= FICHA DE SEGUIMIENTO DEL CRM =============
@@ -3533,7 +3560,10 @@ async function renderEventoPosgrado(main) {
   main.innerHTML = `
     <div class="page-header">
       <div><h1>🔔 Evento Posgrados</h1><div class="subtitle">Prospectos del meetup "Retos del Management Digital" — dales seguimiento e invítalos a lo que sigue</div></div>
-      <button class="btn btn-secondary" id="refreshEvento"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="exportEventoCsv">${icon('external', 14)} Exportar<span class="hide-sm"> CSV</span></button>
+        <button class="btn btn-secondary" id="refreshEvento"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
+      </div>
     </div>
     <div class="crm-toolbar">
       <input type="text" id="eventoSearch" placeholder="Buscar por nombre, email o programa…">
@@ -3558,6 +3588,7 @@ async function renderEventoPosgrado(main) {
   `;
 
   $('#eventoSearch').addEventListener('input', renderEventoGrid);
+  $('#exportEventoCsv').addEventListener('click', () => exportarEventoCsv());
 
   // Vista rápida de becas — segundo segmentado reusando buildSegmented (mismo patrón iOS que el filtro de estados)
   function renderBecaVistaSegment() {

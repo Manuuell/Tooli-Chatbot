@@ -1,0 +1,76 @@
+/**
+ * Infraestructura de recordatorios — envío real de mensajes de WhatsApp.
+ *
+ * QUÉ ES REAL:
+ *   `enviarRecordatorio()` reutiliza el cliente de WhatsApp ya existente
+ *   (`messaging` de src/flows/shared.ts, que resuelve a EvolutionAPI o
+ *   Meta Cloud según config.messagingAdapter). Enviar un texto a un número
+ *   es 100% viable con lo que ya hay desplegado — no inventa transporte.
+ *
+ * QUÉ ES MANUAL / FUTURO:
+ *   El *disparador* ("cuándo" enviar un recordatorio de tarea/nota/evento)
+ *   depende de un sistema universitario externo tipo Banner/SIA que NO existe
+ *   en este repo. No hay calificaciones, calendario académico ni cron de
+ *   tareas disponible. Por eso el único punto de entrada es el endpoint HTTP
+ *   `POST /api/tools/recordatorio` (protegido con auth de asesores) que recibe
+ *   { telefono, mensaje } y llama a esta función. El día que exista una
+ *   integración real — o incluso un cron manual que consulte un sheet — solo
+ *   hay que llamar a `enviarRecordatorio` desde allí.
+ *
+ *   No se fabrica ningún dato académico ni se simula integración con Banner.
+ *   Ver `src/routes/toolsRoutes.ts` (ruta recordatorio) para el endpoint.
+ */
+
+import { messaging } from './shared';
+
+export interface RecordatorioPayload {
+  /** Número en formato E.164 sin + (ej: 573001234567) — se normaliza automáticamente */
+  telefono: string;
+  /** Texto del recordatorio (1–4096 chars) */
+  mensaje: string;
+}
+
+function normalizarTelefono(raw: string): string {
+  // quita todo lo que no sea dígito, mantiene country code si viene
+  return raw.replace(/\D/g, '');
+}
+
+function validarPayload(p: RecordatorioPayload): string | null {
+  if (!p.telefono || !p.mensaje) return 'telefono y mensaje son requeridos';
+  const tel = normalizarTelefono(p.telefono);
+  // E.164 colombiano mínimo 10 dígitos (57 + 10), aceptamos 10-15 dígitos generales
+  if (tel.length < 10 || tel.length > 15) return 'telefono inválido (debe tener 10–15 dígitos)';
+  if (p.mensaje.length < 1 || p.mensaje.length > 4096) return 'mensaje debe tener entre 1 y 4096 caracteres';
+  return null;
+}
+
+/**
+ * Envía un recordatorio por WhatsApp usando el adaptador configurado.
+ * Lanza Error si la validación falla o si el envío falla.
+ */
+export async function enviarRecordatorio(payload: RecordatorioPayload): Promise<{ ok: true; to: string }> {
+  const err = validarPayload(payload);
+  if (err) throw new Error(err);
+
+  const to = normalizarTelefono(payload.telefono);
+  const text = payload.mensaje.trim();
+
+  await messaging.sendText({ to, text });
+
+  console.log(`[recordatorio] enviado a +${to.slice(0, 4)}**** (${text.length} chars)`);
+  return { ok: true, to };
+}
+
+/**
+ * Punto de extensión para futuro disparo automático.
+ *
+ * TODO(integracion-banner): cuando exista acceso al sistema académico
+ * (Banner/SIA u otro), implementar un job que:
+ *   1. Consulte tareas/eventos/notas pendientes por estudiante.
+ *   2. Construya el mensaje con contexto real (ej: "Tienes tarea de Cálculo I para el 20/09").
+ *   3. Llame a enviarRecordatorio({ telefono, mensaje }).
+ *
+ * Mientras tanto el disparo es MANUAL vía POST /api/tools/recordatorio.
+ * No inventar datos de notas/tareas sin fuente real.
+ */
+export const _extensionPoint = 'manual-only';

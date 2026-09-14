@@ -19,7 +19,8 @@ export type AuditAction =
   | 'ia_desactivada'
   | 'usuario_creado'
   | 'usuario_eliminado'
-  | 'seguimiento_evento_actualizado';
+  | 'seguimiento_evento_actualizado'
+  | 'recordatorio_enviado';
 
 export interface AuditEntry {
   ts: number;

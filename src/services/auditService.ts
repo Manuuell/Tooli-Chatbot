@@ -20,7 +20,8 @@ export type AuditAction =
   | 'usuario_creado'
   | 'usuario_eliminado'
   | 'seguimiento_evento_actualizado'
-  | 'recordatorio_enviado';
+  | 'recordatorio_enviado'
+  | 'invitacion_evento_enviada';
 
 export interface AuditEntry {
   ts: number;

@@ -19,6 +19,7 @@ import { leerRegistrosEventoPosgrado, actualizarSeguimientoEvento } from '../ser
 import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSheets';
 import { getCodigoNutria, canjearCodigoNutria, getCanjesRecientes } from '../services/nutriaCodigoService';
 import { enviarRecordatorio } from '../flows/recordatorios';
+import { messaging } from '../flows/shared';
 
 export const toolsRouter = Router();
 
@@ -296,13 +297,24 @@ toolsRouter.get('/registros-evento-posgrado', async (_req, res) => {
   }
 });
 
+const SEGUIMIENTO_VALIDOS = [
+  'Contactado', 'Interesado', 'Inscrito',
+  'Invitado a próximo evento', 'No interesado',
+  'Confirmó asistencia', 'Interesado en beca',
+];
+
 toolsRouter.post('/registros-evento-posgrado/:fila/seguimiento', async (req: AuthedRequest, res: Response) => {
   const fila = parseInt(req.params.fila, 10);
   const { estado } = req.body ?? {};
   if (!fila || !estado) { res.status(400).json({ error: 'missing_fields' }); return; }
+  if (!SEGUIMIENTO_VALIDOS.includes(estado)) {
+    res.status(400).json({ error: 'estado_invalido', validos: SEGUIMIENTO_VALIDOS });
+    return;
+  }
   try {
     await actualizarSeguimientoEvento(fila, estado);
-    await logAudit(req.user!.username, 'seguimiento_evento_actualizado');
+    await logAudit(req.user!.username, 'seguimiento_evento_actualizado', `${estado} · fila ${fila}`);
+    console.log(`[asesor] ${req.user?.username} marcó fila ${fila} como "${estado}"`);
     res.json({ ok: true });
   } catch (err: any) {
     console.error('[tools/registros-evento-posgrado/seguimiento] error:', err);
@@ -332,6 +344,51 @@ toolsRouter.post('/recordatorio', async (req: AuthedRequest, res: Response) => {
     const isValidation = /requeridos|inválido|caracteres/.test(msg);
     console.error('[tools/recordatorio] error:', msg);
     res.status(isValidation ? 400 : 500).json({ error: isValidation ? 'validation_error' : 'internal_error', message: msg });
+  }
+});
+
+/**
+ * Invita por WhatsApp a un prospecto del evento a un próximo evento de posgrados.
+ * Usa el mismo adaptador de mensajería del bot (Evolution o Meta Cloud) — texto
+ * plano simple, sin templates pre-aprobados. El asesor edita el mensaje antes
+ * de enviar en el panel. Tras enviar, marca automáticamente "Invitado a próximo
+ * evento" en el Sheet y registra auditoría.
+ */
+toolsRouter.post('/registros-evento-posgrado/:fila/invitar', async (req: AuthedRequest, res: Response) => {
+  const fila = parseInt(req.params.fila, 10);
+  const { mensaje, whatsapp } = req.body ?? {};
+  if (!fila) { res.status(400).json({ error: 'missing_fields' }); return; }
+  const texto = (mensaje ?? '').trim();
+  if (!texto || texto.length < 10) {
+    res.status(400).json({ error: 'mensaje_requerido', message: 'El mensaje debe tener al menos 10 caracteres' });
+    return;
+  }
+  if (texto.length > 1000) {
+    res.status(400).json({ error: 'mensaje_demasiado_largo' });
+    return;
+  }
+  // Resolver WhatsApp: prioridad al body, fallback a leer la fila del Sheet
+  let to = (whatsapp ?? '').replace(/\D/g, '');
+  if (!to) {
+    try {
+      const rows = await leerRegistrosEventoPosgrado();
+      const row = rows[fila - 2]; // A2 = índice 0 → fila 2
+      to = (row?.[1] ?? '').replace(/\D/g, '');
+    } catch { /* ignore */ }
+  }
+  if (!to) { res.status(400).json({ error: 'whatsapp_requerido' }); return; }
+
+  try {
+    await messaging.sendText({ to, text: texto });
+    // Marca como invitado si no lo estaba ya — no bloquea el éxito del envío si falla el Sheet
+    try { await actualizarSeguimientoEvento(fila, 'Invitado a próximo evento'); } catch (e) { console.warn('[invitar] no se pudo actualizar seguimiento:', e); }
+    await logAudit(req.user!.username, 'invitacion_evento_enviada', `fila ${fila} · +${to.slice(-4)}`);
+    await logAudit(req.user!.username, 'seguimiento_evento_actualizado', 'Invitado a próximo evento · fila ' + fila);
+    console.log(`[asesor] ${req.user?.username} invitó a fila ${fila} (+${to.slice(-4)}) al próximo evento`);
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[tools/registros-evento-posgrado/invitar] error:', err?.response?.data ?? err?.message ?? err);
+    res.status(502).json({ error: 'send_failed', message: err?.message ?? 'No se pudo enviar el mensaje' });
   }
 });
 

@@ -1863,6 +1863,7 @@ async function openThread(phone) {
       title: nombre ?? `+${phone}`,
       groups: [[
         { label: 'Ficha del prospecto', icon: '🗂️', onClick: () => openFichaSheet(phone, nombre, ficha, info) },
+        { label: 'Programar recordatorio', icon: '⏰', onClick: () => { remPrefill = { telefono: phone, nombre }; navigate('recordatorios'); } },
         { label: 'Copiar número', icon: '🔗', onClick: () => copyToClipboard(phone, 'Número copiado') },
         { label: 'Resetear sesión', icon: '🔄', onClick: () => quickAction(phone, 'reset-session').then(() => openThread(phone)) },
         { label: info.banned ? 'Desbanear' : 'Banear', icon: '⛔', destructive: !info.banned, onClick: () => quickAction(phone, info.banned ? 'unban' : 'ban').then(() => openThread(phone)) },
@@ -3182,6 +3183,10 @@ function tiempoRelativoFuturo(ts) {
   return diff >= 0 ? `en ${txt}` : `hace ${txt}`;
 }
 
+/* Cuando se llega a Recordatorios desde una conversación, el teléfono ya viene
+   puesto: copiarlo a mano desde el hilo era el paso que hacía que nadie usara
+   esta función. */
+let remPrefill = null;
 let remFiltro = 'programado';
 let remLista = [];
 
@@ -3242,6 +3247,18 @@ async function renderRecordatorios(main) {
 
   const msg = $('#remMsg');
   msg.addEventListener('input', () => { $('#remCount').textContent = msg.value.length; });
+
+  if (remPrefill) {
+    $('#remTel').value = remPrefill.telefono;
+    if (remPrefill.nombre) {
+      msg.value = `Hola ${String(remPrefill.nombre).trim().split(/\s+/)[0]} 👋 `;
+      msg.dispatchEvent(new Event('input'));
+    }
+    $('#remFeedback').innerHTML = `<span class="rem-ok">${icon('check', 13)} Destinatario tomado de la conversación${remPrefill.nombre ? ` con ${escapeHtml(remPrefill.nombre)}` : ''}</span>`;
+    msg.focus();
+    msg.setSelectionRange(msg.value.length, msg.value.length);
+    remPrefill = null;   // solo aplica a la primera visita
+  }
 
   // Ver el borrador dentro del marco de iPhone, tal como le va a llegar:
   // reusa el mismo componente que la bandeja, no una maqueta aparte.

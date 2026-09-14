@@ -2463,6 +2463,7 @@ function crmCategoria(row) { return areaOf(row) === 'Pregrado' ? 'pregrado' : pr
 let crmRows = [];
 let crmFilter = 'todos';
 let crmFichas = {};
+let crmEtapa = 'todas';
 
 async function renderRegistros(main) {
   let selectMode = false;
@@ -2479,6 +2480,10 @@ async function renderRegistros(main) {
     <div class="crm-toolbar">
       <input type="text" id="crmSearch" placeholder="Buscar por nombre, email o programa…">
       <div id="crmFilterWrap"></div>
+    </div>
+    <div class="crm-etapa-fila" id="crmEtapaFila">
+      <span class="crm-etapa-label">Etapa del embudo:</span>
+      <div id="crmEtapaWrap"></div>
     </div>
     <div id="broadcastBar" class="broadcast-bar hidden">
       <div class="broadcast-bar-left">
@@ -2713,6 +2718,27 @@ async function renderRegistros(main) {
         ],
         crmFilter, (v) => { crmFilter = v; renderCrmGrid(); },
       ));
+
+      // Segundo filtro: etapa del embudo. Solo aparece si alguien ya movió
+      // fichas — si no, sería un control que no filtra nada.
+      const etapaCounts = crmRows.reduce((acc, row) => {
+        const est = crmFichas[row[3]]?.estado ?? 'nuevo';
+        acc[est] = (acc[est] ?? 0) + 1;
+        return acc;
+      }, {});
+      const hayEtapas = Object.keys(etapaCounts).some(k => k !== 'nuevo');
+      $('#crmEtapaFila').style.display = hayEtapas ? '' : 'none';
+      if (hayEtapas) {
+        $('#crmEtapaWrap').innerHTML = '';
+        $('#crmEtapaWrap').appendChild(buildSegmented(
+          [
+            { value: 'todas', label: 'Todas' },
+            ...CRM_ESTADOS.filter(e => etapaCounts[e.value]).map(e => ({ value: e.value, label: `${e.icon} ${e.label} (${etapaCounts[e.value]})` })),
+          ],
+          etapaCounts[crmEtapa] ? crmEtapa : 'todas',
+          (v) => { crmEtapa = v; renderCrmGrid(); },
+        ));
+      }
       renderCrmGrid();
     } catch (err) {
       console.error(err);
@@ -2725,6 +2751,10 @@ async function renderRegistros(main) {
     const filtered = crmRows.filter((row, i) => {
       row.__i = i;
       if (crmFilter !== 'todos' && crmCategoria(row) !== crmFilter) return false;
+      if (crmEtapa !== 'todas') {
+        const est = crmFichas[row[3]]?.estado ?? 'nuevo';
+        if (est !== crmEtapa) return false;
+      }
       if (!q) return true;
       return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
     });

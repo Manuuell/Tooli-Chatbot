@@ -1686,3 +1686,13 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
 @media (max-width: 520px) {
   .funnel-label { width: 96px; font-size: 11.5px; }
 }
+
+/* Segundo filtro del CRM: etapa del embudo */
+.crm-etapa-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.crm-etapa-label { font-size: 12.5px; font-weight: 600; color: var(--text-muted); }

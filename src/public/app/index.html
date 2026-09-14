@@ -3822,6 +3822,19 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {});
   });
+
+  // El service worker avisa cuando el panel cambió en el servidor. No se recarga
+  // solo: alguien puede tener un mensaje a medio escribir. Se ofrece y decide.
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type !== 'shell-actualizado' || $('#versionNueva')) return;
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.id = 'versionNueva';
+    pill.className = 'version-nueva';
+    pill.innerHTML = `${icon('refresh', 14)} Hay una versión nueva del panel · Recargar`;
+    pill.addEventListener('click', () => { haptic(12); location.reload(); });
+    document.body.appendChild(pill);
+  });
 }
 
 function updateOfflineBanner() {

@@ -1840,3 +1840,32 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   animation: fade-rise-in 0.3s var(--ease-spring) backwards;
 }
 .rem-ventana svg { flex: 0 0 auto; margin-top: 1px; }
+
+/* Aviso de que el panel cambió en el servidor (lo manda el service worker) */
+.version-nueva {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--utb-blue);
+  color: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 12px 28px -10px rgba(0, 48, 135, 0.7);
+  animation: broadcast-rise 0.45s var(--ease-spring) backwards;
+  transition: transform 0.2s var(--ease-spring), box-shadow 0.2s var(--ease-out);
+}
+.version-nueva:hover { transform: translate(-50%, -2px); box-shadow: 0 16px 34px -12px rgba(0, 48, 135, 0.8); }
+.version-nueva:active { transform: translate(-50%, 0) scale(0.97); }
+@media (max-width: 860px) {
+  .version-nueva { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}

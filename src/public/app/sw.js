@@ -37,9 +37,34 @@ self.addEventListener('fetch', (event) => {
     caches.open(CACHE_NAME).then(async (cache) => {
       const cached = await cache.match(request);
       const network = fetch(request)
-        .then((res) => { if (res.ok) cache.put(request, res.clone()); return res; })
+        .then(async (res) => {
+          if (!res.ok) return res;
+          // Si la copia en red es distinta a la que acabamos de servir, la
+          // pestaña abierta está mostrando la versión anterior. En vez de
+          // recargarla por sorpresa (se perdería un mensaje a medio escribir),
+          // se le avisa para que ofrezca recargar cuando la persona quiera.
+          if (cached && haCambiado(cached, res)) avisarClientes();
+          cache.put(request, res.clone());
+          return res;
+        })
         .catch(() => null);
       return cached || (await network) || new Response('Sin conexión', { status: 503, statusText: 'Offline' });
     })
   );
 });
+
+/** Compara por ETag, y si el servidor no la manda, por Last-Modified. */
+function haCambiado(cached, fresca) {
+  const etagA = cached.headers.get('etag');
+  const etagB = fresca.headers.get('etag');
+  if (etagA && etagB) return etagA !== etagB;
+  const lmA = cached.headers.get('last-modified');
+  const lmB = fresca.headers.get('last-modified');
+  if (lmA && lmB) return lmA !== lmB;
+  return false;   // sin forma de comparar, no molestar con avisos falsos
+}
+
+async function avisarClientes() {
+  const clientes = await self.clients.matchAll({ type: 'window' });
+  clientes.forEach((c) => c.postMessage({ type: 'shell-actualizado' }));
+}

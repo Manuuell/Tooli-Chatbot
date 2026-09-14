@@ -515,3 +515,61 @@ toolsRouter.delete('/recordatorios/:id', async (req: AuthedRequest, res: Respons
     res.status(500).json({ error: 'internal_error', message: msg });
   }
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESPONDER DESDE EL PANEL
+   Permite que un asesor conteste por WhatsApp sin salir de la bandeja — es el
+   hueco que obligaba a abrir Chatwoot para algo tan básico como responder.
+   El mensaje enviado aparece solo en el hilo: los adaptadores de mensajería ya
+   llaman a recordActivity(phone, 'out', ...) al enviar.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Ventana de servicio de WhatsApp: fuera de ella Meta rechaza el texto libre. */
+const VENTANA_24H_MS = 24 * 60 * 60 * 1000;
+
+toolsRouter.post('/bot-users/:phone/reply', async (req: AuthedRequest, res: Response) => {
+  const phone = normalizePhone(req.params.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'invalid_phone' });
+    return;
+  }
+
+  const texto = String(req.body?.text ?? '').trim();
+  if (!texto) {
+    res.status(400).json({ error: 'validation_error', message: 'El mensaje no puede estar vacío' });
+    return;
+  }
+  if (texto.length > 4096) {
+    res.status(400).json({ error: 'validation_error', message: 'El mensaje no puede superar 4096 caracteres' });
+    return;
+  }
+
+  try {
+    // Restricción REAL de la WhatsApp Business Platform: fuera de las 24h desde
+    // el último mensaje del usuario, Meta solo acepta plantillas aprobadas. En
+    // vez de dejar que el envío falle con un error críptico de la Graph API, se
+    // avisa acá con el motivo y la alternativa.
+    const info = await getBotUser(phone);
+    const ultimoEntrante = info.recentMessages.find((m) => m.direction === 'in');
+    if (ultimoEntrante && Date.now() - ultimoEntrante.ts > VENTANA_24H_MS) {
+      const horas = Math.floor((Date.now() - ultimoEntrante.ts) / (60 * 60 * 1000));
+      res.status(409).json({
+        error: 'fuera_de_ventana',
+        message:
+          `Han pasado ${horas} horas desde el último mensaje de esta persona. ` +
+          'WhatsApp solo permite texto libre dentro de las 24 horas siguientes; ' +
+          'para retomar el contacto hay que usar una plantilla aprobada por Meta.',
+      });
+      return;
+    }
+
+    await messaging.sendText({ to: phone, text: texto });
+    await logAudit(req.user!.username, 'mensaje_enviado', `${phone.slice(-4)} · ${texto.length} chars`);
+    console.log(`[asesor] ${req.user?.username} respondió a ****${phone.slice(-4)} (${texto.length} chars)`);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[tools/reply] error al enviar:', msg);
+    res.status(502).json({ error: 'send_failed', message: msg });
+  }
+});

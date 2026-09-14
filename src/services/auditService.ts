@@ -24,7 +24,8 @@ export type AuditAction =
   | 'invitacion_evento_enviada'
   | 'broadcast_enviado'
   | 'recordatorio_programado'
-  | 'recordatorio_cancelado';
+  | 'recordatorio_cancelado'
+  | 'mensaje_enviado';
 
 export interface AuditEntry {
   ts: number;

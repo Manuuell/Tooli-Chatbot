@@ -322,6 +322,20 @@ let ptrIndicador = null;
 /** Cada pantalla con datos registra acá cómo recargarse. navigate() lo limpia. */
 function setPullToRefresh(fn) { ptrHandler = fn; }
 
+/* Timers de la pantalla actual. Sin esto, cada intervalo que arranca una
+   pantalla sigue corriendo después de navegar a otra: el panel se va poniendo
+   lento solo con el uso y las peticiones se acumulan en segundo plano. */
+let screenTimers = [];
+function screenInterval(fn, ms) {
+  const id = setInterval(fn, ms);
+  screenTimers.push(id);
+  return id;
+}
+function clearScreenTimers() {
+  screenTimers.forEach(clearInterval);
+  screenTimers = [];
+}
+
 function ptrGetIndicador() {
   if (ptrIndicador) return ptrIndicador;
   ptrIndicador = document.createElement('div');
@@ -514,6 +528,7 @@ function navigate(route) {
   currentRoute = route;
   ActionSheet.close();
   setPullToRefresh(null);   // cada pantalla vuelve a registrarse si puede recargarse
+  clearScreenTimers();
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
   updateTabBar(route);
   location.hash = route;
@@ -683,8 +698,8 @@ async function renderHome(main) {
       }
       if (chatwootRes.status === 'fulfilled') {
         const cw = chatwootRes.value;
-        if (cw.unassigned > 0) rows.push({ tone: 'danger', html: `<strong>${cw.unassigned}</strong> conversación${cw.unassigned !== 1 ? 'es' : ''} sin asignar en Chatwoot`, go: 'conversaciones' });
-        if (cw.pending > 0) rows.push({ tone: 'warning', html: `<strong>${cw.pending}</strong> conversación${cw.pending !== 1 ? 'es' : ''} pendiente${cw.pending !== 1 ? 's' : ''} de responder`, go: 'conversaciones' });
+        if (cw.unassigned > 0) rows.push({ tone: 'danger', html: `<strong>${cw.unassigned}</strong> ${cw.unassigned === 1 ? 'conversación' : 'conversaciones'} sin asignar en Chatwoot`, go: 'conversaciones' });
+        if (cw.pending > 0) rows.push({ tone: 'warning', html: `<strong>${cw.pending}</strong> ${cw.pending === 1 ? 'conversación pendiente' : 'conversaciones pendientes'} de responder`, go: 'conversaciones' });
       }
       if (healthRes.status === 'fulfilled') {
         const bad = Object.entries(healthRes.value.checks ?? {}).filter(([, c]) => c.status === 'down' || c.status === 'degraded');
@@ -1526,6 +1541,7 @@ async function renderConversaciones(main) {
       <div class="inbox-list glass" id="inboxList">
         <div class="inbox-search"><input type="text" id="inboxSearch" placeholder="Buscar por número, nombre o mensaje…" aria-label="Buscar conversaciones"></div>
         <div class="inbox-filter-wrap" id="inboxFilterWrap"></div>
+        <button type="button" class="inbox-nuevos" id="inboxNuevos" hidden></button>
         <div class="inbox-rows" id="inboxRows">
           ${Array.from({ length: 7 }).map(() => `
             <div class="inbox-row">
@@ -1545,7 +1561,12 @@ async function renderConversaciones(main) {
   `;
 
   $('#inboxSearch').addEventListener('input', (e) => renderInboxRows(e.target.value.trim().toLowerCase()));
+  $('#inboxNuevos').addEventListener('click', () => { haptic(12); renderConversaciones(main); });
   setPullToRefresh(() => renderConversaciones(main));
+
+  // Sondeo suave de mensajes nuevos. No se re-renderiza la lista sola: si el
+  // asesor está leyendo o escribiendo, moverle el piso es peor que avisarle.
+  screenInterval(() => buscarMensajesNuevos(), 25_000);
 
   try {
     const r = await api('/api/tools/bot-users');
@@ -1588,6 +1609,39 @@ async function renderConversaciones(main) {
   } catch {
     $('#inboxRows').innerHTML = '<div class="alert alert-error" style="margin:12px;">No se pudo cargar la lista.</div>';
   }
+}
+
+/* Compara el último mensaje entrante de cada conversación con lo que ya está
+   en pantalla y, si hay novedades, muestra una píldora para recargar a voluntad. */
+async function buscarMensajesNuevos() {
+  if (document.hidden || !conversationsCache.length) return;
+  try {
+    const { phones } = await (await api('/api/tools/bot-users')).json();
+    const revisar = (phones ?? []).slice(0, 15);
+    const detalles = await Promise.all(revisar.map(async (phone) => {
+      try { return await (await api(`/api/tools/bot-users/${phone}`)).json(); }
+      catch { return null; }
+    }));
+
+    let nuevas = 0;
+    detalles.forEach((info) => {
+      if (!info) return;
+      const ultimo = info.recentMessages?.[0];
+      if (!ultimo || ultimo.direction !== 'in') return;
+      const actual = conversationsCache.find(c => c.phone === info.phone);
+      if (!actual || !actual.last || ultimo.ts > actual.last.ts) nuevas++;
+    });
+
+    const pill = $('#inboxNuevos');
+    if (!pill) return;
+    if (nuevas > 0) {
+      // "conversaciones" pierde la tilde en plural — no se puede armar pegando "es".
+      pill.textContent = `${nuevas} ${nuevas === 1 ? 'conversación' : 'conversaciones'} con mensajes nuevos · Actualizar`;
+      pill.hidden = false;
+    } else {
+      pill.hidden = true;
+    }
+  } catch { /* si falla el sondeo se reintenta en el siguiente ciclo */ }
 }
 
 function renderInboxRows(filter) {

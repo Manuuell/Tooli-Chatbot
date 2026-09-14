@@ -1793,3 +1793,25 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   box-shadow: var(--shadow-sm);
 }
 .composer-quick:active { transform: scale(0.92); }
+
+/* Aviso de mensajes nuevos en la bandeja (sondeo cada 25s, sin re-render
+   automático: mover la lista mientras alguien lee o escribe es peor) */
+.inbox-nuevos {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 0 10px 8px;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: var(--utb-blue);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -6px rgba(0, 48, 135, 0.6);
+  animation: fade-rise-in 0.4s var(--ease-spring) backwards;
+  transition: transform 0.18s var(--ease-spring), box-shadow 0.2s var(--ease-out);
+}
+.inbox-nuevos:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -8px rgba(0, 48, 135, 0.7); }
+.inbox-nuevos:active { transform: scale(0.97); }

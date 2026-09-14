@@ -10,6 +10,7 @@ import { authRouter } from './routes/authRoutes';
 import { toolsRouter } from './routes/toolsRoutes';
 import { healthRouter } from './routes/health';
 import { seedDefaultAdmin } from './services/usersService';
+import { startReminderWorker } from './services/reminderService';
 
 const app = express();
 
@@ -44,6 +45,8 @@ app.use('/public', express.static(path.resolve(__dirname, 'public')));
 
 (async () => {
   await seedDefaultAdmin();
+  // Dispara los recordatorios programados que ya vencieron (ver reminderService.ts).
+  startReminderWorker();
   app.listen(config.port, () => {
     console.log(`Tooli Chatbot escuchando en puerto ${config.port}`);
     console.log(`UI Asesores → http://localhost:${config.port}/app/`);

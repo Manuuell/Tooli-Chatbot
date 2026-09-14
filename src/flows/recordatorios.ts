@@ -30,7 +30,8 @@ export interface RecordatorioPayload {
   mensaje: string;
 }
 
-function normalizarTelefono(raw: string): string {
+/** Exportada para reusarla en `reminderService.ts` (no duplicar la validación). */
+export function normalizarTelefono(raw: string): string {
   // quita todo lo que no sea dígito, mantiene country code si viene
   return raw.replace(/\D/g, '');
 }

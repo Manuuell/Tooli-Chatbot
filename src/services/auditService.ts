@@ -22,7 +22,9 @@ export type AuditAction =
   | 'seguimiento_evento_actualizado'
   | 'recordatorio_enviado'
   | 'invitacion_evento_enviada'
-  | 'broadcast_enviado';
+  | 'broadcast_enviado'
+  | 'recordatorio_programado'
+  | 'recordatorio_cancelado';
 
 export interface AuditEntry {
   ts: number;

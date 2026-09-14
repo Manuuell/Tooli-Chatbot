@@ -444,3 +444,74 @@ toolsRouter.post('/broadcast/send', requireAdmin, async (req: AuthedRequest, res
   }
 });
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RECORDATORIOS PROGRAMADOS
+   El endpoint `/recordatorio` (arriba) envía ya mismo. Estos programan para
+   una fecha futura y los dispara solo el worker de `reminderService.ts`.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+toolsRouter.post('/recordatorios', async (req: AuthedRequest, res: Response) => {
+  const { telefono, mensaje, scheduledAt } = req.body ?? {};
+  try {
+    const { scheduleReminder, ReminderValidationError } = await import('../services/reminderService');
+    try {
+      const reminder = await scheduleReminder({
+        telefono: String(telefono ?? ''),
+        mensaje: String(mensaje ?? ''),
+        scheduledAt: scheduledAt ?? '',
+        createdBy: req.user!.username,
+      });
+      await logAudit(
+        req.user!.username,
+        'recordatorio_programado',
+        `${reminder.telefono.slice(-4)} · ${new Date(reminder.scheduledAt).toISOString()}`
+      );
+      res.json({ ok: true, reminder });
+    } catch (err: unknown) {
+      if (err instanceof ReminderValidationError) {
+        res.status(400).json({ error: 'validation_error', message: err.message });
+        return;
+      }
+      throw err;
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[tools/recordatorios] error al programar:', msg);
+    res.status(500).json({ error: 'internal_error', message: msg });
+  }
+});
+
+toolsRouter.get('/recordatorios', async (req: AuthedRequest, res: Response) => {
+  try {
+    const { listReminders } = await import('../services/reminderService');
+    const estado = req.query.estado ? String(req.query.estado) : undefined;
+    const valido = ['programado', 'enviado', 'fallido', 'cancelado'].includes(estado ?? '');
+    const reminders = await listReminders({
+      estado: valido ? (estado as 'programado' | 'enviado' | 'fallido' | 'cancelado') : undefined,
+      limit: Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? '50')) || 50)),
+    });
+    res.json({ reminders });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[tools/recordatorios] error al listar:', msg);
+    res.status(500).json({ error: 'internal_error', message: msg });
+  }
+});
+
+toolsRouter.delete('/recordatorios/:id', async (req: AuthedRequest, res: Response) => {
+  try {
+    const { cancelReminder } = await import('../services/reminderService');
+    const reminder = await cancelReminder(String(req.params.id));
+    if (!reminder) {
+      res.status(404).json({ error: 'not_found', message: 'Ese recordatorio ya no existe' });
+      return;
+    }
+    await logAudit(req.user!.username, 'recordatorio_cancelado', reminder.telefono.slice(-4));
+    res.json({ ok: true, reminder });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[tools/recordatorios] error al cancelar:', msg);
+    res.status(500).json({ error: 'internal_error', message: msg });
+  }
+});

@@ -3278,6 +3278,7 @@ async function renderRecordatorios(main) {
         <label class="rem-label" for="remTel">WhatsApp del destinatario</label>
         <input type="tel" id="remTel" class="rem-input" placeholder="573001234567" inputmode="numeric" required>
         <div class="rem-help">Con indicativo de país, sin + ni espacios.</div>
+        <div class="rem-ventana" id="remVentana" hidden></div>
 
         <label class="rem-label" for="remMsg">Mensaje</label>
         <textarea id="remMsg" class="rem-input" rows="4" maxlength="4096" required
@@ -3339,6 +3340,37 @@ async function renderRecordatorios(main) {
     const tel = $('#remTel').value.replace(/\D/g, '') || '573000000000';
     openPhonePreview(tel, 'Tooli · UTB', [[{ ts: cuando, direction: 'out', text: texto }]]);
   });
+
+  /* Aviso de la ventana de 24h de Meta: si la persona no ha escrito hace más de
+     un día, un mensaje de texto libre será rechazado al momento del envío. No se
+     bloquea —puede volver a escribir antes de la hora programada— pero el asesor
+     tiene que saberlo antes de programar algo que quizá no salga. */
+  const avisoVentana = async () => {
+    const tel = $('#remTel').value.replace(/\D/g, '');
+    const aviso = $('#remVentana');
+    if (!aviso) return;
+    if (tel.length < 10) { aviso.hidden = true; return; }
+    try {
+      const r = await api('/api/tools/bot-users/batch', { method: 'POST', body: JSON.stringify({ phones: [tel] }) });
+      const info = (await r.json()).users?.[0];
+      const ultimoEntrante = info?.recentMessages?.find(m => m.direction === 'in');
+      if (!ultimoEntrante) {
+        aviso.innerHTML = `${icon('clock', 13)} Esta persona no ha escrito nunca al bot. WhatsApp solo permite texto libre dentro de las 24 h siguientes a un mensaje suyo.`;
+        aviso.hidden = false;
+        return;
+      }
+      const horas = Math.floor((Date.now() - ultimoEntrante.ts) / 3_600_000);
+      if (horas >= 23) {
+        aviso.innerHTML = `${icon('clock', 13)} Escribió hace ${horas} h. Si no vuelve a escribir antes de la hora programada, Meta rechazará el mensaje por la ventana de 24 h.`;
+        aviso.hidden = false;
+      } else {
+        aviso.hidden = true;
+      }
+    } catch { aviso.hidden = true; }
+  };
+  $('#remTel').addEventListener('change', avisoVentana);
+  $('#remTel').addEventListener('blur', avisoVentana);
+  if ($('#remTel').value) avisoVentana();
 
   $('#remForm').addEventListener('submit', async (e) => {
     e.preventDefault();

@@ -1824,3 +1824,19 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   color: var(--warning);
   animation: fade-rise-in 0.3s var(--ease-spring) backwards;
 }
+
+/* Aviso de la ventana de 24h de WhatsApp al programar un recordatorio */
+.rem-ventana {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: -6px 0 13px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.1);
+  color: #92400e;
+  font-size: 11.5px;
+  line-height: 1.45;
+  animation: fade-rise-in 0.3s var(--ease-spring) backwards;
+}
+.rem-ventana svg { flex: 0 0 auto; margin-top: 1px; }

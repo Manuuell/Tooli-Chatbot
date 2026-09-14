@@ -1524,7 +1524,7 @@ async function renderConversaciones(main) {
     </div>
     <div class="inbox" id="inbox">
       <div class="inbox-list glass" id="inboxList">
-        <div class="inbox-search"><input type="text" id="inboxSearch" placeholder="Buscar por número o nombre…"></div>
+        <div class="inbox-search"><input type="text" id="inboxSearch" placeholder="Buscar por número, nombre o mensaje…" aria-label="Buscar conversaciones"></div>
         <div class="inbox-filter-wrap" id="inboxFilterWrap"></div>
         <div class="inbox-rows" id="inboxRows">
           ${Array.from({ length: 7 }).map(() => `
@@ -1594,7 +1594,12 @@ function renderInboxRows(filter) {
   const rowsEl = $('#inboxRows');
   const list = conversationsCache.filter(c => {
     if (inboxFilter !== 'todos' && c.cat?.key !== inboxFilter) return false;
-    return !filter || c.phone.includes(filter) || c.nombre?.toLowerCase().includes(filter);
+    if (!filter) return true;
+    // También busca dentro del último mensaje: para encontrar "beca" o "recibo"
+    // hay que poder buscar por lo que la persona escribió, no solo por su nombre.
+    return c.phone.includes(filter)
+      || (c.nombre?.toLowerCase().includes(filter) ?? false)
+      || (c.last?.text?.toLowerCase().includes(filter) ?? false);
   });
   if (!list.length) {
     const hasSearch = !!filter;
@@ -1602,7 +1607,7 @@ function renderInboxRows(filter) {
       <div class="inbox-empty" style="height:auto;padding:44px 20px;flex-direction:column;text-align:center;gap:6px;">
         <div class="inbox-empty-icon">${hasSearch ? '🔍' : '💬'}</div>
         <div class="inbox-empty-title">${hasSearch ? 'Sin resultados' : 'Nada por aquí'}</div>
-        <div class="inbox-empty-sub">${hasSearch ? 'Probá con otro nombre, número o filtro de área.' : 'No hay conversaciones en esta categoría.'}</div>
+        <div class="inbox-empty-sub">${hasSearch ? 'Busca por nombre, número o por lo que dice el último mensaje.' : 'No hay conversaciones en esta categoría.'}</div>
         ${hasSearch ? `<button type="button" class="btn btn-ghost" style="margin-top:8px;font-size:13px;" onclick="document.getElementById('inboxSearch').value='';document.getElementById('inboxSearch').dispatchEvent(new Event('input'))">Limpiar búsqueda</button>` : ''}
       </div>`;
     return;
@@ -2369,6 +2374,61 @@ async function renderPosgrados(main) {
 }
 
 /* ============= REGISTROS BD (CRM de prospectos) ============= */
+/* Exportar el CRM a CSV — lo que un coordinador necesita para cruzar datos en
+   Excel o pasarle la lista a alguien que no entra al panel. Exporta lo que se
+   está viendo (filtros y búsqueda aplicados), no toda la base, para que el
+   archivo coincida con lo que la persona tiene en pantalla. */
+function csvEscape(v) {
+  const t = String(v ?? '');
+  return /[",\n;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+}
+
+function exportarCrmCsv() {
+  const q = ($('#crmSearch')?.value ?? '').trim().toLowerCase();
+  const filas = crmRows.filter((row) => {
+    if (crmFilter !== 'todos' && crmCategoria(row) !== crmFilter) return false;
+    if (crmEtapa !== 'todas' && (crmFichas[row[3]]?.estado ?? 'nuevo') !== crmEtapa) return false;
+    if (crmSoloMios && crmFichas[row[3]]?.asignadoA !== currentUser?.username) return false;
+    if (!q) return true;
+    return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
+  });
+
+  if (!filas.length) { toast('No hay nada que exportar con estos filtros'); haptic([20, 30, 20]); return; }
+
+  const cabecera = ['Fecha de registro', 'Nombre', 'Correo', 'WhatsApp', 'Programa de interés', 'Área', 'Etapa', 'Asesor', 'Etiquetas', 'Notas'];
+  const lineas = [cabecera.join(';')];
+  filas.forEach((row) => {
+    const f = crmFichas[row[3]];
+    // Fecha en "YYYY-MM-DD HH:mm": Excel la reconoce y además ordena bien,
+    // cosa que el ISO crudo con la T y la Z no hace en configuración española.
+    const d = new Date(row[0]);
+    const fecha = Number.isNaN(d.getTime())
+      ? row[0]
+      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    lineas.push([
+      fecha, row[1], row[2], row[3], row[4], areaOf(row),
+      crmEstadoMeta(f?.estado ?? 'nuevo').label,
+      f?.asignadoA ?? '',
+      (f?.etiquetas ?? []).join(', '),
+      f?.notas?.length ?? 0,
+    ].map(csvEscape).join(';'));
+  });
+
+  // BOM para que Excel en Windows abra bien las tildes, y ";" como separador
+  // porque es lo que espera Excel en configuración regional de Colombia.
+  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `prospectos-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  haptic([10, 20, 10]);
+  toast(`${filas.length} prospecto${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
+}
+
 /* ============= FICHA DE SEGUIMIENTO DEL CRM =============
    Notas, estado del embudo, etiquetas y asignación por prospecto.
    Todo esto lo escribe el equipo — no viene del bot ni de un sistema
@@ -2585,6 +2645,7 @@ async function renderRegistros(main) {
       <div><h1>📝 CRM — Prospectos</h1><div class="subtitle">Pregrado y posgrado — quienes completaron el registro de interés vía WhatsApp</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-secondary" id="toggleSelectMode">${icon('check', 14)} Seleccionar varios</button>
+        <button class="btn btn-secondary" id="exportCsv">${icon('external', 14)} Exportar<span class="hide-sm"> CSV</span></button>
         <button class="btn btn-secondary" id="refreshReg"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
       </div>
     </div>
@@ -2629,6 +2690,7 @@ async function renderRegistros(main) {
     updateSelectToggle();
     renderCrmGrid();
   });
+  $('#exportCsv').addEventListener('click', () => exportarCrmCsv());
   $('#crmMios').addEventListener('click', (e) => {
     haptic(10);
     crmSoloMios = !crmSoloMios;

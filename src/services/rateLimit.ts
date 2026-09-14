@@ -48,3 +48,26 @@ const DEFAULT_WINDOW = 60;
 export async function checkUserRateLimit(phoneNumber: string): Promise<RateLimitResult> {
   return checkRateLimit(`user:${phoneNumber}`, DEFAULT_MAX, DEFAULT_WINDOW);
 }
+
+export interface RateLimiterOptions {
+  prefix: string;
+  maxRequests: number;
+  windowSec: number;
+  keyGenerator?: (req: any) => string;
+}
+
+export function createRateLimiter(options: RateLimiterOptions) {
+  const { prefix, maxRequests, windowSec, keyGenerator = (req) => req.ip ?? 'unknown' } = options;
+  return async (req: any, res: any, next: any) => {
+    const key = `${prefix}:${keyGenerator(req)}`;
+    const limit = await checkRateLimit(key, maxRequests, windowSec);
+    res.setHeader('X-RateLimit-Limit', String(maxRequests));
+    res.setHeader('X-RateLimit-Remaining', String(limit.remaining));
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retryAfterSec));
+      res.status(429).json({ error: 'too_many_requests', retryAfterSec: limit.retryAfterSec });
+      return;
+    }
+    next();
+  };
+}

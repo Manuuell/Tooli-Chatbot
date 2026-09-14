@@ -11,11 +11,33 @@ import { toolsRouter } from './routes/toolsRoutes';
 import { healthRouter } from './routes/health';
 import { seedDefaultAdmin } from './services/usersService';
 import { startReminderWorker } from './services/reminderService';
+import { securityHeaders, bodySizeLimit, errorHandler, notFoundHandler } from './middleware/security';
+import { checkRateLimit } from './services/rateLimit';
+import { validateJwtSecret } from './middleware/auth';
 
 const app = express();
 
+app.use(securityHeaders);
+app.use(bodySizeLimit);
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+app.use(async (req, res, next) => {
+  if (isProduction && req.path.startsWith('/api/')) {
+    const ip = req.ip ?? 'unknown';
+    const limit = await checkRateLimit(`api:${ip}`, 120, 60);
+    res.setHeader('X-RateLimit-Limit', '120');
+    res.setHeader('X-RateLimit-Remaining', String(limit.remaining));
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retryAfterSec));
+      res.status(429).json({ error: 'too_many_requests', retryAfterSec: limit.retryAfterSec });
+      return;
+    }
+  }
+  next();
+});
 
 app.use('/health', healthRouter);
 app.use('/webhook', webhookRouter);
@@ -43,7 +65,11 @@ app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 
 app.use('/public', express.static(path.resolve(__dirname, 'public')));
 
+app.use(notFoundHandler);
+app.use(errorHandler);
+
 (async () => {
+  validateJwtSecret();
   await seedDefaultAdmin();
   // Dispara los recordatorios programados que ya vencieron (ver reminderService.ts).
   startReminderWorker();

@@ -1738,3 +1738,30 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   .hide-sm { display: none; }
   .broadcast-bar .btn { padding-left: 12px; padding-right: 12px; font-size: 12.5px; }
 }
+
+/* "Solo los míos": filtra por las fichas asignadas al asesor que está mirando */
+.crm-mios {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s var(--ease-spring), background 0.2s var(--ease-out),
+              color 0.2s var(--ease-out), border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+.crm-mios:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); border-color: var(--utb-blue-light); }
+.crm-mios:active { transform: scale(0.96); }
+.crm-mios.active {
+  background: rgba(0, 48, 135, 0.1);
+  border-color: var(--utb-blue);
+  color: var(--utb-blue);
+  box-shadow: 0 3px 10px rgba(0, 48, 135, 0.18);
+}

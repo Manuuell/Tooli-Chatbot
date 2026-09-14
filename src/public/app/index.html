@@ -2464,6 +2464,7 @@ let crmRows = [];
 let crmFilter = 'todos';
 let crmFichas = {};
 let crmEtapa = 'todas';
+let crmSoloMios = false;
 
 async function renderRegistros(main) {
   let selectMode = false;
@@ -2484,6 +2485,7 @@ async function renderRegistros(main) {
     <div class="crm-etapa-fila" id="crmEtapaFila">
       <span class="crm-etapa-label">Etapa del embudo:</span>
       <div id="crmEtapaWrap"></div>
+      <button type="button" class="crm-mios" id="crmMios" aria-pressed="false">${icon('user', 13)} Solo los míos</button>
     </div>
     <div id="broadcastBar" class="broadcast-bar hidden">
       <div class="broadcast-bar-left">
@@ -2515,6 +2517,14 @@ async function renderRegistros(main) {
     selectMode = !selectMode;
     if (!selectMode) selected.clear();
     updateSelectToggle();
+    renderCrmGrid();
+  });
+  $('#crmMios').addEventListener('click', (e) => {
+    haptic(10);
+    crmSoloMios = !crmSoloMios;
+    const btn = e.currentTarget;
+    btn.classList.toggle('active', crmSoloMios);
+    btn.setAttribute('aria-pressed', String(crmSoloMios));
     renderCrmGrid();
   });
   $('#broadcastAll').addEventListener('click', () => {
@@ -2747,7 +2757,8 @@ async function renderRegistros(main) {
         return acc;
       }, {});
       const hayEtapas = Object.keys(etapaCounts).some(k => k !== 'nuevo');
-      $('#crmEtapaFila').style.display = hayEtapas ? '' : 'none';
+      $('#crmEtapaWrap').style.display = hayEtapas ? '' : 'none';
+      $('#crmEtapaFila').querySelector('.crm-etapa-label').style.display = hayEtapas ? '' : 'none';
       if (hayEtapas) {
         $('#crmEtapaWrap').innerHTML = '';
         $('#crmEtapaWrap').appendChild(buildSegmented(
@@ -2775,10 +2786,37 @@ async function renderRegistros(main) {
         const est = crmFichas[row[3]]?.estado ?? 'nuevo';
         if (est !== crmEtapa) return false;
       }
+      if (crmSoloMios && crmFichas[row[3]]?.asignadoA !== currentUser?.username) return false;
       if (!q) return true;
       return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
     });
-    if (!filtered.length) { $('#regContent').innerHTML = '<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">Sin resultados.</p></div>'; return; }
+    if (!filtered.length) {
+      // Un "sin resultados" mudo obliga a adivinar cuál de los tres filtros
+      // activos lo dejó vacío: se dice cuál y se ofrece quitarlo.
+      const motivos = [];
+      if (crmSoloMios) motivos.push('asignados a ti');
+      if (crmEtapa !== 'todas') motivos.push(`en etapa "${crmEstadoMeta(crmEtapa).label}"`);
+      if (crmFilter !== 'todos') motivos.push(`de ${PROGRAMA_LABELS[crmFilter] ?? crmFilter}`);
+      if (q) motivos.push(`que coincidan con "${q}"`);
+      $('#regContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">${icon('search', 42)}</div>
+          <div class="empty-state-title">Ningún prospecto coincide</div>
+          <div class="empty-state-sub">No hay prospectos ${motivos.join(', ')}.</div>
+          <button type="button" class="btn btn-secondary" id="crmLimpiarFiltros" style="margin-top:12px;">Quitar los filtros</button>
+        </div>`;
+      $('#crmLimpiarFiltros')?.addEventListener('click', () => {
+        crmSoloMios = false;
+        crmEtapa = 'todas';
+        crmFilter = 'todos';
+        if ($('#crmSearch')) $('#crmSearch').value = '';
+        $('#crmMios')?.classList.remove('active');
+        $('#crmMios')?.setAttribute('aria-pressed', 'false');
+        haptic(10);
+        loadReg();
+      });
+      return;
+    }
     $('#regContent').innerHTML = `
       <div class="crm-grid stagger-in">
         ${filtered.map(row => {

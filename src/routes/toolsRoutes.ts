@@ -18,6 +18,7 @@ import { leerRegistrosPosgrado } from '../services/registroService';
 import { leerRegistrosEventoPosgrado, actualizarSeguimientoEvento } from '../services/posgradosEventoSheets';
 import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSheets';
 import { getCodigoNutria, canjearCodigoNutria, getCanjesRecientes } from '../services/nutriaCodigoService';
+import { enviarRecordatorio } from '../flows/recordatorios';
 
 export const toolsRouter = Router();
 
@@ -306,6 +307,31 @@ toolsRouter.post('/registros-evento-posgrado/:fila/seguimiento', async (req: Aut
   } catch (err: any) {
     console.error('[tools/registros-evento-posgrado/seguimiento] error:', err);
     res.status(500).json({ error: 'internal_error', message: err?.message });
+  }
+});
+
+/* ===== Recordatorios manuales (infraestructura real, disparo futuro) =====
+   Infraestructura de envío REAL (usa Evolution/Meta ya configurado).
+   El disparador es MANUAL vía este endpoint protegido con requireAuth.
+   No hay integración con Banner/SIA — el día que exista, ese sistema solo
+   debe llamar a enviarRecordatorio({ telefono, mensaje }) o a este endpoint
+   vía cron. Ver src/flows/recordatorios.ts para el detalle. */
+toolsRouter.post('/recordatorio', async (req: AuthedRequest, res: Response) => {
+  const { telefono, mensaje } = req.body ?? {};
+  if (!telefono || !mensaje) {
+    res.status(400).json({ error: 'missing_fields', message: 'Se requiere { telefono, mensaje }' });
+    return;
+  }
+  try {
+    const result = await enviarRecordatorio({ telefono: String(telefono), mensaje: String(mensaje) });
+    await logAudit(req.user!.username, 'recordatorio_enviado', result.to.slice(-4));
+    res.json(result);
+  } catch (err: any) {
+    const msg = err?.message ?? 'internal_error';
+    // Errores de validación → 400, resto → 500
+    const isValidation = /requeridos|inválido|caracteres/.test(msg);
+    console.error('[tools/recordatorio] error:', msg);
+    res.status(isValidation ? 400 : 500).json({ error: isValidation ? 'validation_error' : 'internal_error', message: msg });
   }
 });
 

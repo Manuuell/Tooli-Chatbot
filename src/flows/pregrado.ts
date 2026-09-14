@@ -73,6 +73,14 @@ export async function handlePregradoRegistroCarrera(ctx: FlowContext): Promise<v
     return;
   }
 
+  if (carrera.length < 2) {
+    await messaging.sendText({
+      to: from,
+      text: 'Por favor dime qué carrera te interesa (mínimo 2 caracteres).\n_Ejemplo: "Ingeniería de Sistemas" o "no sé aún"._\n\nEscribe *menu* para cancelar.',
+    });
+    return;
+  }
+
   const nombre = session?.data.nombre ?? 'Desconocido';
   const email = session?.data.email ?? '';
 
@@ -106,23 +114,41 @@ export async function handlePregradoProspectoNombre(ctx: FlowContext): Promise<v
   const { from, text, session } = ctx;
   const nombre = text.trim();
 
+  if (nombre.toLowerCase() === 'menu') {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
   if (nombre.length < 3) {
-    await messaging.sendText({ to: from, text: 'Por favor escribe tu nombre completo (mínimo 3 caracteres).' });
+    await messaging.sendText({
+      to: from,
+      text: 'Por favor escribe tu *nombre completo* (mínimo 3 caracteres).\n\nEscribe *menu* para cancelar.',
+    });
     return;
   }
 
   await setSession(from, { step: 'pregrado_prospecto_email', data: { ...session?.data, nombre } });
-  await messaging.sendText({ to: from, text: `Gracias, *${nombre}* 👋\n\n¿Cuál es tu *correo electrónico*?` });
+  await messaging.sendText({
+    to: from,
+    text: `Gracias, *${nombre}* 👋\n\n¿Cuál es tu *correo electrónico*?\n\n_Escribe *menu* para cancelar._`,
+  });
 }
 
 export async function handlePregradoProspectoEmail(ctx: FlowContext): Promise<void> {
   const { from, text, session } = ctx;
   const email = text.trim().toLowerCase();
 
+  if (email === 'menu') {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
   if (!EMAIL_REGEX.test(email)) {
     await messaging.sendText({
       to: from,
-      text: 'El correo no parece válido. Por favor escríbelo de nuevo.\n_Ejemplo: nombre@gmail.com_',
+      text: 'El correo no parece válido. Por favor escríbelo de nuevo.\n_Ejemplo: tunombre@gmail.com_\n\nEscribe *menu* para cancelar.',
     });
     return;
   }
@@ -130,13 +156,28 @@ export async function handlePregradoProspectoEmail(ctx: FlowContext): Promise<vo
   await setSession(from, { step: 'pregrado_prospecto_carrera', data: { ...session?.data, email } });
   await messaging.sendText({
     to: from,
-    text: '¿Qué carrera o área de pregrado te interesa?\n\n_Puedes ser específico o general ("no sé aún")._',
+    text: '¿Qué *carrera* te interesa?\n\n_Puedes ser específico (ej: "Ingeniería de Sistemas") o general (ej: "algo de salud", "no sé aún")._\n\nEscribe *menu* para cancelar.',
   });
 }
 
 export async function handlePregradoProspectoCarrera(ctx: FlowContext): Promise<void> {
   const { from, text, session } = ctx;
   const carrera = text.trim();
+
+  if (carrera.toLowerCase() === 'menu') {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
+  if (carrera.length < 2) {
+    await messaging.sendText({
+      to: from,
+      text: 'Por favor dime qué carrera te interesa (mínimo 2 caracteres).\n_Ejemplo: "Ingeniería de Sistemas" o "no sé aún"._\n\nEscribe *menu* para cancelar.',
+    });
+    return;
+  }
+
   const data = session?.data ?? {};
 
   const nombre = data.nombre ?? 'Prospecto';

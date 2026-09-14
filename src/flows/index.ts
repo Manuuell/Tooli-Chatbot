@@ -8,6 +8,7 @@ import {
   handlePregradoRegistroNombre, handlePregradoRegistroEmail, handlePregradoRegistroCarrera,
   handlePregradoProspectoNombre, handlePregradoProspectoEmail, handlePregradoProspectoCarrera,
 } from './pregrado';
+import { handleAcademicoMenu } from './academico';
 import { handleChattingWithAI } from './aiChat';
 import { handleWithAgent } from './withAgent';
 // Flujos legacy (turno, recibo, TI) — se mantienen por si algún usuario tiene sesión activa
@@ -46,6 +47,7 @@ const HANDLERS: Record<string, (ctx: FlowContext) => Promise<void>> = {
   pregrado_prospecto_email: handlePregradoProspectoEmail,
   pregrado_prospecto_carrera: handlePregradoProspectoCarrera,
   // ── Compartido ───────────────────────────────────────────────────────────────
+  academico_menu: handleAcademicoMenu,
   chatting_with_ai: handleChattingWithAI,
   with_agent: handleWithAgent,
   // ── Legacy (sesiones activas anteriores) ────────────────────────────────────

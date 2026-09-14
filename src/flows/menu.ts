@@ -2,6 +2,7 @@ import { setSession } from '../services/session';
 import { track } from '../services/metrics';
 import { FlowContext, messaging, sendMenu, sendMenuPosgrado, sendMenuPregrado } from './shared';
 import { sendCategoriasMenu } from './programas';
+import { sendMenuAcademico } from './academico';
 
 /** Paso 0 — el usuario todavía no eligió Pregrado o Posgrado. */
 export async function handleMenu(ctx: FlowContext): Promise<void> {
@@ -107,6 +108,12 @@ export async function handleMenuPosgrado(ctx: FlowContext): Promise<void> {
     return;
   }
 
+  // 7 — Mi vida académica (estudiantes ya matriculados)
+  if (input === '7') {
+    await sendMenuAcademico(from, 'posgrado');
+    return;
+  }
+
   // Cualquier otro input — mostrar menú
   await track('menu_shown');
   await sendMenuPosgrado(from);
@@ -187,6 +194,12 @@ export async function handleMenuPregrado(ctx: FlowContext): Promise<void> {
         '_Escribe *menu* para cancelar._',
     });
     await track('prospecto_pregrado_iniciado');
+    return;
+  }
+
+  // 6 — Mi vida académica (estudiantes ya matriculados)
+  if (input === '6') {
+    await sendMenuAcademico(from, 'pregrado');
     return;
   }
 

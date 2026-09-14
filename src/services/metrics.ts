@@ -38,7 +38,19 @@ export type MetricEvent =
   | 'prospecto_pregrado_iniciado'
   | 'prospecto_pregrado_completado'
   | 'registro_pregrado_iniciado'
-  | 'registro_pregrado_completado';
+  | 'registro_pregrado_completado'
+  // Mi vida académica (hub de plataformas para estudiantes matriculados).
+  // Un evento por recurso, no uno genérico con prop: así el panel puede
+  // rankear qué está buscando realmente la gente (ver renderMetricas).
+  | 'academico_menu_shown'
+  | 'academico_notas'
+  | 'academico_horario'
+  | 'academico_savio'
+  | 'academico_calendario'
+  | 'academico_recibo'
+  | 'academico_correo'
+  | 'academico_becas'
+  | 'academico_derechos';
 
 export interface MetricProps {
   area?: 'ti' | 'admisiones' | 'posgrados';

@@ -1194,3 +1194,213 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 /* Burbuja mientras el envío está en vuelo */
 .bubble-row.sending .bubble { opacity: 0.62; }
 .bubble-row.sending .bubble-time { font-style: italic; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DISCLOSURE / ACORDEÓN estilo iOS
+   Basado en <details> nativo (accesible con teclado sin JS extra), con
+   chevron que rota y contenido que entra con spring.
+   ═══════════════════════════════════════════════════════════════════ */
+.disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+  transition: box-shadow 0.22s var(--ease-out), border-color 0.22s var(--ease-out);
+}
+.disclosure + .disclosure { margin-top: 10px; }
+.disclosure:hover { border-color: #d6dce8; box-shadow: var(--shadow-sm); }
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  user-select: none;
+  transition: background 0.18s var(--ease-out);
+}
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary:hover { background: rgba(0, 48, 135, 0.035); }
+.disclosure > summary:active { background: rgba(0, 48, 135, 0.07); }
+.disclosure > summary:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--utb-blue-light);
+}
+.disclosure-title { display: inline-flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
+.disclosure-title svg { color: var(--text-muted); flex: 0 0 auto; }
+.disclosure-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.disclosure > summary > svg:last-child {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  transition: transform 0.32s var(--ease-spring);
+}
+.disclosure[open] > summary > svg:last-child { transform: rotate(90deg); }
+.disclosure-body {
+  padding: 2px 14px 14px;
+  animation: disclosure-in 0.34s var(--ease-spring) both;
+}
+@keyframes disclosure-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FICHA DE SEGUIMIENTO DEL CRM
+   ═══════════════════════════════════════════════════════════════════ */
+.crm-ficha { margin: 14px 0 4px; text-align: left; }
+.crm-estado-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.crm-estado-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s var(--ease-spring), background 0.2s var(--ease-out),
+              color 0.2s var(--ease-out), border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+.crm-estado-chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); border-color: var(--chip); }
+.crm-estado-chip:active { transform: scale(0.95); }
+.crm-estado-chip.active {
+  background: color-mix(in srgb, var(--chip) 14%, transparent);
+  border-color: var(--chip);
+  color: var(--chip);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--chip) 26%, transparent);
+}
+.crm-asignado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.crm-asignado-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.crm-asignado-valor { flex: 1; font-weight: 600; text-align: right; }
+.crm-mini-btn { padding: 5px 11px; font-size: 12px; }
+.crm-etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.crm-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 48, 135, 0.07);
+  color: var(--utb-blue);
+  border-radius: 999px;
+  padding: 4px 6px 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  animation: fade-rise-in 0.3s var(--ease-spring) both;
+}
+.crm-etiqueta button {
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 50%;
+  transition: opacity 0.16s, background 0.16s, transform 0.16s var(--ease-spring);
+}
+.crm-etiqueta button:hover { opacity: 1; background: rgba(0, 48, 135, 0.12); transform: scale(1.12); }
+.crm-etiqueta-input {
+  border: 1px dashed var(--border);
+  background: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 11.5px;
+  width: 92px;
+  color: var(--text);
+  transition: border-color 0.18s var(--ease-out), width 0.24s var(--ease-spring);
+}
+.crm-etiqueta-input:focus { outline: none; border-color: var(--utb-blue-light); border-style: solid; width: 130px; }
+.crm-notas { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.crm-notas-vacio { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; padding: 6px 0; }
+.crm-nota {
+  background: rgba(0, 48, 135, 0.04);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+}
+.crm-nota.recien-agregada { animation: fade-rise-in 0.38s var(--ease-spring) both; }
+.crm-nota.saliendo { opacity: 0; transform: translateX(-12px); }
+.crm-nota-texto { font-size: 12.5px; line-height: 1.45; color: var(--text); white-space: pre-wrap; }
+.crm-nota-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.crm-nota-del {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px;
+  border-radius: 6px;
+  transition: opacity 0.18s var(--ease-out), color 0.18s, background 0.18s;
+}
+.crm-nota:hover .crm-nota-del, .crm-nota-del:focus-visible { opacity: 1; }
+.crm-nota-del:hover { color: var(--danger); background: rgba(255, 59, 48, 0.1); }
+.crm-nota-form { display: flex; flex-direction: column; gap: 8px; }
+.crm-nota-form textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  resize: vertical;
+  min-height: 54px;
+  color: var(--text);
+  transition: border-color 0.18s var(--ease-out), box-shadow 0.22s var(--ease-out);
+}
+.crm-nota-form textarea:focus {
+  outline: none;
+  border-color: var(--utb-blue-light);
+  box-shadow: 0 0 0 4px rgba(30, 115, 190, 0.13);
+}
+.crm-nota-form .btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Estado de la ficha en la tarjeta del CRM (vista de grilla) */
+.crm-card-ficha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.crm-card-asignado,
+.crm-card-notas {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.05);
+  border-radius: 999px;
+  padding: 3px 8px 3px 6px;
+}
+.crm-card-asignado svg, .crm-card-notas svg { opacity: 0.7; }

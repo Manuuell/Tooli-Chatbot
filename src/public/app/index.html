@@ -563,6 +563,8 @@ function dateLabelToday() {
 
 async function renderHome(main) {
   const isAdmin = currentUser.role === 'admin';
+  let homeFichas = null;   // se comparte entre "Requiere atención" y el embudo
+  setPullToRefresh(() => renderHome(main));
   main.innerHTML = `
     <div class="page-header">
       <div>
@@ -590,6 +592,14 @@ async function renderHome(main) {
       </div>
     </div>
 
+    <div class="widget-card stagger-in" id="funnelWidget" style="margin-bottom:14px;">
+      <div class="widget-card-head">
+        <h3>Embudo de prospectos</h3>
+        <button type="button" class="widget-link" id="seeAllCrm">Ver el CRM ${icon('chevronRight', 13)}</button>
+      </div>
+      <div id="funnelBody">${Array.from({ length: 3 }).map(() => `<div class="skeleton skeleton-line" style="height:12px;margin:9px 6px;"></div>`).join('')}</div>
+    </div>
+
     <div class="widget-card stagger-in" id="roleWidget">
       <div class="widget-card-head"><h3>${isAdmin ? 'Actividad de asesores' : 'Tu actividad reciente'}</h3>${isAdmin ? `<button type="button" class="widget-link" id="seeAllActivity">Ver todo ${icon('chevronRight', 13)}</button>` : ''}</div>
       <div id="roleWidgetBody">${Array.from({ length: 4 }).map(() => `<div class="skeleton skeleton-line" style="height:12px;margin:8px 6px;"></div>`).join('')}</div>
@@ -602,6 +612,7 @@ async function renderHome(main) {
     { icon: 'receipt', label: 'Descargar recibo', sub: 'PDF desde Iceberg', go: () => navigate('recibo') },
     { icon: 'users', label: 'CRM · Prospectos', sub: 'Búsqueda y filtros', go: () => navigate('registros') },
     { icon: 'cap', label: 'Posgrados', sub: 'Gráficas y embudo', go: () => navigate('posgrados') },
+    { icon: 'clock', label: 'Recordatorios', sub: 'Mensajes programados por WhatsApp', go: () => navigate('recordatorios') },
     { icon: 'chart', label: 'Métricas', sub: 'Actividad de los últimos días', go: () => navigate('metricas') },
     { icon: 'message', label: `Abrir Chatwoot${capabilities.chatwootSso ? ' · SSO' : ''}`, sub: 'Atender conversaciones humanas', go: () => openChatwootExternal() },
     { icon: 'chart', label: 'Abrir Grafana', sub: 'Métricas técnicas en vivo', go: () => window.open(publicUrls.grafana, '_blank', 'noopener') },
@@ -626,16 +637,37 @@ async function renderHome(main) {
   }
 
   $('#seeAllActivity')?.addEventListener('click', () => navigate('actividad'));
+  $('#seeAllCrm')?.addEventListener('click', () => navigate('registros'));
 
   // ── "Requiere atención": combina datos reales de bot-users, Chatwoot y salud ──
   (async () => {
     const rows = [];
     try {
-      const [botUsersRes, chatwootRes, healthRes] = await Promise.allSettled([
+      const [botUsersRes, chatwootRes, healthRes, fichasRes, remRes] = await Promise.allSettled([
         api('/api/tools/bot-users').then(r => r.json()),
         api('/api/tools/chatwoot/summary').then(r => r.json()),
         fetch('/health/deep', { credentials: 'same-origin' }).then(r => r.json()),
+        api('/api/tools/crm/fichas').then(r => r.json()),
+        api('/api/tools/recordatorios').then(r => r.json()),
       ]);
+
+      // Recordatorios que no salieron: nadie se entera si no se avisa acá.
+      if (remRes.status === 'fulfilled') {
+        const fallidos = (remRes.value.reminders ?? []).filter(x => x.estado === 'fallido');
+        if (fallidos.length) {
+          rows.push({ tone: 'danger', html: `<strong>${fallidos.length}</strong> recordatorio${fallidos.length !== 1 ? 's' : ''} no se pudo enviar`, go: 'recordatorios' });
+        }
+      }
+
+      // Prospectos interesados que nadie tomó — el caso que más se pierde.
+      if (fichasRes.status === 'fulfilled') {
+        const fichas = Object.values(fichasRes.value.fichas ?? {});
+        homeFichas = fichas;
+        const huerfanos = fichas.filter(f => !f.asignadoA && (f.estado === 'interesado' || f.estado === 'contactado'));
+        if (huerfanos.length) {
+          rows.push({ tone: 'warning', html: `<strong>${huerfanos.length}</strong> prospecto${huerfanos.length !== 1 ? 's' : ''} en seguimiento sin asesor asignado`, go: 'registros' });
+        }
+      }
       if (chatwootRes.status === 'fulfilled') {
         const cw = chatwootRes.value;
         if (cw.unassigned > 0) rows.push({ tone: 'danger', html: `<strong>${cw.unassigned}</strong> conversación${cw.unassigned !== 1 ? 'es' : ''} sin asignar en Chatwoot`, go: 'conversaciones' });
@@ -663,6 +695,32 @@ async function renderHome(main) {
       </button>
     `).join('');
     $$('#attentionList [data-go]').forEach(b => b.addEventListener('click', () => navigate(b.dataset.go)));
+  })();
+
+  // ── Embudo del equipo: cuántos prospectos hay en cada etapa (dato real de
+  //    las fichas del CRM, no una estimación) ──
+  (async () => {
+    const cont = $('#funnelBody');
+    if (!cont) return;
+    let fichas = homeFichas;
+    if (!fichas) {
+      try { fichas = Object.values((await (await api('/api/tools/crm/fichas')).json()).fichas ?? {}); }
+      catch { cont.innerHTML = `<div class="widget-empty">No se pudo cargar el embudo.</div>`; return; }
+    }
+    if (!fichas.length) {
+      cont.innerHTML = `<div class="widget-empty">${icon('tag', 16)} Nadie ha movido prospectos todavía. Abre una ficha en el CRM y marca en qué punto va.</div>`;
+      return;
+    }
+    const counts = fichas.reduce((acc, f) => { acc[f.estado] = (acc[f.estado] ?? 0) + 1; return acc; }, {});
+    const total = fichas.length;
+    cont.innerHTML = CRM_ESTADOS.filter(e => counts[e.value]).map(e => `
+      <div class="funnel-row" data-estado="${e.value}">
+        <div class="funnel-label">${e.icon} ${e.label}</div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round(counts[e.value] / total * 100)}%;background:${e.color};"></div></div>
+        <div class="funnel-value">${counts[e.value]}</div>
+      </div>
+    `).join('');
+    $$('#funnelBody .funnel-row').forEach(r => r.addEventListener('click', () => navigate('registros')));
   })();
 
   // ── Widget de rol: admin ve actividad del equipo, asesor ve la suya ──

@@ -1654,3 +1654,35 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   white-space: nowrap;
   font-style: italic;
 }
+
+/* Embudo de prospectos en el inicio */
+.funnel-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.18s var(--ease-out), transform 0.18s var(--ease-spring);
+}
+.funnel-row:hover { background: rgba(0, 48, 135, 0.04); transform: translateX(2px); }
+.funnel-row:active { transform: scale(0.99); }
+.funnel-label { width: 116px; flex: 0 0 auto; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.funnel-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(15, 23, 42, 0.07);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.funnel-fill {
+  height: 100%;
+  border-radius: 999px;
+  transform-origin: left center;
+  animation: funnel-grow 0.7s var(--ease-spring) both;
+}
+@keyframes funnel-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.funnel-value { width: 30px; text-align: right; font-size: 13px; font-weight: 700; color: var(--text); }
+@media (max-width: 520px) {
+  .funnel-label { width: 96px; font-size: 11.5px; }
+}

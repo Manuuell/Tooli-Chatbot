@@ -2,6 +2,7 @@ import axios from 'axios';
 import { IMessagingAdapter, OutboundMessage, OutboundButtons, OutboundList, OutboundDocument, OutboundImage, OutboundMediaUrl } from './IMessagingAdapter';
 import { config } from '../../config';
 import { recordActivity } from '../../services/botUserService';
+import { maskPhone } from '../../services/logSafe';
 
 export class EvolutionAPIAdapter implements IMessagingAdapter {
   private readonly baseUrl: string;
@@ -131,7 +132,7 @@ export class EvolutionAPIAdapter implements IMessagingAdapter {
         })),
       })),
     };
-    console.log('[sendList] to:', msg.to);
+    console.log('[sendList] to:', maskPhone(msg.to));
     try {
       const res = await axios.post(
         `${this.baseUrl}/message/sendList/${this.instance}`,

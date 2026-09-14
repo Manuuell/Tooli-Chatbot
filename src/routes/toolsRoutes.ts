@@ -20,7 +20,7 @@ import { leerEncuestasNutria, guardarEncuestaNutria } from '../services/nutriaSh
 import { getCodigoNutria, canjearCodigoNutria, getCanjesRecientes } from '../services/nutriaCodigoService';
 import { enviarRecordatorio } from '../flows/recordatorios';
 import { messaging } from '../flows/shared';
-import { maskCode } from '../services/logSafe';
+import { maskCode, maskPhone } from '../services/logSafe';
 
 export const toolsRouter = Router();
 
@@ -98,7 +98,7 @@ toolsRouter.post('/nutria/codigo/:code/canjear', async (req, res) => {
     res.status(status).json({ error: result.error, data: result.data });
     return;
   }
-  console.log(`[nutria] código canjeado: ${code} — ${result.data?.phone?.slice(-4)}`);
+  console.log(`[nutria] código canjeado: ${maskCode(code)} — ${maskPhone(result.data?.phone)}`);
   res.json({ ok: true, code, ...result.data });
 });
 

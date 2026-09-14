@@ -1869,3 +1869,15 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
 @media (max-width: 860px) {
   .version-nueva { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Profundidad al pasar el mouse sobre las tarjetas de recordatorio.
+   Son filas de información, no botones: la elevación es más leve que la de una
+   tarjeta clickeable, para no prometer una acción que no existe. */
+.rem-card {
+  transition: transform 0.24s var(--ease-spring), box-shadow 0.24s var(--ease-out), border-color 0.2s var(--ease-out);
+}
+.rem-card:hover {
+  transform: translateY(-2px);
+  border-color: #d6dce8;
+  box-shadow: 0 10px 26px -14px rgba(0, 48, 135, 0.4), var(--shadow-sm);
+}

@@ -638,16 +638,25 @@ function renderTurno(main) {
     e.preventDefault();
     const codigo = $('#codigo').value.trim().toUpperCase();
     const btn = $('#turnoBtn');
+    haptic(10);
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Buscando…';
     $('#turnoAlert').innerHTML = '';
-    $('#turnoResult').innerHTML = '';
+    $('#turnoResult').innerHTML = `
+      <div class="result-block turno-skeleton-block" aria-hidden="true">
+        ${Array.from({ length: 5 }).map(() => `
+          <div class="row"><span class="skeleton skeleton-line" style="width:72px;height:11px;"></span><span class="skeleton skeleton-line" style="width:118px;height:12px;"></span></div>
+        `).join('')}
+      </div>`;
     try {
       const r = await api(`/api/tools/turno/${encodeURIComponent(codigo)}`);
       if (!r.ok) {
         const err = await r.json();
-        const msg = err.error === 'no_encontrado' ? `No se encontró información para ${codigo}.` :
-                    err.error === 'codigo_invalido' ? 'Formato de código inválido.' : 'Error consultando el turno.';
-        $('#turnoAlert').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+        $('#turnoResult').innerHTML = '';
+        const msg = err.error === 'no_encontrado' ? `No se encontró información para <strong>${escapeHtml(codigo)}</strong>. Verifica el código e intenta de nuevo.` :
+                    err.error === 'codigo_invalido' ? 'Formato de código inválido. Usa T seguido de 8 dígitos (ej. T00012345).' : 'No se pudo consultar el turno. Intenta de nuevo en unos segundos.';
+        const tone = err.error === 'no_encontrado' ? 'alert-info' : 'alert-error';
+        const ic = err.error === 'no_encontrado' ? icon('search', 16) : icon('x', 16);
+        $('#turnoAlert').innerHTML = `<div class="alert ${tone} turno-alert"><span class="turno-alert-icon">${ic}</span><span>${msg}</span></div>`;
         haptic([20, 30, 20]);
         return;
       }
@@ -660,19 +669,22 @@ function renderTurno(main) {
         ['Hora', turno.hora],
       ];
       $('#turnoResult').innerHTML = `
-        <div class="result-block">
-          ${fields.map(([label, value]) => `<div class="row" data-copy-row><span class="label">${label}</span><span class="value">${value}</span></div>`).join('')}
+        <div class="result-block turno-result">
+          <div class="turno-result-head"><span class="turno-result-dot"></span> Resultado para ${escapeHtml(codigo)}</div>
+          ${fields.map(([label, value]) => `<div class="row" data-copy-row><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value) || '—'}</span></div>`).join('')}
         </div>
-        <p style="font-size:11.5px;color:var(--text-muted);margin-top:8px;text-align:center;">Mantén presionado un dato para copiarlo</p>
+        <p class="turno-hint">Mantén presionado un dato para copiarlo</p>
       `;
       $$('#turnoResult [data-copy-row]').forEach(row => {
         const label = row.querySelector('.label').textContent;
         const value = row.querySelector('.value').textContent;
-        contextSheet(row, { title: label, actions: [{ label: `Copiar "${value}"`, icon: '📋', onClick: () => copyToClipboard(value, `${label} copiado`) }] });
+        if (!value || value === '—') return;
+        contextSheet(row, { title: label, subtitle: value, actions: [{ label: `Copiar "${value}"`, icon: '📋', onClick: () => copyToClipboard(value, `${label} copiado`) }] });
       });
       haptic([15, 40, 15]);
     } catch {
-      $('#turnoAlert').innerHTML = `<div class="alert alert-error">Error de conexión.</div>`;
+      $('#turnoResult').innerHTML = '';
+      $('#turnoAlert').innerHTML = `<div class="alert alert-error turno-alert"><span class="turno-alert-icon">${icon('x', 16)}</span><span>Error de conexión. Revisa tu internet e intenta de nuevo.</span></div>`;
       haptic([20, 30, 20]);
     } finally {
       btn.disabled = false; btn.textContent = 'Buscar';
@@ -701,6 +713,7 @@ function renderRecibo(main) {
       </form>
 
       <div id="reciboAlert"></div>
+      <div id="reciboResult"></div>
     </div>
   `;
 
@@ -709,15 +722,17 @@ function renderRecibo(main) {
     const codigo = $('#rCodigo').value.trim().toUpperCase();
     const cedula = $('#rCedula').value.trim();
     const btn = $('#reciboBtn');
+    haptic(10);
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Descargando…';
     $('#reciboAlert').innerHTML = `
-      <div class="alert alert-info" style="display:flex;align-items:center;gap:16px;">
+      <div class="alert alert-info recibo-loading">
         ${buildProgressRing('reciboProgress')}
-        <div>
-          <div style="font-weight:600;margin-bottom:2px;">Ingresando al portal Iceberg…</div>
-          <div style="font-size:12px;opacity:0.85;">Puede tardar hasta un minuto. No cierres esta pestaña.</div>
+        <div class="recibo-loading-text">
+          <div class="recibo-loading-title">Ingresando al portal Iceberg…</div>
+          <div class="recibo-loading-sub">Puede tardar hasta un minuto. No cierres esta pestaña.</div>
         </div>
       </div>`;
+    $('#reciboResult').innerHTML = '';
     let pct = 4;
     setProgress('reciboProgress', pct);
     const progTimer = setInterval(() => {
@@ -742,21 +757,47 @@ function renderRecibo(main) {
         URL.revokeObjectURL(url);
         setProgress('reciboProgress', 100);
         haptic([15, 40, 15]);
-        $('#reciboAlert').innerHTML = `<div class="alert alert-success" style="text-align:center;">${successCheckSvg()}<div style="margin-top:8px;font-weight:600;">PDF descargado correctamente</div></div>`;
+        $('#reciboAlert').innerHTML = `<div class="alert alert-success recibo-success">${successCheckSvg()}<div class="recibo-success-title">PDF descargado correctamente</div><div class="recibo-success-sub">Se guardó como recibo-${escapeHtml(codigo)}.pdf</div></div>`;
+        $('#reciboResult').innerHTML = `
+          <div class="result-block recibo-result">
+            <div class="row" data-copy-row data-copy-label="Código"><span class="label">Código</span><span class="value">${escapeHtml(codigo)}</span></div>
+            <div class="row" data-copy-row data-copy-label="Archivo"><span class="label">Archivo</span><span class="value">recibo-${escapeHtml(codigo)}.pdf</span></div>
+          </div>
+          <p class="turno-hint">Mantén presionado un dato para copiarlo</p>`;
+        $$('#reciboResult [data-copy-row]').forEach(row => {
+          const label = row.dataset.copyLabel || row.querySelector('.label').textContent;
+          const value = row.querySelector('.value').textContent;
+          contextSheet(row, { title: label, subtitle: value, actions: [{ label: `Copiar "${value}"`, icon: '📋', onClick: () => copyToClipboard(value, `${label} copiado`) }] });
+        });
       } else {
         const err = await res.json();
-        const msg = err.noRecibos ? `No hay recibos pendientes${err.nombre ? ` para ${err.nombre}` : ''}.` :
-                    err.error === 'login_failed' ? 'Las credenciales no son válidas. Verifica el código y la cédula.' :
-                    err.error === 'codigo_invalido' ? 'Formato de código inválido.' :
-                    err.error === 'cedula_invalida' ? 'Formato de cédula inválido.' :
-                    'No se pudo descargar el recibo.';
+        let msg = '';
+        let tone = 'alert-error';
+        let ic = icon('x', 16);
+        if (err.noRecibos) {
+          tone = 'alert-info';
+          ic = icon('search', 16);
+          msg = err.nombre ? `No hay recibos pendientes para <strong data-copy-nombre>${escapeHtml(err.nombre)}</strong>.` : 'No hay recibos pendientes para este estudiante.';
+        } else if (err.error === 'login_failed') {
+          msg = 'Las credenciales no son válidas. Verifica el código y la cédula.';
+        } else if (err.error === 'codigo_invalido') {
+          msg = 'Formato de código inválido. Usa T seguido de 8 dígitos.';
+        } else if (err.error === 'cedula_invalida') {
+          msg = 'Formato de cédula inválido. Solo dígitos, sin puntos ni guiones.';
+        } else {
+          msg = err.detail ? escapeHtml(err.detail) : 'No se pudo descargar el recibo. Intenta de nuevo en unos segundos.';
+        }
         haptic([20, 30, 20]);
-        $('#reciboAlert').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+        $('#reciboAlert').innerHTML = `<div class="alert ${tone} turno-alert"><span class="turno-alert-icon">${ic}</span><span>${msg}</span></div>`;
+        if (err.noRecibos && err.nombre) {
+          const nombreEl = $('#reciboAlert [data-copy-nombre]');
+          if (nombreEl) contextSheet(nombreEl, { title: 'Estudiante', subtitle: err.nombre, actions: [{ label: `Copiar "${err.nombre}"`, icon: '📋', onClick: () => copyToClipboard(err.nombre, 'Nombre copiado') }] });
+        }
       }
     } catch {
       clearInterval(progTimer);
       haptic([20, 30, 20]);
-      $('#reciboAlert').innerHTML = '<div class="alert alert-error">Error de conexión.</div>';
+      $('#reciboAlert').innerHTML = `<div class="alert alert-error turno-alert"><span class="turno-alert-icon">${icon('x', 16)}</span><span>Error de conexión. Revisa tu internet e intenta de nuevo.</span></div>`;
     } finally {
       btn.disabled = false; btn.textContent = 'Descargar PDF';
     }

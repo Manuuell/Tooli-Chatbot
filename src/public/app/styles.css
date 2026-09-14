@@ -1012,3 +1012,45 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .health-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .health-latency { font-size: 11px; font-weight: 700; color: var(--text-muted); background: #f1f5f9; padding: 2px 7px; border-radius: 6px; font-variant-numeric: tabular-nums; }
 .health-card [data-detail] { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
+
+/* ===================================================================
+   Turno / Recibo — pulido iOS (skeleton, alerts con icono, resultado)
+   Solo agrega reglas nuevas; no reescribe las existentes de .tool-panel
+   =================================================================== */
+.turno-alert { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; }
+.turno-alert-icon { flex-shrink: 0; display: inline-flex; margin-top: 1px; opacity: 0.9; }
+.turno-alert-icon svg { display: block; }
+.turno-skeleton-block { border-left-color: var(--border); opacity: 0.9; animation: fade-rise-in 0.3s var(--ease-out) both; }
+.turno-skeleton-block .row { border-bottom-color: transparent; }
+.turno-result { animation: fade-rise-in 0.4s var(--ease-spring) both; }
+.turno-result-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--utb-blue); letter-spacing: 0.2px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.turno-result-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12); flex-shrink: 0; }
+.turno-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 10px; text-align: center; }
+.recibo-loading { display: flex; align-items: center; gap: 16px; }
+.recibo-loading-text { min-width: 0; }
+.recibo-loading-title { font-weight: 700; margin-bottom: 2px; }
+.recibo-loading-sub { font-size: 12px; opacity: 0.85; line-height: 1.4; }
+.recibo-success { text-align: center; }
+.recibo-success-title { margin-top: 8px; font-weight: 700; }
+.recibo-success-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; word-break: break-all; }
+.recibo-result { margin-top: 14px; }
+.recibo-result .value { word-break: break-word; }
+
+/* El resultado de turno/recibo debe envolver limpio en pantallas angostas:
+   el label queda fijo, el value puede romper línea sin empujar hacia fuera. */
+.turno-result .row, .recibo-result .row { gap: 12px; align-items: flex-start; }
+.turno-result .row .label, .recibo-result .row .label { flex-shrink: 0; }
+.turno-result .row .value, .recibo-result .row .value { min-width: 0; text-align: right; word-break: break-word; }
+
+@media (max-width: 720px) {
+  .recibo-loading { gap: 12px; }
+  .recibo-loading .progress-ring { width: 48px; height: 48px; }
+  .recibo-loading .progress-ring svg { width: 48px; height: 48px; }
+  .turno-result .row, .recibo-result .row { padding: 8px 0; }
+}
+@media (max-width: 375px) {
+  .tool-panel { padding: 20px 14px; }
+  .tool-panel .btn { width: 100%; justify-content: center; }
+  .turno-result .row, .recibo-result .row { flex-direction: column; gap: 2px; align-items: stretch; }
+  .turno-result .row .value, .recibo-result .row .value { text-align: left; }
+}

@@ -1622,8 +1622,15 @@ async function openThread(phone) {
   $('#threadBack')?.addEventListener('click', () => $('#inbox').classList.remove('thread-open'));
 
   try {
-    const r = await api(`/api/tools/bot-users/${phone}`);
+    // La ficha del CRM va en paralelo: da contexto para responder (en qué punto
+    // del embudo está, quién lo tiene, qué anotó el compañero) sin cambiar de
+    // pantalla. Si falla, el hilo se abre igual — es contexto, no un requisito.
+    const [r, fichaRes] = await Promise.all([
+      api(`/api/tools/bot-users/${phone}`),
+      api(`/api/tools/crm/${phone}`).then(x => x.json()).catch(() => null),
+    ]);
     const info = await r.json();
+    const ficha = fichaRes?.ficha ?? null;
     const nombre = info.session?.data?.nombre;
     const msgs = [...info.recentMessages].reverse();
     const groups = groupMessages(msgs);
@@ -1646,6 +1653,18 @@ async function openThread(phone) {
         <button type="button" class="btn btn-ghost" id="threadPhoneBtn" title="Ver cómo lo ve el estudiante" style="padding:8px;">${icon('phone', 18)}</button>
         <button type="button" class="btn btn-ghost" id="threadMenuBtn" style="padding:8px;">${icon('more', 18)}</button>
       </div>
+      ${(() => {
+        if (!ficha || (ficha.estado === 'nuevo' && !ficha.notas?.length && !ficha.asignadoA && !ficha.etiquetas?.length)) return '';
+        const em = crmEstadoMeta(ficha.estado);
+        const ultima = ficha.notas?.[0];
+        return `
+          <div class="thread-crm">
+            <span class="badge" style="background:${em.color}1f;color:${em.color};">${em.icon} ${em.label}</span>
+            ${ficha.asignadoA ? `<span class="thread-crm-item">${icon('user', 12)} ${escapeHtml(ficha.asignadoA)}</span>` : ''}
+            ${ficha.etiquetas?.length ? ficha.etiquetas.slice(0, 3).map(e => `<span class="thread-crm-tag">${escapeHtml(e)}</span>`).join('') : ''}
+            ${ultima ? `<span class="thread-crm-nota" title="${escapeHtml(ultima.texto)}">${icon('note', 12)} ${escapeHtml(ultima.texto)}</span>` : ''}
+          </div>`;
+      })()}
       <div class="inbox-messages" id="inboxMessages">
         ${info.session?.step ? `<div class="thread-meta">Paso actual de la sesión: <strong>${escapeHtml(info.session.step)}</strong></div>` : ''}
         ${groups.length === 0 ? `
@@ -1685,6 +1704,7 @@ async function openThread(phone) {
     $('#threadMenuBtn').addEventListener('click', () => ActionSheet.open({
       title: nombre ?? `+${phone}`,
       groups: [[
+        { label: 'Ficha del prospecto', icon: '🗂️', onClick: () => openFichaSheet(phone, nombre, ficha, info) },
         { label: 'Copiar número', icon: '🔗', onClick: () => copyToClipboard(phone, 'Número copiado') },
         { label: 'Resetear sesión', icon: '🔄', onClick: () => quickAction(phone, 'reset-session').then(() => openThread(phone)) },
         { label: info.banned ? 'Desbanear' : 'Banear', icon: '⛔', destructive: !info.banned, onClick: () => quickAction(phone, info.banned ? 'unban' : 'ban').then(() => openThread(phone)) },
@@ -1715,6 +1735,32 @@ function formatWhatsApp(textoEscapado) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* Ficha del prospecto desde la bandeja — el mismo componente que usa el CRM,
+   para que anotar el resultado de una conversación no obligue a cambiar de
+   pantalla ni a buscar a la persona otra vez. */
+function openFichaSheet(phone, nombre, ficha, info) {
+  const cat = flowCategory(info?.session?.step);
+  openProfileSheet({
+    avatarBg: avatarTone(phone),
+    avatarText: initialsFor(phone, nombre),
+    title: nombre || `+${phone}`,
+    subtitle: nombre ? `+${phone}` : undefined,
+    badges: [
+      ...(cat ? [{ label: cat.label, color: cat.color }] : []),
+      ...(info?.banned ? [{ label: 'Baneado', color: '#dc2626' }] : []),
+      ...(info?.aiDisabled ? [{ label: 'IA apagada', color: '#f59e0b' }] : []),
+    ],
+    rows: [
+      ...(info?.session?.data?.correo ? [{ icon: '📧', label: 'Correo', value: info.session.data.correo }] : []),
+      ...(info?.session?.data?.programa ? [{ icon: '🎓', label: 'Programa', value: info.session.data.programa }] : []),
+      ...(info?.session?.step ? [{ icon: '🔄', label: 'Paso de la sesión', value: info.session.step }] : []),
+    ],
+    extraHtml: fichaHtml(ficha),
+    onMount: (sheet) => wireFicha(sheet, phone, ficha, null),
+    actions: [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(phone), closeAfter: false }],
+  });
 }
 
 /* Composer de la bandeja: responder por WhatsApp sin salir del panel.

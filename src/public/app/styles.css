@@ -1537,3 +1537,71 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   .rem-layout { grid-template-columns: 1fr; }
   .rem-form { position: static; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PULL TO REFRESH — indicador flotante estilo iOS
+   ═══════════════════════════════════════════════════════════════════ */
+.ptr-indicator {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  color: var(--text-muted);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 900;
+  transition: opacity 0.22s var(--ease-out), transform 0.32s var(--ease-spring), color 0.2s ease;
+}
+.ptr-indicator.ready { color: var(--utb-blue); }
+.ptr-indicator .ptr-spinner { display: grid; place-items: center; }
+.ptr-indicator.loading .ptr-spinner {
+  animation: ptr-spin 0.75s linear infinite;
+  transform: none !important;
+}
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOCO VISIBLE — anillo estilo iOS para navegación por teclado.
+   Solo con :focus-visible, así el mouse no lo dispara.
+   ═══════════════════════════════════════════════════════════════════ */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(30, 115, 190, 0.45), 0 0 0 6px rgba(30, 115, 190, 0.16);
+  border-radius: var(--radius-sm);
+}
+.sidebar a:focus-visible,
+.tab-item:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOVIMIENTO REDUCIDO — respeta la preferencia del sistema.
+   Se desactiva lo decorativo, no lo funcional: los cambios de estado
+   siguen ocurriendo, simplemente sin animarse.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .empty-state-icon,
+  .ptr-indicator.loading .ptr-spinner,
+  .pulse-dot::before {
+    animation: none !important;
+  }
+  .btn:hover, .card:hover, .crm-card:hover, .tool-card:hover {
+    transform: none !important;
+  }
+}

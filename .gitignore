@@ -8,3 +8,4 @@ tmp-iceberg/
 tmp/
 *.key
 *.pem
+.worktrees/

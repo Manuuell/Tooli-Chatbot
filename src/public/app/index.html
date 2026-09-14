@@ -1930,7 +1930,16 @@ async function openThread(phone) {
         { label: info.banned ? 'Desbanear' : 'Banear', icon: '⛔', destructive: !info.banned, onClick: () => quickAction(phone, info.banned ? 'unban' : 'ban').then(() => openThread(phone)) },
       ], [{ label: 'Cancelar', cancel: true }]],
     }));
-    $('#threadPhoneBtn').addEventListener('click', () => openPhonePreview(phone, nombre, groups));
+    $('#threadPhoneBtn').addEventListener('click', () => {
+      // Si el asesor tiene algo escrito sin enviar, la vista previa lo incluye:
+      // el punto de mirar el teléfono es ver cómo va a quedar lo que va a mandar,
+      // sobre todo con el formato de WhatsApp (*negrita*, saltos de línea).
+      const borrador = $('#composerInput')?.value?.trim();
+      const conBorrador = borrador
+        ? [...groups, [{ ts: Date.now(), direction: 'out', text: borrador }]]
+        : groups;
+      openPhonePreview(phone, nombre, conBorrador);
+    });
     setupComposer(phone, nombre);
     const msgsEl = $('#inboxMessages');
     requestAnimationFrame(() => {

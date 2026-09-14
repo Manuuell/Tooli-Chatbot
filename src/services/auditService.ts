@@ -25,7 +25,10 @@ export type AuditAction =
   | 'broadcast_enviado'
   | 'recordatorio_programado'
   | 'recordatorio_cancelado'
-  | 'mensaje_enviado';
+  | 'mensaje_enviado'
+  | 'crm_nota_agregada'
+  | 'crm_estado_actualizado'
+  | 'crm_asignado';
 
 export interface AuditEntry {
   ts: number;

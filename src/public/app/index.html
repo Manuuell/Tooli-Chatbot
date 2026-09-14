@@ -285,6 +285,12 @@ const ICONS = {
   x: '<path d="m6 6 12 12M18 6 6 18"/>',
   bell: '<path d="M7 9a5 5 0 0 1 10 0v4l1.5 3h-13L7 13Z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
   phone: '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
+  send: '<path d="M4.5 12 20 4.5 15 20l-3.5-5.5L4.5 12Z"/><path d="m11.5 14.5 3.5-6"/>',
+  note: '<path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h4"/>',
+  tag: '<path d="M3 11V4a1 1 0 0 1 1-1h7l9 9-8 8-9-9Z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/>',
+  user: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/>',
+  book: '<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5Z"/><path d="M5 19.5A1.5 1.5 0 0 1 6.5 18H19v3H6.5A1.5 1.5 0 0 1 5 19.5Z"/>',
 };
 function icon(name, size = 20) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon-svg">${ICONS[name] ?? ''}</svg>`;
@@ -1544,7 +1550,16 @@ async function openThread(phone) {
         `).join('')).join('')}
       </div>
       <div class="inbox-thread-footer">
-        <a class="btn btn-secondary" href="${publicUrls.chatwoot}" target="_blank" rel="noopener" style="width:100%;justify-content:center;">💬 Responder en Chatwoot</a>
+        ${info.banned ? `
+          <div class="composer-blocked">${icon('ban', 15)} Esta persona está baneada. Desbanéala para poder responder.</div>
+        ` : `
+          <form class="composer" id="composer" autocomplete="off">
+            <textarea class="composer-input" id="composerInput" rows="1" maxlength="4096"
+              placeholder="Escribe un mensaje…" aria-label="Escribir mensaje para ${nombre ? escapeHtml(nombre) : `+${phone}`}"></textarea>
+            <button type="submit" class="composer-send" id="composerSend" disabled aria-label="Enviar mensaje">${icon('send', 18)}</button>
+          </form>
+          <div class="composer-hint" id="composerHint">Enter envía · Shift+Enter salta de línea</div>
+        `}
       </div>
     `;
     $('#threadBack')?.addEventListener('click', () => $('#inbox').classList.remove('thread-open'));
@@ -1563,6 +1578,7 @@ async function openThread(phone) {
       ], [{ label: 'Cancelar', cancel: true }]],
     }));
     $('#threadPhoneBtn').addEventListener('click', () => openPhonePreview(phone, nombre, groups));
+    setupComposer(phone);
     const msgsEl = $('#inboxMessages');
     requestAnimationFrame(() => {
       try { msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'smooth' }); } catch { msgsEl.scrollTop = msgsEl.scrollHeight; }
@@ -1574,6 +1590,78 @@ async function openThread(phone) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* Composer de la bandeja: responder por WhatsApp sin salir del panel.
+   El backend valida la ventana de 24h de Meta y devuelve 409 con el motivo. */
+function setupComposer(phone) {
+  const form = $('#composer');
+  if (!form) return;
+  const input = $('#composerInput');
+  const sendBtn = $('#composerSend');
+  const hint = $('#composerHint');
+  const msgsEl = $('#inboxMessages');
+
+  const autoGrow = () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+  };
+  const sync = () => {
+    sendBtn.disabled = input.value.trim().length === 0;
+    autoGrow();
+  };
+  input.addEventListener('input', sync);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const texto = input.value.trim();
+    if (!texto) return;
+
+    // Burbuja optimista: el mensaje aparece al instante y se marca "enviando".
+    const row = document.createElement('div');
+    row.className = 'bubble-row out group-start sending';
+    row.innerHTML = `<div class="bubble out">${escapeHtml(texto)}<span class="bubble-time">enviando…</span></div>`;
+    msgsEl?.appendChild(row);
+    msgsEl?.scrollTo({ top: msgsEl.scrollHeight, behavior: 'smooth' });
+
+    input.value = '';
+    sync();
+    input.disabled = true;
+    sendBtn.disabled = true;
+    haptic(12);
+
+    try {
+      const r = await api(`/api/tools/bot-users/${phone}/reply`, { method: 'POST', body: JSON.stringify({ text: texto }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        row.remove();
+        input.value = texto;   // no perder lo que escribió
+        haptic([20, 30, 20]);
+        if (data.error === 'fuera_de_ventana') {
+          hint.innerHTML = `<span class="composer-warn">${icon('clock', 13)} ${escapeHtml(data.message ?? '')}</span>`;
+        } else {
+          hint.innerHTML = `<span class="composer-warn">${icon('x', 13)} No se pudo enviar: ${escapeHtml(data.message ?? 'error desconocido')}</span>`;
+        }
+        return;
+      }
+      row.classList.remove('sending');
+      row.querySelector('.bubble-time').textContent = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      hint.textContent = 'Enter envía · Shift+Enter salta de línea';
+      haptic([10, 20, 10]);
+    } catch {
+      row.remove();
+      input.value = texto;
+      hint.innerHTML = `<span class="composer-warn">${icon('x', 13)} Sin conexión con el servidor.</span>`;
+      haptic([20, 30, 20]);
+    } finally {
+      input.disabled = false;
+      sync();
+      input.focus();
+    }
+  });
 }
 
 function groupMessages(msgs) {

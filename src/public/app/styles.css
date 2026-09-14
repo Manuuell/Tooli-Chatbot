@@ -1106,3 +1106,91 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
   .inbox-row { padding: 9px 8px; }
   .swipe-hint { opacity: 0.55; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   COMPOSER DE LA BANDEJA — responder por WhatsApp desde el panel.
+   Pill de vidrio con botón circular que "entra" con spring al escribir,
+   igual que el composer de iMessage.
+   ═══════════════════════════════════════════════════════════════════ */
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.composer-input {
+  flex: 1;
+  min-height: 40px;
+  max-height: 140px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+  resize: none;
+  overflow-y: auto;
+  transition: border-color 0.18s var(--ease-out), box-shadow 0.22s var(--ease-out);
+}
+.composer-input:focus {
+  outline: none;
+  border-color: var(--utb-blue-light);
+  box-shadow: 0 0 0 4px rgba(30, 115, 190, 0.14);
+}
+.composer-input:disabled { opacity: 0.6; }
+.composer-send {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--utb-blue);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 48, 135, 0.28);
+  transition: transform 0.26s var(--ease-spring-bounce), opacity 0.2s var(--ease-out),
+              box-shadow 0.22s var(--ease-out), background 0.2s ease;
+}
+.composer-send:disabled {
+  transform: scale(0.72);
+  opacity: 0.35;
+  box-shadow: none;
+  cursor: default;
+}
+.composer-send:not(:disabled):hover {
+  transform: scale(1.06);
+  box-shadow: 0 8px 20px rgba(0, 48, 135, 0.34);
+}
+.composer-send:not(:disabled):active { transform: scale(0.92); }
+.composer-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  min-height: 15px;
+  padding-left: 4px;
+}
+.composer-warn {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--danger);
+  line-height: 1.35;
+}
+.composer-warn svg { flex: 0 0 auto; margin-top: 1px; }
+.composer-blocked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 59, 48, 0.08);
+  color: var(--danger);
+  font-size: 13px;
+}
+/* Burbuja mientras el envío está en vuelo */
+.bubble-row.sending .bubble { opacity: 0.62; }
+.bubble-row.sending .bubble-time { font-style: italic; }

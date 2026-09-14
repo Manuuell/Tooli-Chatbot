@@ -2488,11 +2488,12 @@ async function renderRegistros(main) {
     <div id="broadcastBar" class="broadcast-bar hidden">
       <div class="broadcast-bar-left">
         <span class="broadcast-count" id="broadcastCount">0 seleccionados</span>
-        <span class="broadcast-hint">Solo números con WhatsApp válido</span>
+        <span class="broadcast-hint" id="broadcastHint" style="display:none;"></span>
       </div>
       <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" id="broadcastAll">Todos<span class="hide-sm"> los visibles</span></button>
         <button class="btn btn-ghost" id="broadcastClear">Limpiar</button>
-        <button class="btn btn-primary" id="broadcastSendBtn" disabled>${icon('phone', 14)} Enviar plantilla a 0</button>
+        <button class="btn btn-primary" id="broadcastSendBtn" disabled>${icon('send', 14)} Enviar<span class="hide-sm"> plantilla</span> a 0</button>
       </div>
     </div>
     <div id="regContent">
@@ -2515,6 +2516,16 @@ async function renderRegistros(main) {
     if (!selectMode) selected.clear();
     updateSelectToggle();
     renderCrmGrid();
+  });
+  $('#broadcastAll').addEventListener('click', () => {
+    haptic(12);
+    // "Todos los visibles" = los que pasaron los filtros y la búsqueda actuales,
+    // no toda la base: seleccionar sin querer a 300 personas para un envío
+    // masivo es justo el error que hay que hacer difícil de cometer.
+    $$('#regContent .crm-card[data-row]').forEach(c => selected.add(Number(c.dataset.row)));
+    updateBroadcastBar();
+    renderCrmGrid();
+    toast(`${selected.size} seleccionados`);
   });
   $('#broadcastClear').addEventListener('click', () => {
     haptic(10);
@@ -2551,10 +2562,19 @@ async function renderRegistros(main) {
     const nums = selectedTelefonos();
     const countEl = $('#broadcastCount');
     const btn = $('#broadcastSendBtn');
-    if (countEl) countEl.textContent = `${selected.size} seleccionados${nums.length !== selected.size ? ` · ${nums.length} con WhatsApp válido` : ''}`;
+    const sinWhatsapp = selected.size - nums.length;
+    if (countEl) countEl.textContent = `${selected.size} seleccionado${selected.size === 1 ? '' : 's'}`;
+    const hintEl = $('#broadcastHint');
+    if (hintEl) {
+      // El aviso solo aparece si de verdad hay alguien que no va a recibir nada.
+      hintEl.textContent = sinWhatsapp > 0
+        ? `${sinWhatsapp} sin WhatsApp — no recibirá${sinWhatsapp === 1 ? '' : 'n'} el mensaje`
+        : '';
+      hintEl.style.display = sinWhatsapp > 0 ? '' : 'none';
+    }
     if (btn) {
       btn.disabled = nums.length === 0;
-      btn.innerHTML = `${icon('phone', 14)} Enviar plantilla a ${nums.length} seleccionados`;
+      btn.innerHTML = `${icon('send', 14)} Enviar<span class="hide-sm"> plantilla</span> a ${nums.length}`;
     }
   }
 

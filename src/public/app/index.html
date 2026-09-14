@@ -983,11 +983,22 @@ async function renderUsuarios(main) {
       api('/api/tools/audit/summary?days=7').then(r => r.json()).then(d => d.summary ?? {}).catch(() => ({})),
     ]);
 
-    const deleteUser = async (username) => {
-      if (!confirm(`¿Eliminar usuario "${username}"?`)) return;
-      await api(`/api/auth/users/${username}`, { method: 'DELETE' });
-      toast('Usuario eliminado');
-      loadUsers();
+    const deleteUser = (username) => {
+      ActionSheet.open({
+        title: `¿Eliminar "${username}"?`,
+        subtitle: 'Esta acción no se puede deshacer. El usuario perderá acceso al panel.',
+        groups: [
+          [{ label: 'Eliminar usuario', icon: icon('trash', 16), destructive: true, onClick: async () => {
+            haptic([20, 30, 20]);
+            const r = await api(`/api/auth/users/${username}`, { method: 'DELETE' });
+            if (!r.ok) { toast('No se pudo eliminar'); haptic([20,30,20]); return; }
+            toast('Usuario eliminado');
+            haptic(15);
+            loadUsers();
+          } }],
+          [{ label: 'Cancelar', cancel: true }],
+        ],
+      });
     };
 
     const openAdvisorProfile = (u) => {
@@ -1004,7 +1015,11 @@ async function renderUsuarios(main) {
         stats: [{ value: total, label: 'Acciones · 7 días' }],
         rows: [
           ...(u.email ? [{ icon: '📧', label: 'Email', value: u.email }] : []),
-          ...actionKeys.map(k => ({ icon: AUDIT_LABELS[k]?.icon ?? '📊', label: AUDIT_LABELS[k]?.label ?? k, value: counts[k] })),
+          ...actionKeys.map(k => {
+            const fallback = k === 'recordatorio_enviado' ? { label: 'Recordatorio enviado', icon: '⏰' } : null;
+            return { icon: AUDIT_LABELS[k]?.icon ?? fallback?.icon ?? '📊', label: AUDIT_LABELS[k]?.label ?? fallback?.label ?? k, value: counts[k] };
+          }),
+          ...(actionKeys.length === 0 ? [{ icon: '💤', label: 'Actividad', value: 'Sin acciones en los últimos 7 días' }] : []),
         ],
         actions: [
           { label: 'Copiar usuario', icon: '🔗', onClick: () => copyToClipboard(u.username, 'Usuario copiado'), closeAfter: false },
@@ -1139,7 +1154,12 @@ async function renderActividad(main) {
         .sort((a, b) => b.total - a.total);
 
       if (!advisors.length) {
-        $('#actContent').innerHTML = `<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">No hay actividad registrada en este rango.</p></div>`;
+        $('#actContent').innerHTML = `
+          <div class="card" style="text-align:center;padding:44px 20px;">
+            <div style="font-size:32px;margin-bottom:8px;">📊</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:4px;">Sin actividad aún</div>
+            <div style="font-size:13px;color:var(--text-muted);">No hay acciones registradas en este rango. Probá con otro período.</div>
+          </div>`;
         return;
       }
 
@@ -1195,12 +1215,16 @@ async function renderActividad(main) {
           <div class="widget-card-head"><h3>Detalle por tipo de acción</h3></div>
           <div style="overflow-x:auto;">
             <table>
-              <thead><tr><th>Asesor</th>${actionKeys.map(k => `<th style="text-align:center;">${AUDIT_LABELS[k]?.icon ?? ''} ${AUDIT_LABELS[k]?.label ?? k}</th>`).join('')}<th style="text-align:right;">Total</th></tr></thead>
+              <thead><tr><th>Asesor</th>${actionKeys.map(k => {
+                const fb = k === 'recordatorio_enviado' ? { label: 'Recordatorio enviado', icon: '⏰' } : null;
+                return `<th style="text-align:center;">${AUDIT_LABELS[k]?.icon ?? fb?.icon ?? ''} ${escapeHtml(AUDIT_LABELS[k]?.label ?? fb?.label ?? k)}</th>`;
+              }).join('')}<th style="text-align:right;">Total</th></tr></thead>
               <tbody class="stagger-in">
                 ${advisors.map(a => `<tr><td><strong>${escapeHtml(fullNameOf[a.username] ?? a.username)}</strong></td>${actionKeys.map(k => `<td style="text-align:center;">${a.counts[k] ?? '—'}</td>`).join('')}<td style="text-align:right;font-weight:700;color:var(--utb-blue);">${a.total}</td></tr>`).join('')}
               </tbody>
             </table>
           </div>
+          ${actionKeys.length > 3 ? `<div style="font-size:11px;color:var(--text-muted);text-align:center;padding-top:8px;opacity:.8;">← Deslizá para ver todas las columnas →</div>` : ''}
         </div>
       `;
 
@@ -1312,7 +1336,12 @@ async function renderConversaciones(main) {
     const r = await api('/api/tools/bot-users');
     const { phones } = await r.json();
     if (!phones.length) {
-      $('#inboxRows').innerHTML = '<div class="inbox-empty" style="height:auto;padding:32px 16px;">Aún no hay conversaciones registradas.</div>';
+      $('#inboxRows').innerHTML = `
+        <div class="inbox-empty" style="height:auto;padding:44px 20px;flex-direction:column;text-align:center;gap:6px;">
+          <div class="inbox-empty-icon">💬</div>
+          <div class="inbox-empty-title">Aún no hay conversaciones</div>
+          <div class="inbox-empty-sub">Cuando alguien escriba por WhatsApp aparecerá aquí.</div>
+        </div>`;
       return;
     }
     const preview = phones.slice(0, 30);
@@ -1352,7 +1381,17 @@ function renderInboxRows(filter) {
     if (inboxFilter !== 'todos' && c.cat?.key !== inboxFilter) return false;
     return !filter || c.phone.includes(filter) || c.nombre?.toLowerCase().includes(filter);
   });
-  if (!list.length) { rowsEl.innerHTML = '<div class="inbox-empty" style="height:auto;padding:32px 16px;">Sin resultados.</div>'; return; }
+  if (!list.length) {
+    const hasSearch = !!filter;
+    rowsEl.innerHTML = `
+      <div class="inbox-empty" style="height:auto;padding:44px 20px;flex-direction:column;text-align:center;gap:6px;">
+        <div class="inbox-empty-icon">${hasSearch ? '🔍' : '💬'}</div>
+        <div class="inbox-empty-title">${hasSearch ? 'Sin resultados' : 'Nada por aquí'}</div>
+        <div class="inbox-empty-sub">${hasSearch ? 'Probá con otro nombre, número o filtro de área.' : 'No hay conversaciones en esta categoría.'}</div>
+        ${hasSearch ? `<button type="button" class="btn btn-ghost" style="margin-top:8px;font-size:13px;" onclick="document.getElementById('inboxSearch').value='';document.getElementById('inboxSearch').dispatchEvent(new Event('input'))">Limpiar búsqueda</button>` : ''}
+      </div>`;
+    return;
+  }
   rowsEl.innerHTML = list.map(c => `
     <div class="swipe-row" data-phone="${c.phone}">
       <div class="swipe-actions">
@@ -1372,6 +1411,7 @@ function renderInboxRows(filter) {
               ${c.banned ? '⛔ Baneado' : (c.last ? escapeHtml(c.last.text) : 'Sin mensajes registrados')}
             </div>
           </div>
+          <span class="swipe-hint" aria-hidden="true">${icon('chevronLeft', 14)}</span>
         </button>
       </div>
     </div>
@@ -1489,7 +1529,12 @@ async function openThread(phone) {
       </div>
       <div class="inbox-messages" id="inboxMessages">
         ${info.session?.step ? `<div class="thread-meta">Paso actual de la sesión: <strong>${escapeHtml(info.session.step)}</strong></div>` : ''}
-        ${groups.length === 0 ? '<div class="inbox-empty" style="height:auto;padding:40px 16px;">No hay mensajes registrados.</div>' : groups.map(g => g.map((m, i) => `
+        ${groups.length === 0 ? `
+          <div class="inbox-empty" style="height:auto;padding:48px 16px;flex-direction:column;text-align:center;gap:6px;">
+            <div class="inbox-empty-icon">📭</div>
+            <div class="inbox-empty-title">Sin mensajes aún</div>
+            <div class="inbox-empty-sub">Los mensajes de WhatsApp aparecerán aquí cuando haya actividad.</div>
+          </div>` : groups.map(g => g.map((m, i) => `
           <div class="bubble-row ${m.direction === 'out' ? 'out' : 'in'} ${i === 0 ? 'group-start' : 'group-mid'}">
             <div class="bubble ${m.direction === 'out' ? 'out' : 'in'} ${i !== 0 ? 'not-first' : ''} ${i !== g.length - 1 ? 'not-last' : ''}">
               ${escapeHtml(m.text)}
@@ -1519,7 +1564,9 @@ async function openThread(phone) {
     }));
     $('#threadPhoneBtn').addEventListener('click', () => openPhonePreview(phone, nombre, groups));
     const msgsEl = $('#inboxMessages');
-    msgsEl.scrollTop = msgsEl.scrollHeight;
+    requestAnimationFrame(() => {
+      try { msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'smooth' }); } catch { msgsEl.scrollTop = msgsEl.scrollHeight; }
+    });
   } catch {
     thread.innerHTML = '<div class="alert alert-error" style="margin:16px;">No se pudo cargar la conversación.</div>';
   }

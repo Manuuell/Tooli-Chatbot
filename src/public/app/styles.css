@@ -1012,3 +1012,26 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .health-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .health-latency { font-size: 11px; font-weight: 700; color: var(--text-muted); background: #f1f5f9; padding: 2px 7px; border-radius: 6px; font-variant-numeric: tabular-nums; }
 .health-card [data-detail] { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
+
+/* ===================================================================
+   Pulido inbox — empty states y affordance de swipe (Conversaciones)
+   =================================================================== */
+.inbox-empty-icon { font-size: 28px; line-height: 1; margin-bottom: 2px; filter: grayscale(0.1); }
+.inbox-empty-title { font-weight: 700; font-size: 14px; color: var(--text); }
+.inbox-empty-sub { font-size: 12.5px; color: var(--text-muted); max-width: 260px; line-height: 1.45; }
+.swipe-hint {
+  margin-left: auto; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: #cbd5e1; opacity: 0.85; padding-left: 6px; transition: opacity 0.18s ease, transform 0.18s var(--ease-spring);
+}
+.swipe-hint svg { display: block; }
+.inbox-row:hover .swipe-hint { color: #94a3b8; opacity: 1; transform: translateX(-1px); }
+.swipe-row.swiped .swipe-hint { opacity: 0; transform: translateX(6px); }
+/* Mobile 375px: el layout de dos tarjetas colapsa a una columna ya definido
+   en @media (max-width:880px). Este refuerzo asegura que en 375px no haya
+   overflow horizontal por el swipe-hint y que la lista ocupe 100% limpio. */
+@media (max-width: 375px) {
+  .inbox-list { width: 100%; border-radius: var(--radius-lg); }
+  .inbox-thread { border-radius: var(--radius-lg); }
+  .inbox-row { padding: 9px 8px; }
+  .swipe-hint { opacity: 0.55; }
+}

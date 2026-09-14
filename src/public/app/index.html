@@ -1701,6 +1701,18 @@ async function openThread(phone) {
   }
 }
 
+/* Marcado de WhatsApp para la vista previa: *negrita*, _cursiva_, ~tachado~ y
+   ```monoespaciado```. Se aplica SIEMPRE sobre texto ya escapado — nunca sobre
+   texto crudo — así el formato no abre una vía de inyección de HTML. */
+function formatWhatsApp(textoEscapado) {
+  return textoEscapado
+    .replace(/```([\s\S]+?)```/g, '<code>$1</code>')
+    .replace(/(^|\s)\*(\S[^*]*?)\*(?=$|\s|[.,!?])/g, '$1<strong>$2</strong>')
+    .replace(/(^|\s)_(\S[^_]*?)_(?=$|\s|[.,!?])/g, '$1<em>$2</em>')
+    .replace(/(^|\s)~(\S[^~]*?)~(?=$|\s|[.,!?])/g, '$1<s>$2</s>')
+    .replace(/\n/g, '<br>');
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
@@ -1873,7 +1885,7 @@ function openPhonePreview(phone, nombre, groups) {
           ${groups.length === 0 ? '<div class="wa-empty">No hay mensajes registrados.</div>' : groups.map(g => g.map((m, i) => `
             <div class="wa-bubble-row ${m.direction === 'out' ? 'me' : 'them'}">
               <div class="wa-bubble ${m.direction === 'out' ? 'me' : 'them'}">
-                ${escapeHtml(m.text)}
+                ${formatWhatsApp(escapeHtml(m.text))}
                 <span class="wa-bubble-meta">${new Date(m.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}${m.direction === 'out' ? ' <span class=\"wa-ticks\">✓✓</span>' : ''}</span>
               </div>
             </div>
@@ -2781,9 +2793,10 @@ async function renderRecordatorios(main) {
         <input type="datetime-local" id="remFecha" class="rem-input" value="${valorLocal}" required>
         <div class="rem-help">Hora de tu dispositivo. Mínimo 30 segundos en el futuro.</div>
 
-        <button type="submit" class="btn btn-primary" id="remSubmit" style="width:100%;justify-content:center;margin-top:6px;">
-          ${icon('bell', 16)} Programar recordatorio
-        </button>
+        <div class="rem-acciones">
+          <button type="button" class="btn btn-secondary" id="remPreview">${icon('phone', 15)} Ver en el teléfono</button>
+          <button type="submit" class="btn btn-primary" id="remSubmit">${icon('bell', 16)} Programar</button>
+        </div>
         <div class="rem-feedback" id="remFeedback"></div>
 
         <div class="rem-nota-honesta">
@@ -2809,6 +2822,16 @@ async function renderRecordatorios(main) {
 
   const msg = $('#remMsg');
   msg.addEventListener('input', () => { $('#remCount').textContent = msg.value.length; });
+
+  // Ver el borrador dentro del marco de iPhone, tal como le va a llegar:
+  // reusa el mismo componente que la bandeja, no una maqueta aparte.
+  $('#remPreview').addEventListener('click', () => {
+    const texto = msg.value.trim();
+    if (!texto) { toast('Escribe el mensaje primero'); haptic([20, 30, 20]); return; }
+    const cuando = $('#remFecha').value ? new Date($('#remFecha').value).getTime() : Date.now();
+    const tel = $('#remTel').value.replace(/\D/g, '') || '573000000000';
+    openPhonePreview(tel, 'Tooli · UTB', [[{ ts: cuando, direction: 'out', text: texto }]]);
+  });
 
   $('#remForm').addEventListener('submit', async (e) => {
     e.preventDefault();

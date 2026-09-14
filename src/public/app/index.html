@@ -2191,6 +2191,10 @@ async function renderEventoPosgrado(main) {
     const overlay = document.createElement('div');
     overlay.className = 'sheet-backdrop';
     overlay.style.alignItems = 'center';
+    // z-index 500: este modal se abre ENCIMA del sheet de perfil (que sigue
+    // abierto con closeAfter:false) — sin esto queda invisible detrás, mismo
+    // patrón que .phone-preview-overlay (styles.css).
+    overlay.style.zIndex = '500';
     overlay.innerHTML = `
       <div class="action-sheet" style="max-width:480px;">
         <div class="sheet-group" style="padding:16px;text-align:left;">

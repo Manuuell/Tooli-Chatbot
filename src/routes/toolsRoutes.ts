@@ -748,3 +748,42 @@ toolsRouter.delete('/quick-replies/:id', async (req: AuthedRequest, res: Respons
     res.status(500).json({ error: 'internal_error', message: msg });
   }
 });
+
+/**
+ * Detalle de varias conversaciones en una sola petición.
+ *
+ * La bandeja pintaba hasta 30 tarjetas pidiendo `/bot-users/:phone` una por una:
+ * 31 peticiones HTTP cada vez que se abre, cada una con su ida y vuelta a Redis.
+ * Con esto son 2. Se mantiene el endpoint individual porque el hilo abierto sí
+ * necesita una sola conversación fresca.
+ */
+toolsRouter.post('/bot-users/batch', async (req: AuthedRequest, res: Response) => {
+  const lista = Array.isArray(req.body?.phones) ? req.body.phones : [];
+  if (!lista.length) {
+    res.status(400).json({ error: 'validation_error', message: 'phones debe ser un arreglo con al menos un número' });
+    return;
+  }
+  if (lista.length > 60) {
+    res.status(400).json({ error: 'validation_error', message: 'Máximo 60 números por lote' });
+    return;
+  }
+
+  const phones = [...new Set(lista.map((p: unknown) => normalizePhone(String(p ?? ''))).filter(Boolean))] as string[];
+
+  try {
+    const users = await Promise.all(phones.map(async (phone) => {
+      try {
+        return await getBotUser(phone);
+      } catch {
+        // Una conversación que falla no debe tumbar el lote entero: la bandeja
+        // la muestra vacía y el resto se pinta igual.
+        return { phone, session: null, banned: false, aiDisabled: false, recentMessages: [] };
+      }
+    }));
+    res.json({ users });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[tools/bot-users/batch] error:', msg);
+    res.status(500).json({ error: 'internal_error', message: msg });
+  }
+});

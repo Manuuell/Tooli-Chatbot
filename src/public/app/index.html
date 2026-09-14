@@ -1640,10 +1640,15 @@ async function renderConversaciones(main) {
       return;
     }
     const preview = phones.slice(0, 30);
-    const details = await Promise.all(preview.map(async (phone) => {
-      try { const rr = await api(`/api/tools/bot-users/${phone}`); return await rr.json(); }
-      catch { return { phone, recentMessages: [], banned: false, session: null }; }
-    }));
+    // Una sola petición para las 30: antes era una por tarjeta (31 en total
+    // cada vez que se abría la bandeja).
+    let details;
+    try {
+      const rb = await api('/api/tools/bot-users/batch', { method: 'POST', body: JSON.stringify({ phones: preview }) });
+      details = (await rb.json()).users ?? [];
+    } catch {
+      details = preview.map(phone => ({ phone, recentMessages: [], banned: false, session: null }));
+    }
     conversationsCache = details
       .map(info => ({
         phone: info.phone,
@@ -1677,10 +1682,9 @@ async function buscarMensajesNuevos() {
   try {
     const { phones } = await (await api('/api/tools/bot-users')).json();
     const revisar = (phones ?? []).slice(0, 15);
-    const detalles = await Promise.all(revisar.map(async (phone) => {
-      try { return await (await api(`/api/tools/bot-users/${phone}`)).json(); }
-      catch { return null; }
-    }));
+    if (!revisar.length) return;
+    const rb = await api('/api/tools/bot-users/batch', { method: 'POST', body: JSON.stringify({ phones: revisar }) });
+    const detalles = (await rb.json()).users ?? [];
 
     let nuevas = 0;
     detalles.forEach((info) => {

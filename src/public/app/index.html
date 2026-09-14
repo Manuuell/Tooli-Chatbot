@@ -303,6 +303,7 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/>',
   user: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/>',
   book: '<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5Z"/><path d="M5 19.5A1.5 1.5 0 0 1 6.5 18H19v3H6.5A1.5 1.5 0 0 1 5 19.5Z"/>',
+  bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/>',
 };
 function icon(name, size = 20) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon-svg">${ICONS[name] ?? ''}</svg>`;
@@ -1781,6 +1782,7 @@ async function openThread(phone) {
           <div class="composer-blocked">${icon('ban', 15)} Esta persona está baneada. Desbanéala para poder responder.</div>
         ` : `
           <form class="composer" id="composer" autocomplete="off">
+            <button type="button" class="composer-quick" id="composerQuick" aria-label="Respuestas rápidas" title="Respuestas rápidas">${icon('bolt', 18)}</button>
             <textarea class="composer-input" id="composerInput" rows="1" maxlength="4096"
               placeholder="Escribe un mensaje…" aria-label="Escribir mensaje para ${nombre ? escapeHtml(nombre) : `+${phone}`}"></textarea>
             <button type="submit" class="composer-send" id="composerSend" disabled aria-label="Enviar mensaje">${icon('send', 18)}</button>
@@ -1806,7 +1808,7 @@ async function openThread(phone) {
       ], [{ label: 'Cancelar', cancel: true }]],
     }));
     $('#threadPhoneBtn').addEventListener('click', () => openPhonePreview(phone, nombre, groups));
-    setupComposer(phone);
+    setupComposer(phone, nombre);
     const msgsEl = $('#inboxMessages');
     requestAnimationFrame(() => {
       try { msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'smooth' }); } catch { msgsEl.scrollTop = msgsEl.scrollHeight; }
@@ -1858,9 +1860,75 @@ function openFichaSheet(phone, nombre, ficha, info) {
   });
 }
 
+/* Respuestas rápidas: plantillas compartidas del equipo. El placeholder
+   {nombre} se reemplaza acá con el nombre real que capturó el bot — nunca se
+   inserta el literal "{nombre}" en un mensaje que va a un estudiante. */
+let quickRepliesCache = null;
+
+function aplicarPlaceholders(texto, nombre) {
+  const primerNombre = (nombre ?? '').trim().split(/\s+/)[0];
+  return texto.replace(/\{nombre\}/g, primerNombre || 'hola');
+}
+
+async function abrirRespuestasRapidas(input, sync, nombre) {
+  haptic(10);
+  if (!quickRepliesCache) {
+    try {
+      quickRepliesCache = (await (await api('/api/tools/quick-replies')).json()).replies ?? [];
+    } catch {
+      toast('No se pudieron cargar las respuestas rápidas');
+      return;
+    }
+  }
+
+  const insertar = (texto) => {
+    const final = aplicarPlaceholders(texto, nombre);
+    // Se inserta en el cursor y NO se envía: el asesor siempre revisa antes.
+    const pos = input.selectionStart ?? input.value.length;
+    input.value = input.value.slice(0, pos) + final + input.value.slice(pos);
+    input.focus();
+    input.setSelectionRange(pos + final.length, pos + final.length);
+    sync();
+    haptic(12);
+  };
+
+  const guardarActual = async () => {
+    const texto = input.value.trim();
+    if (!texto) { toast('Escribe primero el mensaje que quieres guardar'); return; }
+    const titulo = texto.split('\n')[0].slice(0, 48);
+    try {
+      const r = await api('/api/tools/quick-replies', { method: 'POST', body: JSON.stringify({ titulo, texto }) });
+      const data = await r.json();
+      if (!r.ok) { toast(data.message ?? 'No se pudo guardar'); return; }
+      quickRepliesCache = null;
+      toast('Guardada como respuesta rápida');
+      haptic([10, 20, 10]);
+    } catch { toast('No se pudo guardar'); }
+  };
+
+  const grupos = [];
+  if (quickRepliesCache.length) {
+    grupos.push(quickRepliesCache.slice(0, 10).map(q => ({
+      label: q.titulo,
+      icon: icon('bolt', 15),
+      onClick: () => insertar(q.texto),
+    })));
+  }
+  grupos.push([{ label: 'Guardar el mensaje actual', icon: icon('plus', 15), onClick: guardarActual }]);
+  grupos.push([{ label: 'Cancelar', cancel: true }]);
+
+  ActionSheet.open({
+    title: 'Respuestas rápidas',
+    subtitle: quickRepliesCache.length
+      ? 'Se inserta en el mensaje para que la revises antes de enviar.'
+      : 'Aún no hay ninguna. Escribe un mensaje y guárdalo para reutilizarlo.',
+    groups: grupos,
+  });
+}
+
 /* Composer de la bandeja: responder por WhatsApp sin salir del panel.
    El backend valida la ventana de 24h de Meta y devuelve 409 con el motivo. */
-function setupComposer(phone) {
+function setupComposer(phone, nombre) {
   const form = $('#composer');
   if (!form) return;
   const input = $('#composerInput');
@@ -1880,6 +1948,8 @@ function setupComposer(phone) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
   });
+
+  $('#composerQuick')?.addEventListener('click', () => abrirRespuestasRapidas(input, sync, nombre));
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

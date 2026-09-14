@@ -1769,3 +1769,27 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
 /* Tres métricas por tarjeta de asesor: el valor no debe desbordar ni cortarse */
 .advisor-stat-value { font-size: 15px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .advisor-stat-label { font-size: 9.5px; letter-spacing: 0.02em; }
+
+/* Botón de respuestas rápidas dentro del composer */
+.composer-quick {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-spring), color 0.18s var(--ease-out),
+              border-color 0.18s var(--ease-out), background 0.18s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+.composer-quick:hover {
+  color: var(--utb-blue);
+  border-color: var(--utb-blue-light);
+  background: rgba(30, 115, 190, 0.06);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.composer-quick:active { transform: scale(0.92); }

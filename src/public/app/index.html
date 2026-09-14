@@ -1125,6 +1125,10 @@ async function renderMetricas(main) {
   loadMetrics();
 }
 
+/* El área en mayúsculas ("ADMISIONES") no cabe en la tarjeta y se cortaba. */
+const AREA_LABELS = { all: 'Todas', admisiones: 'Admisiones', ti: 'TI', posgrados: 'Posgrados' };
+function areaLabel(area) { return AREA_LABELS[area] ?? (area ? area[0].toUpperCase() + area.slice(1) : 'Todas'); }
+
 /* ============= USUARIOS (admin) ============= */
 async function renderUsuarios(main) {
   if (currentUser.role !== 'admin') { navigate('home'); return; }
@@ -1165,10 +1169,22 @@ async function renderUsuarios(main) {
       </div>
     `).join('')}</div>`;
 
-    const [{ users }, auditSummary] = await Promise.all([
+    const [{ users }, auditSummary, fichasMap] = await Promise.all([
       api('/api/auth/users').then(r => r.json()),
       api('/api/tools/audit/summary?days=7').then(r => r.json()).then(d => d.summary ?? {}).catch(() => ({})),
+      api('/api/tools/crm/fichas').then(r => r.json()).then(d => d.fichas ?? {}).catch(() => ({})),
     ]);
+
+    // Cartera de cada asesor: cuántos prospectos tiene asignados y en qué etapa.
+    // Es el dato que un jefe pregunta primero y que la auditoría sola no responde
+    // (la auditoría cuenta acciones, no personas a cargo).
+    const cartera = {};
+    Object.values(fichasMap).forEach((f) => {
+      if (!f.asignadoA) return;
+      const c = (cartera[f.asignadoA] ??= { total: 0, porEstado: {} });
+      c.total++;
+      c.porEstado[f.estado] = (c.porEstado[f.estado] ?? 0) + 1;
+    });
 
     const deleteUser = (username) => {
       ActionSheet.open({
@@ -1197,9 +1213,13 @@ async function renderUsuarios(main) {
         title: u.fullName, subtitle: `@${u.username}`,
         badges: [
           { label: u.role === 'admin' ? 'Administrador' : 'Asesor', color: u.role === 'admin' ? '#7c3aed' : '#0284c7' },
-          { label: u.area && u.area !== 'all' ? u.area.toUpperCase() : 'Todas las áreas', color: '#64748b' },
+          { label: u.area && u.area !== 'all' ? areaLabel(u.area) : 'Todas las áreas', color: '#64748b' },
         ],
-        stats: [{ value: total, label: 'Acciones · 7 días' }],
+        stats: [
+          { value: total, label: 'Acciones · 7 días' },
+          { value: cartera[u.username]?.total ?? 0, label: 'Prospectos a cargo' },
+          { value: cartera[u.username]?.porEstado?.inscrito ?? 0, label: 'Inscritos' },
+        ],
         rows: [
           ...(u.email ? [{ icon: '📧', label: 'Email', value: u.email }] : []),
           ...actionKeys.map(k => {
@@ -1207,6 +1227,10 @@ async function renderUsuarios(main) {
             return { icon: AUDIT_LABELS[k]?.icon ?? fallback?.icon ?? '📊', label: AUDIT_LABELS[k]?.label ?? fallback?.label ?? k, value: counts[k] };
           }),
           ...(actionKeys.length === 0 ? [{ icon: '💤', label: 'Actividad', value: 'Sin acciones en los últimos 7 días' }] : []),
+          ...Object.entries(cartera[u.username]?.porEstado ?? {}).map(([estado, n]) => {
+            const em = crmEstadoMeta(estado);
+            return { icon: em.icon, label: `Prospectos en "${em.label}"`, value: n };
+          }),
         ],
         actions: [
           { label: 'Copiar usuario', icon: '🔗', onClick: () => copyToClipboard(u.username, 'Usuario copiado'), closeAfter: false },
@@ -1231,7 +1255,8 @@ async function renderUsuarios(main) {
             ${u.email ? `<div class="crm-card-row">✉️ ${escapeHtml(u.email)}</div>` : ''}
             <div class="advisor-stat-strip">
               <div class="advisor-stat"><div class="advisor-stat-value">${total}</div><div class="advisor-stat-label">acciones · 7d</div></div>
-              <div class="advisor-stat"><div class="advisor-stat-value">${u.area && u.area !== 'all' ? u.area.toUpperCase() : 'Todas'}</div><div class="advisor-stat-label">área</div></div>
+              <div class="advisor-stat"><div class="advisor-stat-value">${cartera[u.username]?.total ?? 0}</div><div class="advisor-stat-label">a cargo</div></div>
+              <div class="advisor-stat"><div class="advisor-stat-value">${areaLabel(u.area)}</div><div class="advisor-stat-label">área</div></div>
             </div>
           </div>
         `; }).join('')}

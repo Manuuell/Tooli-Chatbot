@@ -1765,3 +1765,7 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   color: var(--utb-blue);
   box-shadow: 0 3px 10px rgba(0, 48, 135, 0.18);
 }
+
+/* Tres métricas por tarjeta de asesor: el valor no debe desbordar ni cortarse */
+.advisor-stat-value { font-size: 15px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.advisor-stat-label { font-size: 9.5px; letter-spacing: 0.02em; }

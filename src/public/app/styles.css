@@ -1815,3 +1815,12 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
 }
 .inbox-nuevos:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -8px rgba(0, 48, 135, 0.7); }
 .inbox-nuevos:active { transform: scale(0.97); }
+
+/* Aviso de Bloq Mayús en el login */
+.caps-warn {
+  margin-top: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--warning);
+  animation: fade-rise-in 0.3s var(--ease-spring) backwards;
+}

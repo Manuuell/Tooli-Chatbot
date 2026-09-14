@@ -1404,3 +1404,136 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
   padding: 3px 8px 3px 6px;
 }
 .crm-card-asignado svg, .crm-card-notas svg { opacity: 0.7; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ESTADO VACÍO reutilizable — ninguna pantalla debe quedar en blanco
+   sin explicar por qué está vacía y qué hacer.
+   ═══════════════════════════════════════════════════════════════════ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 52px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: fade-rise-in 0.42s var(--ease-spring) both;
+}
+.empty-state-icon {
+  color: var(--utb-blue);
+  opacity: 0.22;
+  margin-bottom: 4px;
+  animation: empty-float 4s ease-in-out infinite;
+}
+@keyframes empty-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+.empty-state-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.empty-state-sub { font-size: 13px; color: var(--text-muted); max-width: 340px; line-height: 1.5; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   RECORDATORIOS PROGRAMADOS
+   ═══════════════════════════════════════════════════════════════════ */
+.rem-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.rem-form { position: sticky; top: 8px; }
+.rem-form-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 14px;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.rem-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.rem-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color 0.18s var(--ease-out), box-shadow 0.22s var(--ease-out);
+}
+.rem-input:focus {
+  outline: none;
+  border-color: var(--utb-blue-light);
+  box-shadow: 0 0 0 4px rgba(30, 115, 190, 0.13);
+}
+textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
+.rem-help { font-size: 11px; color: var(--text-muted); margin: 5px 0 13px; line-height: 1.4; }
+.rem-feedback { min-height: 18px; margin-top: 9px; font-size: 12px; }
+.rem-ok, .rem-error { display: inline-flex; align-items: center; gap: 5px; line-height: 1.35; }
+.rem-ok { color: var(--success); }
+.rem-error { color: var(--danger); }
+.btn.is-loading { opacity: 0.7; pointer-events: none; }
+.rem-nota-honesta {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.09);
+  color: #92400e;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.rem-nota-honesta svg { flex: 0 0 auto; margin-top: 1px; opacity: 0.8; }
+.rem-filtro { margin-bottom: 14px; }
+.rem-card { margin-bottom: 10px; }
+.rem-card-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; }
+.rem-card-cuando {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+.rem-card-msg {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  padding: 9px 11px;
+  background: rgba(0, 48, 135, 0.04);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid rgba(0, 48, 135, 0.18);
+}
+.rem-card-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.rem-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.rem-card-error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+@media (max-width: 900px) {
+  .rem-layout { grid-template-columns: 1fr; }
+  .rem-form { position: static; }
+}

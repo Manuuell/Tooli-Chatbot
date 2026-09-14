@@ -145,6 +145,19 @@ export async function seedDefaultAdmin(): Promise<void> {
     console.log('[users] ya hay usuarios en el sistema, no se siembra admin por defecto');
     return;
   }
+  // En un despliegue nuevo sin ADMIN_PASSWORD definida, esto crearía una cuenta
+  // admin/admin con acceso a datos personales de estudiantes. Mejor no arrancar
+  // que arrancar con credenciales por defecto: el despliegue existente no se ve
+  // afectado porque si ya hay usuarios ni se llega hasta acá.
+  const usandoDefaults = config.auth.adminPassword === 'admin' || config.auth.adminPassword.length < 8;
+  if (usandoDefaults && process.env.NODE_ENV === 'production') {
+    console.error(
+      '[FATAL] No hay usuarios y ADMIN_PASSWORD no está definida (o es muy corta). ' +
+      'Define ADMIN_USER y ADMIN_PASSWORD antes de arrancar en producción.'
+    );
+    process.exit(1);
+  }
+
   await createUser({
     username: config.auth.adminUser,
     password: config.auth.adminPassword,
@@ -152,6 +165,10 @@ export async function seedDefaultAdmin(): Promise<void> {
     role: 'admin',
     area: 'all',
   });
-  console.log(`[users] usuario admin creado: ${config.auth.adminUser} / ${config.auth.adminPassword}`);
-  console.log('[users] ⚠️  cambia la contraseña por defecto en producción');
+  // La contraseña NO se imprime: el log se rota, se copia y a veces se envía a
+  // un servicio externo.
+  console.log(`[users] usuario admin creado: ${config.auth.adminUser}`);
+  if (usandoDefaults) {
+    console.warn('[users] ⚠️  contraseña por defecto en uso (solo desarrollo). Define ADMIN_PASSWORD antes de publicar.');
+  }
 }

@@ -6,6 +6,23 @@ import { UserRole } from '../services/usersService';
 const COOKIE_NAME = 'tooli_session';
 const TOKEN_TTL = '8h';
 
+const DEFAULT_JWT_SECRET = 'cambia-este-secreto-largo-para-jwt-tooli-2026';
+
+export function validateJwtSecret(): void {
+  const secret = config.auth.jwtSecret;
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (secret === DEFAULT_JWT_SECRET) {
+    if (isProduction) {
+      console.error('[FATAL] JWT_SECRET está usando el valor por defecto inseguro. Define JWT_SECRET en las variables de entorno.');
+      process.exit(1);
+    }
+    console.warn('[WARN] JWT_SECRET usa valor por defecto (solo desarrollo). Configura JWT_SECRET en producción.');
+  }
+  if (secret.length < 32) {
+    console.warn('[WARN] JWT_SECRET es corto (< 32 chars). Usa un secreto de al menos 32 caracteres.');
+  }
+}
+
 export interface AuthPayload {
   username: string;
   role: UserRole;

@@ -1,0 +1,51 @@
+import { Request, Response, NextFunction } from 'express';
+import { config } from '../config';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+
+  if (isProduction) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https:",
+    "connect-src 'self' https://cdn.jsdelivr.net",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+
+  res.setHeader('Content-Security-Policy', csp);
+
+  next();
+}
+
+export function bodySizeLimit(req: Request, res: Response, next: NextFunction): void {
+  const contentLength = req.headers['content-length'];
+  if (contentLength && parseInt(contentLength, 10) > 5 * 1024 * 1024) {
+    res.status(413).json({ error: 'payload_too_large' });
+    return;
+  }
+  next();
+}
+
+export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
+  console.error('[error]', err);
+  const status = (err as any).status ?? 500;
+  const message = isProduction ? 'Error interno del servidor' : err.message;
+  res.status(status).json({ error: 'internal_error', message });
+}
+
+export function notFoundHandler(_req: Request, res: Response): void {
+  res.status(404).json({ error: 'not_found' });
+}

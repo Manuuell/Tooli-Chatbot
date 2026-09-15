@@ -17,6 +17,10 @@ import { validateJwtSecret } from './middleware/auth';
 
 const app = express();
 
+// Detrás de nginx (un solo salto). Sin esto req.ip es 127.0.0.1 para todos y el
+// rate limit de /api/ de más abajo termina compartido entre todos los asesores.
+app.set('trust proxy', 1);
+
 app.use(securityHeaders);
 app.use(bodySizeLimit);
 app.use(express.json({ limit: '5mb' }));

@@ -94,4 +94,6 @@ jobs:
           script: |
             cd ~/tooli-chatbot
             git pull origin main
-            docker compose up -d --build
+            # Solo el backend: evolution-api ya no se usa (MESSAGING_ADAPTER=meta) y su
+            # imagen base ya no se puede descargar, así que reconstruirlo tumbaba el deploy.
+            docker compose up -d --build backend

@@ -44,7 +44,12 @@ function renderRecibo(main) {
           <div class="recibo-loading-sub">Puede tardar hasta un minuto. No cierres esta pestaña.</div>
         </div>
       </div>`;
-    $('#reciboResult').innerHTML = '';
+    $('#reciboResult').innerHTML = `
+      <div class="result-block turno-skeleton-block" aria-hidden="true">
+        ${Array.from({ length: 3 }).map(() => `
+          <div class="row"><span class="skeleton skeleton-line" style="width:72px;height:11px;"></span><span class="skeleton skeleton-line" style="width:180px;height:12px;"></span></div>
+        `).join('')}
+      </div>`;
     let pct = 4;
     setProgress('reciboProgress', pct);
     const progTimer = setInterval(() => {

@@ -124,29 +124,38 @@ async function renderUsuarios(main) {
       });
     };
 
-    $('#usersTable').innerHTML = `
-      <div class="crm-grid stagger-in">
-        ${users.map(u => {
-          const counts = auditSummary[u.username] ?? {};
-          const total = Object.values(counts).reduce((a, b) => a + b, 0);
-          return `
-          <div class="crm-card advisor-card" data-longpress data-username="${u.username}">
-            <div class="advisor-card-top">
-              <div class="avatar" style="background:${avatarTone(u.username)};width:52px;height:52px;font-size:17px;">${initialsFor(u.username, u.fullName)}</div>
-              <span class="badge ${u.role}">${u.role === 'admin' ? 'Admin' : 'Asesor'}</span>
+    if (users.length === 0) {
+      $('#usersTable').innerHTML = `
+        <div class="empty-state">
+          <span class="empty-state-icon">👥</span>
+          <div class="empty-state-title">No hay usuarios</div>
+          <div class="empty-state-sub">Aún no se ha creado ningún asesor. Usa el botón "Nuevo usuario" para agregar el primero.</div>
+        </div>`;
+    } else {
+      $('#usersTable').innerHTML = `
+        <div class="crm-grid stagger-in">
+          ${users.map(u => {
+            const counts = auditSummary[u.username] ?? {};
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
+            return `
+            <div class="crm-card advisor-card" data-longpress data-username="${u.username}">
+              <div class="advisor-card-top">
+                <div class="avatar" style="background:${avatarTone(u.username)};width:52px;height:52px;font-size:17px;">${initialsFor(u.username, u.fullName)}</div>
+                <span class="badge ${u.role}">${u.role === 'admin' ? 'Admin' : 'Asesor'}</span>
+              </div>
+              <div class="crm-card-name">${escapeHtml(u.fullName)}</div>
+              <div class="crm-card-row">@${escapeHtml(u.username)}</div>
+              ${u.email ? `<div class="crm-card-row">✉️ ${escapeHtml(u.email)}</div>` : ''}
+              <div class="advisor-stat-strip">
+                <div class="advisor-stat"><div class="advisor-stat-value">${total}</div><div class="advisor-stat-label">acciones · 7d</div></div>
+                <div class="advisor-stat"><div class="advisor-stat-value">${cartera[u.username]?.total ?? 0}</div><div class="advisor-stat-label">a cargo</div></div>
+                <div class="advisor-stat"><div class="advisor-stat-value">${areaLabel(u.area)}</div><div class="advisor-stat-label">área</div></div>
+              </div>
             </div>
-            <div class="crm-card-name">${escapeHtml(u.fullName)}</div>
-            <div class="crm-card-row">@${escapeHtml(u.username)}</div>
-            ${u.email ? `<div class="crm-card-row">✉️ ${escapeHtml(u.email)}</div>` : ''}
-            <div class="advisor-stat-strip">
-              <div class="advisor-stat"><div class="advisor-stat-value">${total}</div><div class="advisor-stat-label">acciones · 7d</div></div>
-              <div class="advisor-stat"><div class="advisor-stat-value">${cartera[u.username]?.total ?? 0}</div><div class="advisor-stat-label">a cargo</div></div>
-              <div class="advisor-stat"><div class="advisor-stat-value">${areaLabel(u.area)}</div><div class="advisor-stat-label">área</div></div>
-            </div>
-          </div>
-        `; }).join('')}
-      </div>
-    `;
+          `; }).join('')}
+        </div>
+      `;
+    }
     $$('.advisor-card[data-longpress]').forEach(card => {
       const username = card.dataset.username;
       const u = users.find(x => x.username === username);

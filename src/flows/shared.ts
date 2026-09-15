@@ -9,9 +9,10 @@ export const messaging: IMessagingAdapter =
     ? new MetaCloudAdapter()
     : new EvolutionAPIAdapter();
 
-export const CODIGO_REGEX = /^T\d{8}$/i;
-export const CEDULA_REGEX = /^\d{6,12}$/;
-export const EMAIL_REGEX = /^[^\s@]+@(utb\.edu\.co|utbvirtual\.edu\.co)$/i;
+// Reexportadas desde validation.ts (puras y probadas allí); se mantienen aquí
+// para no tocar los ~20 archivos que ya las importan desde este módulo.
+export { CODIGO_REGEX, CEDULA_REGEX, EMAIL_REGEX, normalize, isMenuCommand } from './validation';
+import { normalize } from './validation';
 
 export const PLATAFORMAS_TI: Record<string, string> = {
   '1': 'Banner / Autoservicio',
@@ -42,17 +43,6 @@ export interface FlowContext {
   session: Session | null;
 }
 
-export function normalize(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
-export function isMenuCommand(text: string): boolean {
-  return normalize(text) === 'menu';
-}
 
 export async function sendAiHint(to: string): Promise<void> {
   await messaging.sendText({

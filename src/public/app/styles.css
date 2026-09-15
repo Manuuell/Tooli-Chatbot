@@ -711,8 +711,8 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
   box-shadow: 0 20px 34px -18px rgba(0, 48, 135, 0.35), 0 6px 14px -6px rgba(0, 48, 135, 0.12);
 }
 .crm-card:active { transform: translateY(-1px) scale(0.97); transition-duration: 0.12s; }
-.crm-card-name { font-weight: 700; font-size: 14.5px; margin-bottom: 6px; }
-.crm-card-row { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crm-card-name { font-weight: 700; font-size: 14.5px; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
+.crm-card-row { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
 .crm-card-date { font-size: 11px; color: var(--text-muted); opacity: 0.75; margin-top: 10px; }
 
 /* ===================================================================
@@ -1039,13 +1039,13 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .recibo-success-title { margin-top: 8px; font-weight: 700; }
 .recibo-success-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; word-break: break-all; }
 .recibo-result { margin-top: 14px; }
-.recibo-result .value { word-break: break-word; }
+.recibo-result .value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
 
 /* El resultado de turno/recibo debe envolver limpio en pantallas angostas:
    el label queda fijo, el value puede romper línea sin empujar hacia fuera. */
 .turno-result .row, .recibo-result .row { gap: 12px; align-items: flex-start; }
 .turno-result .row .label, .recibo-result .row .label { flex-shrink: 0; }
-.turno-result .row .value, .recibo-result .row .value { min-width: 0; text-align: right; word-break: break-word; }
+.turno-result .row .value, .recibo-result .row .value { min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
 
 @media (max-width: 720px) {
   .recibo-loading { gap: 12px; }
@@ -1057,7 +1057,7 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
   .tool-panel { padding: 20px 14px; }
   .tool-panel .btn { width: 100%; justify-content: center; }
   .turno-result .row, .recibo-result .row { flex-direction: column; gap: 2px; align-items: stretch; }
-  .turno-result .row .value, .recibo-result .row .value { text-align: left; }
+  .turno-result .row .value, .recibo-result .row .value { text-align: left; white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
 }
 
 /* ===================================================================
@@ -1766,9 +1766,10 @@ textarea.rem-input { resize: vertical; min-height: 84px; line-height: 1.45; }
   box-shadow: 0 3px 10px rgba(0, 48, 135, 0.18);
 }
 
-/* Tres métricas por tarjeta de asesor: el valor no debe desbordar ni cortarse */
-.advisor-stat-value { font-size: 15px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-.advisor-stat-label { font-size: 9.5px; letter-spacing: 0.02em; }
+/* Tres métricas por tarjeta de asesor: el valor y la etiqueta en una línea con ellipsis,
+   hyphens: none evita cortes a mitad de palabra; overflow-wrap: normal respeta palabras. */
+.advisor-stat-value { font-size: 15px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
+.advisor-stat-label { font-size: 9.5px; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
 
 /* Botón de respuestas rápidas dentro del composer */
 .composer-quick {

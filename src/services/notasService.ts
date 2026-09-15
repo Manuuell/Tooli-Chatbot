@@ -17,9 +17,10 @@ import path from 'path';
 //    es aceptable solo por ser un bot personal; no reutilizar en un bot público.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BANNER_ENTRY = 'https://ssbprod.utb.edu.co:8443/PROD/twbkwbis.P_GenMenu?name=bmenu.P_MainMnu';
-// TODO(verificar en vivo): página que lista las notas del período. Ajustar tras el 1er run.
-const GRADES_URL = 'https://ssbprod.utb.edu.co:8443/PROD/bwskgrds.P_TermGrde';
+// Entrada por el SSO de Microsoft (como en SAVIO → Herramientas → Banner).
+// NO usar twbkwbis.P_GenMenu: esa muestra el login NATIVO (ID+NIP), no el SSO.
+const BANNER_ENTRY = 'https://ssbprod.utb.edu.co:8443/ssomanager/c/SSB';
+const BASE = 'https://ssbprod.utb.edu.co:8443/PROD';
 const DEBUG_DIR = '/tmp/tooli-notas';
 const SESSION_TTL_MS = 3 * 60_000;
 
@@ -73,20 +74,79 @@ async function classifyAfterPassword(page: Page): Promise<'mfa' | 'stay' | 'bann
   return 'unknown';
 }
 
-async function scrapeNotas(page: Page): Promise<NotaCurso[]> {
-  await page.goto(GRADES_URL, { waitUntil: 'networkidle', timeout: 30_000 }).catch(() => {});
-  await snap(page, 'grades-page');
-  const html = await page.content();
+const grab = (html: string, label: string): string => {
+  const m = html.match(new RegExp(`${label}[\\s\\S]{0,20}?<\\/td>\\s*<td[^>]*>([\\s\\S]*?)<\\/td>`, 'i'));
+  return m ? stripTags(m[1]) : '';
+};
 
-  // Parse best-effort: filas con un título de curso y una nota numérica.
+async function scrapeNotas(page: Page): Promise<NotaCurso[]> {
+  await fs.mkdir(DEBUG_DIR, { recursive: true }).catch(() => {});
+
+  // Guardar cookies de la sesión autenticada (para mapear el flujo de notas sin más pruebas).
+  try {
+    const cookies = await page.context().cookies();
+    const cs = cookies
+      .filter((c) => /utb\.edu\.co/.test(c.domain))
+      .map((c) => `${c.name}=${c.value}`)
+      .join('; ');
+    await fs.writeFile(path.join(DEBUG_DIR, 'cookies.txt'), cs);
+  } catch {
+    /* noop */
+  }
+
+  const dump = async (name: string): Promise<string> => {
+    await snap(page, name);
+    const html = await page.content();
+    await fs.writeFile(path.join(DEBUG_DIR, `${name}.html`), html).catch(() => {});
+    return html;
+  };
+  const go = async (url: string): Promise<void> => {
+    try {
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
+    } catch {
+      /* noop */
+    }
+  };
+
+  // Calificaciones Finales = todas las notas por período (bwskogrd.P_ViewTermGrde).
+  await go(`${BASE}/bwskogrd.P_ViewTermGrde`);
+  await dump('termgrde-1');
+
+  // Si hay dropdown de período, elegir el primero con valor de 6 dígitos y enviar.
+  if (await page.locator('select[name="term_in"]').count()) {
+    const opts: string[] = await page
+      .locator('select[name="term_in"] option')
+      .evaluateAll((els) => els.map((e) => (e as unknown as { value: string }).value))
+      .catch(() => [] as string[]);
+    const val = opts.find((v) => /^\d{6}$/.test(v));
+    if (val) await page.selectOption('select[name="term_in"]', val).catch(() => {});
+    // Enviar el FORM que contiene term_in (POST → bwskogrd.P_ViewGrde), no un botón de navegación.
+    await page
+      .locator(
+        'form:has(select[name="term_in"]) button[type="submit"], form:has(select[name="term_in"]) input[type="submit"]'
+      )
+      .first()
+      .click()
+      .catch(() => {});
+    await page.waitForTimeout(2500);
+    await dump('termgrde-2');
+  }
+
   const cursos: NotaCurso[] = [];
-  const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
-  for (const row of rows) {
+  const html = await page.content();
+  for (const row of html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) ?? []) {
     const cells = (row.match(/<td[^>]*>[\s\S]*?<\/td>/gi) ?? []).map(stripTags).filter(Boolean);
-    const nota = cells.find((c) => /^\d(\.\d{1,2})?$/.test(c));
-    const titulo = cells.find((c) => c.length > 4 && /[a-záéíóúñ]/i.test(c));
+    const nota = cells.find((c) => /^[0-5](\.\d{1,2})?$/.test(c));
+    const titulo = cells.find((c) => c.length > 6 && /[a-záéíóúñ]/i.test(c) && !/^\d/.test(c));
     if (nota && titulo) cursos.push({ titulo, notaFinal: nota });
   }
+  if (cursos.length) return cursos;
+
+  // Fallback: detalle conocido (para que veas al menos una nota mientras afino la tabla).
+  await go(`${BASE}/bwsksmrk.p_write_grade_detail?term_in=202610&crn_in=1270&calling_proc_in=bwsksmrk.p_write_crn_selection`);
+  const gd = await dump('grade-detail');
+  const nf = grab(gd, 'Calificaci[oó]n Final');
+  if (nf) cursos.push({ titulo: grab(gd, 'T[ií]tulo') || 'Curso', notaFinal: nf });
   return cursos;
 }
 

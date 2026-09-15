@@ -56,6 +56,14 @@ export async function handleNotasPassword(ctx: FlowContext): Promise<void> {
     return;
   }
 
+  if (/@/.test(text.trim())) {
+    await messaging.sendText({
+      to: from,
+      text: 'Eso parece un correo 🙂. Necesito tu *contraseña* institucional (la de Microsoft), no el correo. Escríbela, o *menu* para cancelar.',
+    });
+    return;
+  }
+
   const identity = await getIdentity(from);
   if (!identity) {
     await setSession(from, { step: 'menu', data: {} });

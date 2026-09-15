@@ -152,6 +152,8 @@ src/
 │   ├── agent*.ts             Handoff y conversación con asesor humano
 │   └── posgrados-evento/     Captación para eventos (activable)
 ├── routes/                 Webhooks (WhatsApp, Chatwoot) y API REST
+│   ├── toolsRoutes.ts        Monta la API del panel; marca qué es público
+│   └── tools/                Un archivo por dominio (crm, botUsers, evento…)
 ├── services/               Integraciones: Sheets, Chatwoot, HubSpot, OpenAI,
 │                           Banner/Iceberg, identidad, métricas, sesiones
 └── public/
@@ -181,6 +183,27 @@ MOCK_ANON=1 node tools/mock-panel-server.cjs   # para ver la pantalla de login
 
 Sirve datos de ejemplo con la misma forma que la API real y aplica las mismas cabeceras de
 seguridad, para que lo que se ve en local sea lo que se ve en producción.
+
+---
+
+## Pruebas
+
+```bash
+npm test          # una pasada
+npm run test:watch
+```
+
+Usa el runner incluido en Node (`node:test`) con `tsx`: no hay framework de pruebas ni
+dependencias extra que mantener. Los archivos viven junto al código que prueban
+(`src/services/logSafe.test.ts`, `src/public/app/js/core/format.test.js`).
+
+Se prueba lo que falla en silencio: el enmascarado de datos personales en los logs, las
+validaciones de entrada del bot (código estudiantil, cédula, correo institucional), las reglas de
+los recordatorios y el escapado del CSV. Lo que necesita Redis o la API de Meta no se prueba con
+dobles artificiales — se marca como pendiente en vez de fingir cobertura.
+
+`.env.test` trae valores falsos: `src/config` valida el entorno al importarse, así que sin él no se
+puede ni importar un módulo del servidor para probarlo.
 
 ---
 

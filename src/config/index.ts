@@ -23,6 +23,11 @@ const schema = z.object({
   NUTRIA_PHONE_NUMBER_ID: z.string().optional(),
   NUTRIA_WABA_ID: z.string().optional(),
   NUTRIA_SHEET_ID: z.string().optional(),
+  // ── Voluntarios digitales (El Mundo Te Busca) — sale por el número de NutriA ──
+  // 'true' hace que el número de NutriA atienda el registro de voluntarios en vez
+  // de la encuesta. Apagar para devolver el número a NutriA.
+  VOLUNTARIOS_ACTIVO: z.string().optional().default('false'),
+  VOLUNTARIOS_SHEET_ID: z.string().optional(),
   // ── Google Sheets — registro de prospectos de posgrado ───────────────────────
   // ID del spreadsheet donde se guardan los registros (compartir con service account)
   POSGRADO_REGISTRO_SHEET_ID: z.string().optional(),
@@ -98,6 +103,10 @@ export const config = {
     phoneNumberId: env.NUTRIA_PHONE_NUMBER_ID ?? '',
     wabaId: env.NUTRIA_WABA_ID ?? '',
     sheetId: env.NUTRIA_SHEET_ID ?? '',
+  },
+  voluntarios: {
+    activo: env.VOLUNTARIOS_ACTIVO === 'true',
+    sheetId: env.VOLUNTARIOS_SHEET_ID ?? '',
   },
   google: {
     serviceAccount: JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON),

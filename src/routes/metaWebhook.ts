@@ -9,6 +9,7 @@ import { config } from '../config';
 import { messaging } from '../flows/shared';
 import { handleMessage } from '../flows';
 import { handleNutriaMessage } from '../flows/nutria';
+import { handleVoluntarioMessage } from '../flows/voluntarios';
 import { handleEventoMessage } from '../flows/evento';
 import { handlePosgradoMessage } from '../flows/posgrados-evento';
 
@@ -90,7 +91,13 @@ metaWebhookRouter.post('/', async (req: Request, res: Response) => {
   // ── Rutear al bot correcto según el número que recibió el mensaje ────────────
   const isNutria = config.nutria.phoneNumberId && inbound.phoneNumberId === config.nutria.phoneNumberId;
 
-  if (isNutria) {
+  if (isNutria && config.voluntarios.activo) {
+    // El número de NutriA está prestado al registro de voluntarios digitales
+    // (El Mundo Te Busca). Apagar VOLUNTARIOS_ACTIVO lo devuelve a la encuesta.
+    handleVoluntarioMessage(from, inbound.text, inbound).catch(err => {
+      console.error('[meta-webhook] error en handleVoluntarioMessage para', from.slice(-4), err);
+    });
+  } else if (isNutria) {
     handleNutriaMessage(from, inbound.text, inbound).catch(err => {
       console.error('[meta-webhook] error en handleNutriaMessage para', from.slice(-4), err);
     });

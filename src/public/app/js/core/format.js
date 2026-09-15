@@ -69,6 +69,10 @@ function descargarCsv(nombreArchivo, cabecera, filas) {
 
 /** Fecha legible para Excel: el ISO crudo con T y Z no ordena bien en español. */
 function fechaParaCsv(raw) {
+  // Una celda sin fecha tiene que salir vacía en el CSV. Sin esta guarda,
+  // new Date(null) es el epoch y la exportación mostraba "1969-12-31 19:00"
+  // en las filas viejas del Sheet que no traen fecha.
+  if (raw === null || raw === undefined || raw === '') return '';
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return raw;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

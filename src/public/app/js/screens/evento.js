@@ -1,0 +1,311 @@
+import { api } from '../core/api.js';
+import { $, $$, copyToClipboard, escapeHtml, haptic, toast } from '../core/dom.js';
+import { avatarTone, descargarCsv, fechaParaCsv, friendlyDate, initialsFor } from '../core/format.js';
+import { icon } from '../core/icons.js';
+import { setPullToRefresh } from '../core/screen.js';
+import { buildSegmented } from '../ui/controls.js';
+import { previewPhoneFor } from '../ui/phone-preview.js';
+import { openProfileSheet } from '../ui/profile.js';
+import { contextSheet } from '../ui/sheet.js';
+
+function exportarEventoCsv() {
+  const q = ($('#eventoSearch')?.value ?? '').trim().toLowerCase();
+  const filas = eventoRows.filter((row) => {
+    const estado = row[7] || 'pendiente';
+    if (becaVista === 'beca' && estado !== 'Interesado en beca') return false;
+    if (eventoFilter !== 'todos' && estado !== eventoFilter) return false;
+    if (!q) return true;
+    return [row[2], row[3], row[5]].some(v => (v ?? '').toLowerCase().includes(q));
+  });
+
+  if (!filas.length) { toast('No hay nada que exportar con estos filtros'); haptic([20, 30, 20]); return; }
+
+  const cabecera = ['Fecha', 'WhatsApp', 'Nombre', 'Correo', 'Interés en financiación', 'Programa', 'Autoriza contacto', 'Seguimiento'];
+  const datos = filas.map((row) => [
+    fechaParaCsv(row[0]), row[1], row[2], row[3], row[4], row[5], row[6], row[7] || 'Sin contactar',
+  ]);
+
+  descargarCsv(`evento-posgrados-${new Date().toISOString().slice(0, 10)}.csv`, cabecera, datos);
+  toast(`${filas.length} registro${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
+}
+
+/* ============= EVENTO POSGRADOS (meetup) ============= */
+/* Registros de la campaña "Retos del Management Digital" — vienen de un
+   Google Sheet aparte del CRM normal (ver src/flows/posgrados-evento).
+   Columnas: 0 fecha, 1 whatsapp, 2 nombre, 3 correo, 4 interésFinanciación,
+   5 programa, 6 autorizaContacto, 7 seguimiento (agregada para el panel). */
+const SEGUIMIENTO_ESTADOS = [
+  { value: 'Contactado', icon: '📞', color: '#0284c7' },
+  { value: 'Interesado', icon: '⭐', color: '#7c3aed' },
+  { value: 'Inscrito', icon: '🎓', color: '#16a34a' },
+  { value: 'Invitado a próximo evento', icon: '📅', color: '#d97706' },
+  { value: 'No interesado', icon: '✖️', color: '#64748b' },
+  { value: 'Confirmó asistencia', icon: '✅', color: '#16a34a' },
+  { value: 'Interesado en beca', icon: '💰', color: '#eab308' },
+];
+function seguimientoMeta(valor) {
+  return SEGUIMIENTO_ESTADOS.find(s => s.value === valor) ?? { value: valor || 'Sin contactar', icon: '⏳', color: '#94a3b8' };
+}
+
+let eventoRows = [];
+let eventoFilter = 'todos';
+let becaVista = 'todos'; // 'todos' | 'beca' — filtro rápido de candidatos a beca
+
+async function renderEventoPosgrado(main) {
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>🔔 Evento Posgrados</h1><div class="subtitle">Prospectos del meetup "Retos del Management Digital" — dales seguimiento e invítalos a lo que sigue</div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="exportEventoCsv">${icon('external', 14)} Exportar<span class="hide-sm"> CSV</span></button>
+        <button class="btn btn-secondary" id="refreshEvento"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
+      </div>
+    </div>
+    <div class="crm-toolbar">
+      <input type="text" id="eventoSearch" placeholder="Buscar por nombre, email o programa…">
+      <div id="eventoFilterWrap"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <span style="font-size:12.5px;font-weight:600;color:var(--text-muted);">Vista rápida:</span>
+      <div id="becaVistaWrap"></div>
+      <span style="font-size:11.5px;color:var(--text-muted);">Filtra candidatos a beca para ofrecerles financiación</span>
+    </div>
+    <div id="eventoContent">
+      <div class="crm-grid stagger-in">
+        ${Array.from({ length: 6 }).map(() => `
+          <div class="crm-card">
+            <div class="skeleton" style="width:44px;height:44px;border-radius:50%;margin-bottom:12px;"></div>
+            <div class="skeleton skeleton-line" style="width:70%;height:14px;margin-bottom:8px;"></div>
+            <div class="skeleton skeleton-line" style="width:90%;height:11px;"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  $('#eventoSearch').addEventListener('input', renderEventoGrid);
+  $('#exportEventoCsv').addEventListener('click', () => exportarEventoCsv());
+
+  // Vista rápida de becas — segundo segmentado reusando buildSegmented (mismo patrón iOS que el filtro de estados)
+  function renderBecaVistaSegment() {
+    const becaCount = eventoRows.filter(r => r[7] === 'Interesado en beca').length;
+    const wrap = $('#becaVistaWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    wrap.appendChild(buildSegmented(
+      [
+        { value: 'todos', label: `Todos (${eventoRows.length})` },
+        { value: 'beca',  label: `💰 Candidatos a beca (${becaCount})` },
+      ],
+      becaVista, (v) => { becaVista = v; renderEventoGrid(); },
+    ));
+  }
+
+  setPullToRefresh(() => loadEvento());
+  async function loadEvento() {
+    $('#refreshEvento').querySelector('.refresh-icon')?.classList.add('spin-once');
+    try {
+      const r = await api('/api/tools/registros-evento-posgrado');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const { rows } = await r.json();
+      eventoRows = rows ?? [];
+      if (!eventoRows.length) {
+        $('#eventoContent').innerHTML = `<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">Aún no hay registros de este evento. Cuando alguien complete el flujo del meetup por WhatsApp, aparecerá aquí.</p></div>`;
+        $('#eventoFilterWrap').innerHTML = '';
+        $('#becaVistaWrap').innerHTML = '';
+        return;
+      }
+      const counts = eventoRows.reduce((acc, row) => { const k = row[7] || 'pendiente'; acc[k] = (acc[k] ?? 0) + 1; return acc; }, {});
+      $('#eventoFilterWrap').innerHTML = '';
+      $('#eventoFilterWrap').appendChild(buildSegmented(
+        [
+          { value: 'todos', label: `Todos (${eventoRows.length})` },
+          ...(counts.pendiente ? [{ value: 'pendiente', label: `Sin contactar (${counts.pendiente})` }] : []),
+          ...SEGUIMIENTO_ESTADOS.filter(s => counts[s.value]).map(s => ({ value: s.value, label: `${s.value} (${counts[s.value]})` })),
+        ],
+        eventoFilter, (v) => { eventoFilter = v; renderEventoGrid(); },
+      ));
+      renderBecaVistaSegment();
+      renderEventoGrid();
+    } catch (err) {
+      console.error(err);
+      $('#eventoContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar los registros del evento. Verifica que el Sheet esté configurado.</div>';
+    }
+  }
+
+  function renderEventoGrid() {
+    // Mantener el segmentado de becas sincronizado con el conteo actual
+    if (eventoRows.length) renderBecaVistaSegment();
+    const q = ($('#eventoSearch')?.value ?? '').trim().toLowerCase();
+    const filtered = eventoRows.filter((row, i) => {
+      row.__i = i;
+      const estado = row[7] || 'pendiente';
+      if (becaVista === 'beca' && estado !== 'Interesado en beca') return false;
+      if (eventoFilter !== 'todos' && estado !== eventoFilter) return false;
+      if (!q) return true;
+      return [row[2], row[3], row[5]].some(v => (v ?? '').toLowerCase().includes(q));
+    });
+    if (!filtered.length) { $('#eventoContent').innerHTML = '<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">Sin resultados.</p></div>'; return; }
+    $('#eventoContent').innerHTML = `
+      <div class="crm-grid stagger-in">
+        ${filtered.map(row => {
+          const nombre = row[2] || 'Sin nombre';
+          const autoriza = (row[6] || '').toLowerCase().startsWith('s');
+          const meta = seguimientoMeta(row[7]);
+          return `
+          <div class="crm-card" data-longpress data-row="${row.__i}">
+            <div class="advisor-card-top">
+              <div class="avatar" style="background:${avatarTone(nombre)};width:44px;height:44px;font-size:14px;">${initialsFor(row[1] || nombre, nombre)}</div>
+              <span class="badge" style="background:${meta.color}22;color:${meta.color};">${meta.icon} ${escapeHtml(meta.value)}</span>
+            </div>
+            <div class="crm-card-name">${escapeHtml(nombre)}</div>
+            ${row[5] ? `<span class="badge" style="background:#7c3aed22;color:#7c3aed;margin-bottom:8px;">${escapeHtml(row[5])}</span>` : ''}
+            <div class="crm-card-row">✉️ ${escapeHtml(row[3] || '—')}</div>
+            <div class="crm-card-row">📱 ${escapeHtml(row[1] || '—')}</div>
+            ${!autoriza ? `<div class="crm-card-row" style="color:var(--danger);font-weight:600;">🔒 No autorizó contacto</div>` : ''}
+            <div class="crm-card-date">${escapeHtml(friendlyDate(row[0]))}</div>
+          </div>
+        `; }).join('')}
+      </div>
+    `;
+    $$('.crm-card[data-longpress]').forEach(card => {
+      const row = eventoRows[Number(card.dataset.row)];
+      card.addEventListener('click', () => openEventoProfile(row));
+      contextSheet(card, {
+        title: row[2] || 'Prospecto',
+        subtitle: row[3] || undefined,
+        actions: [
+          { label: 'Ver perfil', icon: '👤', onClick: () => openEventoProfile(row) },
+          ...(row[1] ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(row[1]) }] : []),
+          { label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(row[3] ?? '', 'Email copiado') },
+          { label: 'Copiar WhatsApp', icon: '📱', onClick: () => copyToClipboard(row[1] ?? '', 'Número copiado') },
+        ],
+      });
+    });
+  }
+
+  async function setSeguimiento(row, estado) {
+    const fila = row.__i + 2; // el Sheet arranca a leer en A2
+    try {
+      const res = await api(`/api/tools/registros-evento-posgrado/${fila}/seguimiento`, { method: 'POST', body: JSON.stringify({ estado }) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.error === 'estado_invalido' ? 'Estado no válido' : 'No se pudo actualizar el seguimiento');
+        return;
+      }
+      row[7] = estado;
+      haptic([10, 20, 10]);
+      toast(`Marcado como "${estado}"`);
+      renderEventoGrid();
+    } catch {
+      toast('No se pudo actualizar el seguimiento');
+    }
+  }
+
+  // Modal para invitar a próximo evento: mensaje editable (placeholder genérico) + envío real vía WhatsApp
+  function openInvitarModal(row) {
+    const [ , whatsapp, nombre] = row;
+    const fila = row.__i + 2;
+    const primer = (nombre || '').trim().split(/\s+/)[0] || 'Hola';
+    const defaultMsg =
+      `¡${primer}! 👋 Soy del equipo de Posgrados UTB 🎓\n\n` +
+      `Te queremos invitar a nuestro próximo evento de posgrados. Será una gran oportunidad para conocer a fondo la Especialización y la Maestría, resolver dudas y conversar con nuestros asesores.\n\n` +
+      `¿Te gustaría que te enviemos los detalles y reservemos tu cupo? Responde a este mensaje y te contamos todo. ¡Te esperamos! 🙌`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'sheet-backdrop';
+    overlay.style.alignItems = 'center';
+    // z-index 500: este modal se abre ENCIMA del sheet de perfil (que sigue
+    // abierto con closeAfter:false) — sin esto queda invisible detrás, mismo
+    // patrón que .phone-preview-overlay (styles.css).
+    overlay.style.zIndex = '500';
+    overlay.innerHTML = `
+      <div class="action-sheet" style="max-width:480px;">
+        <div class="sheet-group" style="padding:16px;text-align:left;">
+          <div class="sheet-title" style="text-align:left;margin-bottom:4px;">Invitar a próximo evento</div>
+          <div class="sheet-subtitle" style="text-align:left;margin-bottom:12px;">Se enviará un WhatsApp real a +${escapeHtml(whatsapp)} vía ${whatsapp ? 'el número de Posgrados' : 'el bot'}. Puedes editar el texto antes de enviar.</div>
+          <div class="field" style="margin-bottom:10px;">
+            <label>Mensaje (texto plano, sin templates)</label>
+            <textarea id="invitarText" rows="7" style="resize:vertical;min-height:120px;">${escapeHtml(defaultMsg)}</textarea>
+            <div class="field-help">Hasta 1000 caracteres · Se marca como "Invitado a próximo evento" al enviar</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-secondary" id="invitarCancel" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="invitarSend" style="flex:1;">📨 Enviar invitación</button>
+          </div>
+          <div id="invitarAlert" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('open'));
+    const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#invitarCancel').addEventListener('click', close);
+    overlay.querySelector('#invitarSend').addEventListener('click', async () => {
+      const texto = overlay.querySelector('#invitarText').value.trim();
+      const alertEl = overlay.querySelector('#invitarAlert');
+      if (texto.length < 10) { alertEl.innerHTML = '<div class="alert alert-error" style="margin:0;">El mensaje es muy corto.</div>'; return; }
+      if (texto.length > 1000) { alertEl.innerHTML = '<div class="alert alert-error" style="margin:0;">Máximo 1000 caracteres.</div>'; return; }
+      const btn = overlay.querySelector('#invitarSend');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const res = await api(`/api/tools/registros-evento-posgrado/${fila}/invitar`, {
+          method: 'POST', body: JSON.stringify({ mensaje: texto, whatsapp }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alertEl.innerHTML = `<div class="alert alert-error" style="margin:0;">${escapeHtml(err.message || err.error || 'No se pudo enviar')}</div>`;
+          btn.disabled = false; btn.textContent = '📨 Enviar invitación';
+          haptic([20, 30, 20]);
+          return;
+        }
+        row[7] = 'Invitado a próximo evento';
+        haptic([15, 40, 15]);
+        toast('Invitación enviada ✓');
+        close();
+        renderEventoGrid();
+      } catch {
+        alertEl.innerHTML = '<div class="alert alert-error" style="margin:0;">Error de conexión.</div>';
+        btn.disabled = false; btn.textContent = '📨 Enviar invitación';
+        haptic([20, 30, 20]);
+      }
+    });
+  }
+
+  function openEventoProfile(row) {
+    const [fecha, whatsapp, nombre, correo, interesFin, programa, autorizaRaw, seguimiento] = row;
+    const autoriza = (autorizaRaw || '').toLowerCase().startsWith('s');
+    const meta = seguimientoMeta(seguimiento);
+    // Nota honesta: "Interesado en beca" solo marca el interés para que el asesor lo contacte;
+    // otorgar una beca real requiere proceso administrativo humano fuera del panel (no se inventa).
+    openProfileSheet({
+      avatarBg: avatarTone(nombre || whatsapp), avatarText: initialsFor(whatsapp || nombre, nombre),
+      title: nombre || 'Prospecto', subtitle: correo || (whatsapp ? `+${whatsapp}` : undefined),
+      badges: [
+        ...(programa ? [{ label: programa, color: '#7c3aed' }] : []),
+        { label: `${meta.icon} ${meta.value}`, color: meta.color },
+        ...(!autoriza ? [{ label: '🔒 No autorizó contacto', color: '#dc2626' }] : []),
+      ],
+      rows: [
+        ...(correo ? [{ icon: '📧', label: 'Email', value: correo }] : []),
+        ...(whatsapp ? [{ icon: '📱', label: 'WhatsApp', value: `+${whatsapp}` }] : []),
+        ...(programa ? [{ icon: '🎓', label: 'Programa de interés', value: programa }] : []),
+        ...(interesFin ? [{ icon: '💰', label: 'Interés en financiación', value: interesFin }] : []),
+        { icon: '🗓️', label: 'Registrado', value: friendlyDate(fecha) },
+        ...(seguimiento === 'Interesado en beca' ? [{ icon: '💡', label: 'Nota', value: 'Candidato a beca — contactar para ofrecer financiación (la beca real la gestiona Admisiones)' }] : []),
+      ],
+      actions: autoriza ? [
+        ...(whatsapp ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(whatsapp), closeAfter: false }] : []),
+        ...(whatsapp ? [{ label: 'Invitar a próximo evento', icon: '📨', onClick: () => openInvitarModal(row), closeAfter: false }] : []),
+        ...SEGUIMIENTO_ESTADOS.filter(s => s.value !== seguimiento).map(s => ({
+          label: `Marcar: ${s.value}`, icon: s.icon, onClick: () => setSeguimiento(row, s.value),
+        })),
+      ] : [],
+    });
+  }
+
+  $('#refreshEvento').addEventListener('click', loadEvento);
+  loadEvento();
+}
+
+export { renderEventoPosgrado, exportarEventoCsv };

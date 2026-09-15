@@ -1,0 +1,77 @@
+import { $, haptic } from './dom.js';
+
+const AVATAR_TONES = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#db2777', '#0d9488'];
+function avatarTone(seed) {
+  let h = 0;
+  for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_TONES[h % AVATAR_TONES.length];
+}
+function initialsFor(phone, nombre) {
+  if (nombre) return nombre.trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  return String(phone).slice(-2);
+}
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  const min = Math.round(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `${min} min`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} h`;
+  const days = Math.round(hr / 24);
+  if (days < 7) return `${days} d`;
+  return new Date(ts).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+}
+function friendlyDate(raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+}
+
+
+/* Marcado de WhatsApp para la vista previa: *negrita*, _cursiva_, ~tachado~ y
+   ```monoespaciado```. Se aplica SIEMPRE sobre texto ya escapado — nunca sobre
+   texto crudo — así el formato no abre una vía de inyección de HTML. */
+function formatWhatsApp(textoEscapado) {
+  return textoEscapado
+    .replace(/```([\s\S]+?)```/g, '<code>$1</code>')
+    .replace(/(^|\s)\*(\S[^*]*?)\*(?=$|\s|[.,!?])/g, '$1<strong>$2</strong>')
+    .replace(/(^|\s)_(\S[^_]*?)_(?=$|\s|[.,!?])/g, '$1<em>$2</em>')
+    .replace(/(^|\s)~(\S[^~]*?)~(?=$|\s|[.,!?])/g, '$1<s>$2</s>')
+    .replace(/\n/g, '<br>');
+}
+
+/* Exportar el CRM a CSV — lo que un coordinador necesita para cruzar datos en
+   Excel o pasarle la lista a alguien que no entra al panel. Exporta lo que se
+   está viendo (filtros y búsqueda aplicados), no toda la base, para que el
+   archivo coincida con lo que la persona tiene en pantalla. */
+function csvEscape(v) {
+  const t = String(v ?? '');
+  return /[",\n;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+}
+
+/** Arma el CSV y lo descarga. Separador ";" y BOM: es lo que espera Excel en
+    configuración regional de Colombia. */
+function descargarCsv(nombreArchivo, cabecera, filas) {
+  const lineas = [cabecera.join(';'), ...filas.map(f => f.map(csvEscape).join(';'))];
+  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  haptic([10, 20, 10]);
+}
+
+/** Fecha legible para Excel: el ISO crudo con T y Z no ordena bien en español. */
+function fechaParaCsv(raw) {
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export { AVATAR_TONES, avatarTone, initialsFor, relativeTime, friendlyDate, formatWhatsApp, csvEscape, descargarCsv, fechaParaCsv };

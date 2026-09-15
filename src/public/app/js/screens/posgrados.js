@@ -1,0 +1,169 @@
+import { api } from '../core/api.js';
+import { $, loadScript } from '../core/dom.js';
+import { setPullToRefresh } from '../core/screen.js';
+import { sesion } from '../core/session.js';
+import { buildSegmented } from '../ui/controls.js';
+
+/* ============= POSGRADOS ============= */
+let pgCharts = [];
+
+function destroyPgCharts() {
+  pgCharts.forEach(c => c.destroy());
+  pgCharts = [];
+}
+
+async function renderPosgrados(main) {
+  destroyPgCharts();
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>🎓 Posgrados</h1><div class="subtitle">Métricas de prospectos, registros y programas consultados</div></div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <a class="btn btn-secondary" href="${sesion.urls.chatwoot}/app/accounts/1/label/posgrado-prospecto" target="_blank" rel="noopener">💬 Ver prospectos</a>
+        <div id="pgRangeWrap"></div>
+      </div>
+    </div>
+    <div id="pgContent">
+      <div class="stats-grid" style="margin-bottom:20px;">
+        ${Array.from({ length: 5 }).map(() => `<div class="stat-card"><div class="skeleton skeleton-line" style="width:70px;height:11px;margin-bottom:8px;"></div><div class="skeleton skeleton-line" style="width:50px;height:26px;"></div></div>`).join('')}
+      </div>
+      <div class="card"><div class="skeleton" style="height:220px;border-radius:12px;"></div></div>
+    </div>
+  `;
+  let pgDays = '7';
+  $('#pgRangeWrap').appendChild(buildSegmented(
+    [{ value: '7', label: '7 días' }, { value: '14', label: '14 días' }, { value: '30', label: '30 días' }],
+    pgDays,
+    (value) => { pgDays = value; loadPg(); },
+  ));
+
+  function pgSkeleton() {
+    return `
+      <div class="stats-grid" style="margin-bottom:20px;">
+        ${Array.from({ length: 5 }).map(() => `<div class="stat-card"><div class="skeleton skeleton-line" style="width:70px;height:11px;margin-bottom:8px;"></div><div class="skeleton skeleton-line" style="width:50px;height:26px;"></div></div>`).join('')}
+      </div>
+      <div class="card"><div class="skeleton" style="height:220px;border-radius:12px;"></div></div>
+    `;
+  }
+
+  setPullToRefresh(() => loadPg());
+  async function loadPg() {
+    destroyPgCharts();
+    $('#pgContent').innerHTML = pgSkeleton();
+    const days = pgDays;
+    try {
+      const r = await api(`/api/tools/metrics/range?days=${days}`);
+      const { days: series } = await r.json();
+      const dateKeys = Object.keys(series).sort();
+
+      const numv = (obj, k) => parseInt(obj?.[k] ?? '0') || 0;
+      const sumAll = (ev) => dateKeys.reduce((a, d) => a + numv(series[d], ev), 0);
+      const daily  = (ev) => dateKeys.map(d => numv(series[d], ev));
+      const fmtDay = d => d.slice(5);
+
+      const prospectos  = sumAll('prospecto_completado');
+      const prospInicio = sumAll('prospecto_iniciado');
+      const registros   = sumAll('registro_completado');
+      const regInicio   = sumAll('registro_iniciado');
+      const especs      = sumAll('programas_especializaciones');
+      const maestrias   = sumAll('programas_maestrias');
+      const doctorados  = sumAll('programas_doctorados');
+      const conv = prospInicio > 0 ? Math.round(prospectos / prospInicio * 100) : 0;
+      const regConv = regInicio > 0 ? Math.round(registros / regInicio * 100) : 0;
+
+      $('#pgContent').innerHTML = `
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="label">Prospectos</div>
+            <div class="value">${prospectos}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${conv}% conversión · ${prospInicio} iniciados</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Registros BD</div>
+            <div class="value">${registros}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${regConv}% conversión · ${regInicio} iniciados</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Especializaciones</div>
+            <div class="value">${especs}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Maestrías</div>
+            <div class="value">${maestrias}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Doctorados</div>
+            <div class="value">${doctorados}</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Actividad diaria — posgrados</h3>
+          <div style="position:relative;height:240px;"><canvas id="pgChartDaily"></canvas></div>
+        </div>
+
+        <div class="posgrados-split" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="card">
+            <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Programas consultados</h3>
+            <div style="position:relative;height:200px;"><canvas id="pgChartProgramas"></canvas></div>
+          </div>
+          <div class="card">
+            <h3 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Embudo prospectos</h3>
+            <div style="position:relative;height:200px;"><canvas id="pgChartFunnel"></canvas></div>
+          </div>
+        </div>
+      `;
+
+      await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js');
+
+      const ticks = { color: '#94a3b8' };
+      const grid  = { color: '#e2e8f0' };
+      const base  = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#64748b' } } },
+        scales: { x: { ticks, grid }, y: { ticks, grid, beginAtZero: true } },
+      };
+
+      pgCharts.push(new Chart(document.getElementById('pgChartDaily'), {
+        type: 'line',
+        data: {
+          labels: dateKeys.map(fmtDay),
+          datasets: [
+            { label: 'Prosp. iniciados',  data: daily('prospecto_iniciado'),   borderColor: '#38bdf8', backgroundColor: '#38bdf833', tension: 0.3, fill: true },
+            { label: 'Prosp. completados',data: daily('prospecto_completado'), borderColor: '#22c55e', backgroundColor: '#22c55e33', tension: 0.3, fill: true },
+            { label: 'Registros BD',      data: daily('registro_completado'),  borderColor: '#a855f7', backgroundColor: '#a855f733', tension: 0.3, fill: true },
+          ],
+        },
+        options: base,
+      }));
+
+      pgCharts.push(new Chart(document.getElementById('pgChartProgramas'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Especializaciones', 'Maestrías', 'Doctorados'],
+          datasets: [{ data: [especs, maestrias, doctorados], backgroundColor: ['#38bdf8', '#a855f7', '#ec4899'] }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#64748b' } } } },
+      }));
+
+      pgCharts.push(new Chart(document.getElementById('pgChartFunnel'), {
+        type: 'bar',
+        data: {
+          labels: ['Prosp. iniciados', 'Prosp. completados', 'Reg. iniciados', 'Reg. completados'],
+          datasets: [{
+            data: [prospInicio, prospectos, regInicio, registros],
+            backgroundColor: ['#38bdf8', '#22c55e', '#eab308', '#a855f7'],
+          }],
+        },
+        options: { ...base, plugins: { legend: { display: false } } },
+      }));
+
+    } catch (err) {
+      console.error(err);
+      $('#pgContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar las métricas de posgrados.</div>';
+    }
+  }
+
+  loadPg();
+}
+
+export { renderPosgrados };

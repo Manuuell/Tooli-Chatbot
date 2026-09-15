@@ -1,0 +1,518 @@
+import { api } from '../core/api.js';
+import { CRM_ESTADOS, PROGRAMA_COLORS, PROGRAMA_LABELS, areaOf, crmCategoria, crmEstadoMeta, fichaHtml, flowCategory, wireFicha } from '../core/crm.js';
+import { $, $$, copyToClipboard, escapeHtml, haptic, toast } from '../core/dom.js';
+import { avatarTone, descargarCsv, fechaParaCsv, friendlyDate, initialsFor } from '../core/format.js';
+import { icon } from '../core/icons.js';
+import { navigate } from '../core/router.js';
+import { setPullToRefresh } from '../core/screen.js';
+import { sesion } from '../core/session.js';
+import { buildSegmented } from '../ui/controls.js';
+import { previewPhoneFor } from '../ui/phone-preview.js';
+import { openProfileSheet } from '../ui/profile.js';
+import { contextSheet } from '../ui/sheet.js';
+
+function exportarCrmCsv() {
+  const q = ($('#crmSearch')?.value ?? '').trim().toLowerCase();
+  const filas = crmRows.filter((row) => {
+    if (crmFilter !== 'todos' && crmCategoria(row) !== crmFilter) return false;
+    if (crmEtapa !== 'todas' && (crmFichas[row[3]]?.estado ?? 'nuevo') !== crmEtapa) return false;
+    if (crmSoloMios && crmFichas[row[3]]?.asignadoA !== sesion.user?.username) return false;
+    if (!q) return true;
+    return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
+  });
+
+  if (!filas.length) { toast('No hay nada que exportar con estos filtros'); haptic([20, 30, 20]); return; }
+
+  const cabecera = ['Fecha de registro', 'Nombre', 'Correo', 'WhatsApp', 'Programa de interés', 'Área', 'Etapa', 'Asesor', 'Etiquetas', 'Notas'];
+  const datos = filas.map((row) => {
+    const f = crmFichas[row[3]];
+    return [
+      fechaParaCsv(row[0]), row[1], row[2], row[3], row[4], areaOf(row),
+      crmEstadoMeta(f?.estado ?? 'nuevo').label,
+      f?.asignadoA ?? '',
+      (f?.etiquetas ?? []).join(', '),
+      f?.notas?.length ?? 0,
+    ];
+  });
+
+  descargarCsv(`prospectos-${new Date().toISOString().slice(0, 10)}.csv`, cabecera, datos);
+  toast(`${filas.length} prospecto${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
+}
+
+/** Mismo patrón para los prospectos del evento de posgrados. */
+
+
+let crmRows = [];
+let crmFilter = 'todos';
+let crmFichas = {};
+let crmEtapa = 'todas';
+let crmSoloMios = false;
+
+async function renderRegistros(main) {
+  let selectMode = false;
+  let selected = new Set();
+
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1>📝 CRM — Prospectos</h1><div class="subtitle">Pregrado y posgrado — quienes completaron el registro de interés vía WhatsApp</div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="toggleSelectMode">${icon('check', 14)} Seleccionar varios</button>
+        <button class="btn btn-secondary" id="exportCsv">${icon('external', 14)} Exportar<span class="hide-sm"> CSV</span></button>
+        <button class="btn btn-secondary" id="refreshReg"><span class="refresh-icon">${icon('refresh', 16)}</span> Actualizar</button>
+      </div>
+    </div>
+    <div class="crm-toolbar">
+      <input type="text" id="crmSearch" placeholder="Buscar por nombre, email o programa…">
+      <div id="crmFilterWrap"></div>
+    </div>
+    <div class="crm-etapa-fila" id="crmEtapaFila">
+      <span class="crm-etapa-label">Etapa del embudo:</span>
+      <div id="crmEtapaWrap"></div>
+      <button type="button" class="crm-mios" id="crmMios" aria-pressed="false">${icon('user', 13)} Solo los míos</button>
+    </div>
+    <div id="broadcastBar" class="broadcast-bar hidden">
+      <div class="broadcast-bar-left">
+        <span class="broadcast-count" id="broadcastCount">0 seleccionados</span>
+        <span class="broadcast-hint" id="broadcastHint" style="display:none;"></span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" id="broadcastAll">Todos<span class="hide-sm"> los visibles</span></button>
+        <button class="btn btn-ghost" id="broadcastClear">Limpiar</button>
+        <button class="btn btn-primary" id="broadcastSendBtn" disabled>${icon('send', 14)} Enviar<span class="hide-sm"> plantilla</span> a 0</button>
+      </div>
+    </div>
+    <div id="regContent">
+      <div class="crm-grid stagger-in">
+        ${Array.from({ length: 6 }).map(() => `
+          <div class="crm-card">
+            <div class="skeleton" style="width:44px;height:44px;border-radius:50%;margin-bottom:12px;"></div>
+            <div class="skeleton skeleton-line" style="width:70%;height:14px;margin-bottom:8px;"></div>
+            <div class="skeleton skeleton-line" style="width:90%;height:11px;"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  $('#crmSearch').addEventListener('input', renderCrmGrid);
+  $('#toggleSelectMode').addEventListener('click', () => {
+    haptic(10);
+    selectMode = !selectMode;
+    if (!selectMode) selected.clear();
+    updateSelectToggle();
+    renderCrmGrid();
+  });
+  $('#exportCsv').addEventListener('click', () => exportarCrmCsv());
+  $('#crmMios').addEventListener('click', (e) => {
+    haptic(10);
+    crmSoloMios = !crmSoloMios;
+    const btn = e.currentTarget;
+    btn.classList.toggle('active', crmSoloMios);
+    btn.setAttribute('aria-pressed', String(crmSoloMios));
+    renderCrmGrid();
+  });
+  $('#broadcastAll').addEventListener('click', () => {
+    haptic(12);
+    // "Todos los visibles" = los que pasaron los filtros y la búsqueda actuales,
+    // no toda la base: seleccionar sin querer a 300 personas para un envío
+    // masivo es justo el error que hay que hacer difícil de cometer.
+    $$('#regContent .crm-card[data-row]').forEach(c => selected.add(Number(c.dataset.row)));
+    updateBroadcastBar();
+    renderCrmGrid();
+    toast(`${selected.size} seleccionados`);
+  });
+  $('#broadcastClear').addEventListener('click', () => {
+    haptic(10);
+    selected.clear();
+    updateBroadcastBar();
+    renderCrmGrid();
+  });
+  $('#broadcastSendBtn').addEventListener('click', () => {
+    const nums = selectedTelefonos();
+    if (!nums.length) { toast('Selecciona al menos un prospecto con WhatsApp'); return; }
+    if (nums.length > 200) { toast('Máximo 200 destinatarios por envío'); return; }
+    openBroadcastSheet(nums);
+  });
+
+  function updateSelectToggle() {
+    const btn = $('#toggleSelectMode');
+    if (!btn) return;
+    btn.classList.toggle('btn-primary', selectMode);
+    btn.classList.toggle('btn-secondary', !selectMode);
+    btn.innerHTML = selectMode ? `${icon('x', 14)} Cancelar selección` : `${icon('check', 14)} Seleccionar varios`;
+    const bar = $('#broadcastBar');
+    if (bar) bar.classList.toggle('hidden', !selectMode);
+    updateBroadcastBar();
+  }
+
+  function selectedTelefonos() {
+    return Array.from(selected).map(idx => {
+      const row = crmRows[idx];
+      return row ? String(row[3] || '').replace(/\D/g, '') : '';
+    }).filter(v => v.length >= 8);
+  }
+
+  function updateBroadcastBar() {
+    const nums = selectedTelefonos();
+    const countEl = $('#broadcastCount');
+    const btn = $('#broadcastSendBtn');
+    const sinWhatsapp = selected.size - nums.length;
+    if (countEl) countEl.textContent = `${selected.size} seleccionado${selected.size === 1 ? '' : 's'}`;
+    const hintEl = $('#broadcastHint');
+    if (hintEl) {
+      // El aviso solo aparece si de verdad hay alguien que no va a recibir nada.
+      hintEl.textContent = sinWhatsapp > 0
+        ? `${sinWhatsapp} sin WhatsApp — no recibirá${sinWhatsapp === 1 ? '' : 'n'} el mensaje`
+        : '';
+      hintEl.style.display = sinWhatsapp > 0 ? '' : 'none';
+    }
+    if (btn) {
+      btn.disabled = nums.length === 0;
+      btn.innerHTML = `${icon('send', 14)} Enviar<span class="hide-sm"> plantilla</span> a ${nums.length}`;
+    }
+  }
+
+  function toggleSelect(idx) {
+    haptic(10);
+    if (selected.has(idx)) selected.delete(idx);
+    else selected.add(idx);
+    updateBroadcastBar();
+    const card = document.querySelector(`.crm-card[data-row="${idx}"]`);
+    if (card) {
+      const isOn = selected.has(idx);
+      card.classList.toggle('crm-card-selected', isOn);
+      const box = card.querySelector('.crm-check');
+      if (box) { box.classList.toggle('checked', isOn); box.innerHTML = isOn ? icon('check', 14) : ''; }
+    }
+  }
+
+  async function openBroadcastSheet(telefonos) {
+    const overlay = document.createElement('div');
+    overlay.className = 'sheet-backdrop';
+    overlay.style.alignItems = 'center';
+    overlay.style.zIndex = '500';
+    overlay.innerHTML = `
+      <div class="action-sheet" style="max-width:480px;">
+        <div class="sheet-group" style="padding:16px;text-align:left;">
+          <div class="sheet-title" style="text-align:left;margin-bottom:4px;">Enviar plantilla por WhatsApp</div>
+          <div class="sheet-subtitle" style="text-align:left;margin-bottom:4px;">${telefonos.length} destinatario${telefonos.length !== 1 ? 's' : ''} · Solo templates aprobados por Meta (sin variables {{1}} por ahora)</div>
+          <div class="field-help" style="margin-bottom:12px;">Limitación: solo templates sin placeholders. Si el template requiere parámetros, Meta devolverá error y se reportará en el resumen.</div>
+          <div id="bcTemplates"><div class="skeleton skeleton-line" style="height:14px;margin:8px 0;"></div><div class="skeleton skeleton-line" style="height:14px;margin:8px 0;"></div><div class="skeleton skeleton-line" style="height:14px;margin:8px 0;"></div></div>
+          <div id="bcSelectedInfo" style="font-size:12px;color:var(--text-muted);margin:8px 0 10px;"></div>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-secondary" id="bcCancel" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="bcConfirm" style="flex:1;" disabled>📨 Enviar</button>
+          </div>
+          <div id="bcAlert" style="margin-top:10px;"></div>
+          <div id="bcResult" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('open'));
+    const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#bcCancel').addEventListener('click', close);
+
+    let chosen = null;
+    let templates = [];
+    const listEl = overlay.querySelector('#bcTemplates');
+    const infoEl = overlay.querySelector('#bcSelectedInfo');
+    const confirmBtn = overlay.querySelector('#bcConfirm');
+    const alertEl = overlay.querySelector('#bcAlert');
+    const resultEl = overlay.querySelector('#bcResult');
+
+    function renderTemplates() {
+      if (!templates.length) {
+        listEl.innerHTML = `<div class="widget-empty" style="padding:14px 0;">No hay templates aprobados disponibles — crealos en el Business Manager de Meta y aparecerán aquí. Sin credenciales WABA en este entorno la lista viene vacía.</div>`;
+        confirmBtn.disabled = true;
+        return;
+      }
+      listEl.innerHTML = templates.map((t, i) => `
+        <button type="button" class="quick-row bc-template-row" data-idx="${i}" style="border:1px solid ${chosen && chosen.name === t.name && chosen.language === t.language ? 'var(--utb-blue)' : 'var(--border)'};background:${chosen && chosen.name === t.name && chosen.language === t.language ? 'rgba(0,48,135,0.06)' : 'transparent'};">
+          <span class="quick-icon" style="background:${chosen && chosen.name === t.name && chosen.language === t.language ? 'var(--utb-blue)' : 'rgba(0,48,135,0.08)'};color:${chosen && chosen.name === t.name && chosen.language === t.language ? 'white' : 'var(--utb-blue)'};">${chosen && chosen.name === t.name && chosen.language === t.language ? '✓' : '📄'}</span>
+          <span class="quick-body"><div class="quick-title">${escapeHtml(t.name)}</div><div class="quick-sub">${escapeHtml(t.language)} · ${escapeHtml(t.category)}${t.components && t.components.length ? ` · ${t.components.length} componentes` : ''}</div></span>
+          <span class="quick-chevron">${icon('chevronRight', 14)}</span>
+        </button>
+      `).join('');
+      if (chosen) infoEl.textContent = `Seleccionado: ${chosen.name} (${chosen.language})`;
+      else infoEl.textContent = 'Toca un template para seleccionarlo';
+      confirmBtn.disabled = !chosen;
+      confirmBtn.textContent = chosen ? `📨 Enviar "${chosen.name}" a ${telefonos.length}` : '📨 Enviar';
+      listEl.querySelectorAll('.bc-template-row').forEach(btn => btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.idx);
+        chosen = templates[idx];
+        haptic(10);
+        renderTemplates();
+      }));
+    }
+
+    try {
+      const r = await api('/api/tools/broadcast/templates');
+      if (!r.ok) throw new Error('No se pudieron cargar los templates');
+      const data = await r.json();
+      templates = data.templates ?? [];
+    } catch (err) {
+      listEl.innerHTML = `<div class="alert alert-error" style="margin:0;">No se pudieron cargar los templates: ${escapeHtml(err.message || String(err))}</div>`;
+      return;
+    }
+    renderTemplates();
+
+    confirmBtn.addEventListener('click', async () => {
+      if (!chosen) return;
+      confirmBtn.disabled = true; confirmBtn.textContent = 'Enviando…';
+      alertEl.innerHTML = '';
+      resultEl.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;"><span class="spinner"></span> Enviando ${telefonos.length} mensajes con delay entre envíos…</div>`;
+      try {
+        const res = await api('/api/tools/broadcast/send', {
+          method: 'POST',
+          body: JSON.stringify({ templateName: chosen.name, language: chosen.language, telefonos }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = body.message || body.error || `HTTP ${res.status}`;
+          alertEl.innerHTML = `<div class="alert alert-error" style="margin:0;">${escapeHtml(msg)}${res.status === 403 ? ' — Solo administradores pueden enviar broadcasts.' : ''}</div>`;
+          resultEl.innerHTML = '';
+          confirmBtn.disabled = false; confirmBtn.textContent = `📨 Enviar "${chosen.name}" a ${telefonos.length}`;
+          haptic([20,30,20]);
+          return;
+        }
+        const enviados = body.enviados ?? [];
+        const fallidos = body.fallidos ?? [];
+        const total = body.total ?? telefonos.length;
+        if (fallidos.length === 0) haptic([15,40,15]); else if (enviados.length === 0) haptic([20,30,20]); else haptic([10,20,10]);
+        resultEl.innerHTML = `
+          <div class="alert ${fallidos.length === 0 ? 'alert-success' : enviados.length === 0 ? 'alert-error' : 'alert-info'}" style="margin:0 0 10px;">
+            <div style="font-weight:700;margin-bottom:4px;">${enviados.length}/${total} enviados correctamente</div>
+            <div style="font-size:12.5px;">Plantilla: <strong>${escapeHtml(chosen.name)}</strong> (${escapeHtml(chosen.language)})</div>
+          </div>
+          ${fallidos.length ? `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">Fallidos (${fallidos.length}):</div>${fallidos.map(f => `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;"><span style="font-weight:600;">+${escapeHtml(f.numero)}</span><span style="color:var(--danger);flex:1;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f.error)}</span></div>`).join('')}</div>` : ''}
+          ${enviados.length ? `<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Enviados: ${enviados.map(n => '+' + escapeHtml(n.slice(-4))).join(', ')}</div>` : ''}
+        `;
+        toast(fallidos.length === 0 ? `¡${enviados.length} mensajes enviados!` : `${enviados.length} enviados, ${fallidos.length} fallidos`);
+        confirmBtn.textContent = 'Cerrar';
+        confirmBtn.disabled = false;
+        confirmBtn.onclick = close;
+        // Al enviar con éxito, limpiar selección en el CRM
+        if (enviados.length) { selected.clear(); updateBroadcastBar(); renderCrmGrid(); }
+      } catch (err) {
+        alertEl.innerHTML = `<div class="alert alert-error" style="margin:0;">Error de conexión: ${escapeHtml(err.message || String(err))}</div>`;
+        resultEl.innerHTML = '';
+        confirmBtn.disabled = false; confirmBtn.textContent = `📨 Enviar "${chosen.name}" a ${telefonos.length}`;
+        haptic([20,30,20]);
+      }
+    });
+  }
+
+  setPullToRefresh(() => loadReg());
+  async function loadReg() {
+    $('#refreshReg').querySelector('.refresh-icon')?.classList.add('spin-once');
+    try {
+      // Las fichas se traen en una sola llamada junto con los registros: una
+      // por tarjeta sería un N+1 contra el backend al pintar la grilla.
+      const [r, fichasRes] = await Promise.all([
+        api('/api/tools/registros-posgrado'),
+        api('/api/tools/crm/fichas').then(x => x.json()).catch(() => ({ fichas: {} })),
+      ]);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const { rows } = await r.json();
+      crmFichas = fichasRes.fichas ?? {};
+      crmRows = rows ?? [];
+      if (!crmRows.length) {
+        $('#regContent').innerHTML = `<div class="card"><p style="color:var(--text-muted);text-align:center;padding:24px 0;">No hay registros aún. Cuando un prospecto complete el formulario del bot, aparecerá aquí.</p></div>`;
+        $('#crmFilterWrap').innerHTML = '';
+        return;
+      }
+      const counts = crmRows.reduce((acc, row) => { const c = crmCategoria(row); acc[c] = (acc[c] ?? 0) + 1; return acc; }, {});
+      $('#crmFilterWrap').innerHTML = '';
+      $('#crmFilterWrap').appendChild(buildSegmented(
+        [
+          { value: 'todos', label: `Todos (${crmRows.length})` },
+          ...Object.keys(PROGRAMA_LABELS).filter(k => counts[k]).map(k => ({ value: k, label: `${PROGRAMA_LABELS[k]} (${counts[k]})` })),
+        ],
+        crmFilter, (v) => { crmFilter = v; renderCrmGrid(); },
+      ));
+
+      // Segundo filtro: etapa del embudo. Solo aparece si alguien ya movió
+      // fichas — si no, sería un control que no filtra nada.
+      const etapaCounts = crmRows.reduce((acc, row) => {
+        const est = crmFichas[row[3]]?.estado ?? 'nuevo';
+        acc[est] = (acc[est] ?? 0) + 1;
+        return acc;
+      }, {});
+      const hayEtapas = Object.keys(etapaCounts).some(k => k !== 'nuevo');
+      $('#crmEtapaWrap').style.display = hayEtapas ? '' : 'none';
+      $('#crmEtapaFila').querySelector('.crm-etapa-label').style.display = hayEtapas ? '' : 'none';
+      if (hayEtapas) {
+        $('#crmEtapaWrap').innerHTML = '';
+        $('#crmEtapaWrap').appendChild(buildSegmented(
+          [
+            { value: 'todas', label: 'Todas' },
+            ...CRM_ESTADOS.filter(e => etapaCounts[e.value]).map(e => ({ value: e.value, label: `${e.icon} ${e.label} (${etapaCounts[e.value]})` })),
+          ],
+          etapaCounts[crmEtapa] ? crmEtapa : 'todas',
+          (v) => { crmEtapa = v; renderCrmGrid(); },
+        ));
+      }
+      renderCrmGrid();
+    } catch (err) {
+      console.error(err);
+      $('#regContent').innerHTML = '<div class="alert alert-error">No se pudieron cargar los registros. Verifica que el Sheet esté configurado.</div>';
+    }
+  }
+
+  function renderCrmGrid() {
+    const q = ($('#crmSearch')?.value ?? '').trim().toLowerCase();
+    const filtered = crmRows.filter((row, i) => {
+      row.__i = i;
+      if (crmFilter !== 'todos' && crmCategoria(row) !== crmFilter) return false;
+      if (crmEtapa !== 'todas') {
+        const est = crmFichas[row[3]]?.estado ?? 'nuevo';
+        if (est !== crmEtapa) return false;
+      }
+      if (crmSoloMios && crmFichas[row[3]]?.asignadoA !== sesion.user?.username) return false;
+      if (!q) return true;
+      return [row[1], row[2], row[4]].some(v => (v ?? '').toLowerCase().includes(q));
+    });
+    if (!filtered.length) {
+      // Un "sin resultados" mudo obliga a adivinar cuál de los tres filtros
+      // activos lo dejó vacío: se dice cuál y se ofrece quitarlo.
+      const motivos = [];
+      if (crmSoloMios) motivos.push('asignados a ti');
+      if (crmEtapa !== 'todas') motivos.push(`en etapa "${crmEstadoMeta(crmEtapa).label}"`);
+      if (crmFilter !== 'todos') motivos.push(`de ${PROGRAMA_LABELS[crmFilter] ?? crmFilter}`);
+      if (q) motivos.push(`que coincidan con "${q}"`);
+      $('#regContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">${icon('search', 42)}</div>
+          <div class="empty-state-title">Ningún prospecto coincide</div>
+          <div class="empty-state-sub">No hay prospectos ${motivos.join(', ')}.</div>
+          <button type="button" class="btn btn-secondary" id="crmLimpiarFiltros" style="margin-top:12px;">Quitar los filtros</button>
+        </div>`;
+      $('#crmLimpiarFiltros')?.addEventListener('click', () => {
+        crmSoloMios = false;
+        crmEtapa = 'todas';
+        crmFilter = 'todos';
+        if ($('#crmSearch')) $('#crmSearch').value = '';
+        $('#crmMios')?.classList.remove('active');
+        $('#crmMios')?.setAttribute('aria-pressed', 'false');
+        haptic(10);
+        loadReg();
+      });
+      return;
+    }
+    $('#regContent').innerHTML = `
+      <div class="crm-grid stagger-in">
+        ${filtered.map(row => {
+          const cat = crmCategoria(row);
+          const nombre = row[1] || 'Sin nombre';
+          const hasPhone = String(row[3] || '').replace(/\D/g, '').length >= 8;
+          const isSelected = selected.has(row.__i);
+          return `
+          <div class="crm-card ${selectMode ? 'select-mode' : ''} ${isSelected ? 'crm-card-selected' : ''}" data-longpress data-row="${row.__i}" style="position:relative;">
+            ${selectMode ? `<button type="button" class="crm-check ${isSelected ? 'checked' : ''}" data-check="${row.__i}" aria-label="Seleccionar">${isSelected ? icon('check', 12) : ''}</button>` : ''}
+            ${selectMode && !hasPhone ? `<span class="badge" style="position:absolute;top:10px;right:10px;background:#fee2e2;color:#dc2626;font-size:10px;">Sin WhatsApp</span>` : ''}
+            <div class="advisor-card-top" style="${selectMode ? 'margin-top:6px;' : ''}">
+              <div class="avatar" style="background:${avatarTone(nombre)};width:44px;height:44px;font-size:14px;">${initialsFor(row[3] || nombre, nombre)}</div>
+              <span class="badge" style="background:${areaOf(row) === 'Pregrado' ? '#0284c722' : '#7c3aed22'};color:${areaOf(row) === 'Pregrado' ? '#0284c7' : '#7c3aed'};">${areaOf(row)}</span>
+            </div>
+            <div class="crm-card-name">${escapeHtml(nombre)}</div>
+            ${(() => {
+              const f = crmFichas[row[3]];
+              if (!f) return '';
+              const em = crmEstadoMeta(f.estado);
+              return `<div class="crm-card-ficha">
+                <span class="badge" style="background:${em.color}1f;color:${em.color};">${em.icon} ${em.label}</span>
+                ${f.asignadoA ? `<span class="crm-card-asignado" title="Asesor responsable">${icon('user', 11)}${escapeHtml(f.asignadoA)}</span>` : ''}
+                ${f.notas?.length ? `<span class="crm-card-notas" title="${f.notas.length} nota(s) del equipo">${icon('note', 11)}${f.notas.length}</span>` : ''}
+              </div>`;
+            })()}
+            ${row[4] ? `<span class="badge" style="background:${PROGRAMA_COLORS[cat]}22;color:${PROGRAMA_COLORS[cat]};margin-bottom:8px;">${escapeHtml(row[4])}</span>` : ''}
+            <div class="crm-card-row">✉️ ${escapeHtml(row[2] || '—')}</div>
+            <div class="crm-card-row">📱 ${escapeHtml(row[3] || '—')}</div>
+            <div class="crm-card-date">${escapeHtml(friendlyDate(row[0]))}</div>
+          </div>
+        `; }).join('')}
+      </div>
+    `;
+    $$('.crm-card[data-longpress]').forEach(card => {
+      const idx = Number(card.dataset.row);
+      const row = crmRows[idx];
+      if (selectMode) {
+        card.addEventListener('click', (e) => {
+          // Si toca el checkbox o cualquier parte de la tarjeta, togglear selección
+          if (e.target.closest('.crm-check')) return;
+          toggleSelect(idx);
+        });
+        const checkBtn = card.querySelector('.crm-check');
+        if (checkBtn) checkBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleSelect(idx); });
+        // En modo selección no abrir contextSheet/long-press para no confundir
+        return;
+      }
+      card.addEventListener('click', () => openStudentProfile(row));
+      contextSheet(card, {
+        title: row[1] || 'Prospecto',
+        subtitle: row[2] || undefined,
+        actions: [
+          { label: 'Ver perfil', icon: '👤', onClick: () => openStudentProfile(row) },
+          ...(row[3] ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(row[3]) }] : []),
+          { label: 'Copiar email', icon: '📧', onClick: () => copyToClipboard(row[2] ?? '', 'Email copiado') },
+          { label: 'Copiar WhatsApp', icon: '📱', onClick: () => copyToClipboard(row[3] ?? '', 'Número copiado') },
+          { label: 'Ver conversación', icon: '💬', onClick: () => navigate('conversaciones') },
+          { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${sesion.urls.chatwoot}/app/accounts/1/label/${areaOf(row) === 'Pregrado' ? 'pregrado-prospecto' : 'posgrado-prospecto'}`, '_blank', 'noopener') },
+        ],
+      });
+    });
+  }
+
+  /* Perfil del estudiante: combina lo que ya sabemos del registro (CRM) con
+     lo que el bot tiene guardado de su conversación (categoría de flujo,
+     último mensaje) — todo dato real, nada inventado tipo Savia. */
+  async function openStudentProfile(row) {
+    const [fecha, nombre, email, phone, programa] = row;
+    const area = areaOf(row);
+    const cat = crmCategoria(row);
+    let flowInfo = null;
+    if (phone) {
+      try {
+        const r = await api(`/api/tools/bot-users/${phone}`);
+        const info = await r.json();
+        flowInfo = { step: flowCategory(info.session?.step), last: info.recentMessages?.[0] ?? null, banned: info.banned };
+      } catch { /* sin datos de conversación disponibles */ }
+    }
+    let ficha = null;
+    if (phone) {
+      try { ficha = (await (await api(`/api/tools/crm/${phone}`)).json()).ficha; }
+      catch { /* la ficha es opcional: si falla, el perfil se abre igual */ }
+    }
+    openProfileSheet({
+      avatarBg: avatarTone(nombre || phone), avatarText: initialsFor(phone || nombre, nombre),
+      title: nombre || 'Prospecto', subtitle: email || (phone ? `+${phone}` : undefined),
+      badges: [
+        { label: area, color: area === 'Pregrado' ? '#0284c7' : '#7c3aed' },
+        ...(programa ? [{ label: programa, color: PROGRAMA_COLORS[cat] }] : []),
+        ...(flowInfo?.step ? [{ label: flowInfo.step.label, color: flowInfo.step.color }] : []),
+        ...(flowInfo?.banned ? [{ label: 'Baneado', color: '#dc2626' }] : []),
+      ],
+      rows: [
+        ...(email ? [{ icon: '📧', label: 'Email', value: email }] : []),
+        ...(phone ? [{ icon: '📱', label: 'WhatsApp', value: `+${phone}` }] : []),
+        ...(programa ? [{ icon: '🎓', label: area === 'Pregrado' ? 'Carrera de interés' : 'Programa de interés', value: programa }] : []),
+        { icon: '🗓️', label: 'Registrado', value: friendlyDate(fecha) },
+        ...(flowInfo?.last ? [{ icon: '💬', label: 'Último mensaje', value: flowInfo.last.text }] : []),
+      ],
+      extraHtml: phone ? fichaHtml(ficha) : '',
+      onMount: phone ? (sheet) => wireFicha(sheet, phone, ficha, () => loadReg()) : undefined,
+      actions: [
+        ...(phone ? [{ label: 'Vista previa en teléfono', icon: '📲', onClick: () => previewPhoneFor(phone), closeAfter: false }] : []),
+        ...(phone ? [{ label: 'Ver conversación', icon: '💬', onClick: () => navigate('conversaciones') }] : []),
+        { label: 'Ver en Chatwoot', icon: '↗️', onClick: () => window.open(`${sesion.urls.chatwoot}/app/accounts/1/label/${area === 'Pregrado' ? 'pregrado-prospecto' : 'posgrado-prospecto'}`, '_blank', 'noopener') },
+      ],
+    });
+  }
+
+  $('#refreshReg').addEventListener('click', loadReg);
+  loadReg();
+}
+
+export { renderRegistros };

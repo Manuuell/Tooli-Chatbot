@@ -16,6 +16,7 @@ import { setSession } from '../services/session';
 import { MetricEvent, track } from '../services/metrics';
 import { FlowContext, messaging, sendMenu, sendMenuPosgrado, sendMenuPregrado } from './shared';
 import { AreaRecurso, getRecursos } from '../services/academicoLinks';
+import { iniciarConsultaDeNotas } from './notas';
 
 /** Métrica por recurso: explícita (y no un template literal) para que el
  * compilador avise si alguien agrega un recurso sin su evento. */
@@ -96,6 +97,14 @@ export async function handleAcademicoMenu(ctx: FlowContext): Promise<void> {
 
   const recursos = getRecursos(area);
   const elegido = recursos[Number(input) - 1];
+
+  // Las notas ya no se resuelven con un enlace: el bot las consulta de verdad
+  // en Banner (verificando primero la identidad por OTP al correo). Mandar el
+  // enlace aquí sería darle al estudiante el camino largo teniendo el corto.
+  if (elegido?.id === 'notas') {
+    await iniciarConsultaDeNotas(from);
+    return;
+  }
 
   if (!elegido) {
     await messaging.sendText({

@@ -50,7 +50,13 @@ export type MetricEvent =
   | 'academico_recibo'
   | 'academico_correo'
   | 'academico_becas'
-  | 'academico_derechos';
+  | 'academico_derechos'
+  // Verificación de identidad (OTP correo)
+  | 'verificacion_iniciada'
+  | 'verificacion_completada'
+  // Notas
+  | 'notas_consultadas'
+  | 'notas_no_encontradas';
 
 export interface MetricProps {
   area?: 'ti' | 'admisiones' | 'posgrados';

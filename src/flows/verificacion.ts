@@ -1,0 +1,112 @@
+import { setSession } from '../services/session';
+import { startVerification, checkCode } from '../services/identityService';
+import { track } from '../services/metrics';
+import { FlowContext, messaging, sendMenu, isMenuCommand, EMAIL_REGEX } from './shared';
+
+// Flujo de verificación de identidad por OTP al correo institucional.
+// Estados: verif_email -> verif_codigo.
+// `after` (opcional) recuerda a qué flujo volver tras verificar (p. ej. 'recibo').
+
+export async function startVerificationFlow(from: string, after?: string): Promise<void> {
+  await setSession(from, { step: 'verif_email', data: after ? { after } : {} });
+  await messaging.sendText({
+    to: from,
+    text:
+      '🔐 *Verificación de identidad*\n\n' +
+      'Para proteger tus datos, primero confirmo que eres tú.\n\n' +
+      'Escribe tu *correo institucional* (@utb.edu.co) y te enviaré un código.\n\n' +
+      '_Escribe *menu* para cancelar._',
+  });
+}
+
+export async function handleVerifEmail(ctx: FlowContext): Promise<void> {
+  const { from, text, session } = ctx;
+  if (isMenuCommand(text)) {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
+  const email = text.trim().toLowerCase();
+  if (!EMAIL_REGEX.test(email)) {
+    await messaging.sendText({
+      to: from,
+      text:
+        'Ese correo no es válido. Debe ser tu correo institucional ' +
+        '(@utb.edu.co o @utbvirtual.edu.co).\n\nInténtalo de nuevo o escribe *menu*.',
+    });
+    return;
+  }
+
+  try {
+    await startVerification(from, email);
+  } catch (err) {
+    console.error('[verif] error enviando OTP:', err);
+    await messaging.sendText({
+      to: from,
+      text: 'No pude enviar el código en este momento. Intenta más tarde o escribe *menu*.',
+    });
+    return;
+  }
+
+  await setSession(from, { step: 'verif_codigo', data: { ...session?.data, email } });
+  await messaging.sendText({
+    to: from,
+    text:
+      `📧 Te envié un código de 6 dígitos a *${email}*.\n\n` +
+      'Escríbelo aquí (revisa también la carpeta de *spam*).\n\n' +
+      '_Escribe *menu* para cancelar._',
+  });
+}
+
+export async function handleVerifCodigo(ctx: FlowContext): Promise<void> {
+  const { from, text, session } = ctx;
+  if (isMenuCommand(text)) {
+    await setSession(from, { step: 'menu', data: {} });
+    await sendMenu(from);
+    return;
+  }
+
+  const result = await checkCode(from, text);
+
+  if (!result.ok) {
+    if (result.reason === 'wrong') {
+      // Sigue en verif_codigo para permitir reintento.
+      await messaging.sendText({
+        to: from,
+        text: 'Código incorrecto. Inténtalo de nuevo o escribe *menu*.',
+      });
+      return;
+    }
+    const msg =
+      result.reason === 'expired'
+        ? 'El código expiró. Escribe *menu* y vuelve a empezar la verificación.'
+        : '🔒 Demasiados intentos. Por seguridad cancelé la verificación. Escribe *menu* para reintentar.';
+    await setSession(from, { step: 'menu', data: {} });
+    await messaging.sendText({ to: from, text: msg });
+    return;
+  }
+
+  // ✅ Verificado. Si venía de otro flujo, lo retomamos.
+  await track('verificacion_completada');
+  const after = session?.data.after;
+  if (after === 'notas') {
+    await setSession(from, { step: 'notas_password', data: {} });
+    await messaging.sendText({
+      to: from,
+      text:
+        '✅ ¡Identidad verificada!\n\n' +
+        'Ahora inicio sesión en Banner por ti. Escribe tu *contraseña institucional* ' +
+        '(la de Microsoft / correo @utb).\n\n⚠️ Solo se usa para esta consulta, *no se guarda*.',
+    });
+    return;
+  }
+
+  await setSession(from, { step: 'menu', data: {} });
+  await messaging.sendText({
+    to: from,
+    text:
+      '✅ ¡Identidad verificada! Ya puedes usar los servicios que requieren verificación.\n\n' +
+      'Escribe *menu* para ver las opciones.',
+  });
+}

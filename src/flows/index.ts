@@ -24,6 +24,8 @@ import {
   handleAgentAdmisionesP3,
 } from './agent';
 import { handleTiCollectEmail, handleTiCollectCodigo, handleTiCollectCedula } from './identity';
+import { handleVerifEmail, handleVerifCodigo } from './verificacion';
+import { handleNotasPassword, handleNotasMfa } from './notas';
 
 const HANDLERS: Record<string, (ctx: FlowContext) => Promise<void>> = {
   // ── Inicio (elige Pregrado / Posgrado) ──────────────────────────────────────
@@ -47,6 +49,13 @@ const HANDLERS: Record<string, (ctx: FlowContext) => Promise<void>> = {
   pregrado_prospecto_email: handlePregradoProspectoEmail,
   pregrado_prospecto_carrera: handlePregradoProspectoCarrera,
   // ── Compartido ───────────────────────────────────────────────────────────────
+  // Verificación de identidad por OTP al correo institucional, y consulta real
+  // de notas por SSO. Van aquí y no bajo un área porque un estudiante activo
+  // puede ser de pregrado o de posgrado indistintamente.
+  verif_email: handleVerifEmail,
+  verif_codigo: handleVerifCodigo,
+  notas_password: handleNotasPassword,
+  notas_mfa: handleNotasMfa,
   academico_menu: handleAcademicoMenu,
   chatting_with_ai: handleChattingWithAI,
   with_agent: handleWithAgent,

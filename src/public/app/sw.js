@@ -2,8 +2,12 @@
 // app (HTML/CSS) cargue rápido y siga disponible con mala conexión o sin
 // internet — nunca cachear /api/* ni el login, porque esos datos deben ser
 // siempre frescos y la sesión depende de cookies validadas por el servidor.
-const CACHE_NAME = 'tooli-asesores-shell-v1';
-const SHELL_URLS = ['/app/index.html', '/app/styles.css'];
+const CACHE_NAME = 'tooli-asesores-shell-v2';
+const SHELL_URLS = ['/app/index.html', '/app/styles.css', '/app/js/app.js'];
+// El panel dejó de ser un único archivo: ahora son módulos ES bajo /app/js/.
+// Se cachean igual que el shell (mismo stale-while-revalidate), porque sin
+// ellos el HTML cacheado cargaría una página en blanco al quedarse sin red.
+const SHELL_PREFIX = '/app/js/';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -27,7 +31,7 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) return; // nunca cachear datos
   if (url.pathname.endsWith('/login.html')) return; // el login siempre debe ir a red
 
-  const isShell = SHELL_URLS.some((p) => url.pathname.endsWith(p));
+  const isShell = SHELL_URLS.some((p) => url.pathname.endsWith(p)) || url.pathname.startsWith(SHELL_PREFIX);
   if (!isShell) return; // fuentes, CDNs externos, etc. — comportamiento normal del navegador
 
   // Stale-while-revalidate: responde con la copia en caché al instante (rápido

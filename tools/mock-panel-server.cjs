@@ -182,6 +182,6 @@ app.get('/health/deep', (_q, res) => j(res, {
   },
 }));
 
-app.use('/app', express.static(path.join(__dirname, 'src/public/app')));
+app.use('/app', express.static(path.join(__dirname, '..', 'src', 'public', 'app')));
 app.get('/', (_q, res) => res.redirect('/app/index.html'));
 app.listen(4599, () => console.log('mock panel en http://localhost:4599/app/index.html'));

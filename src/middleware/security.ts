@@ -15,7 +15,9 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
 
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    // Sin 'unsafe-inline': el panel y el login cargan su JS desde archivos
+    // propios (/app/js/*), así una inyección de HTML no puede ejecutar código.
+    "script-src 'self' https://cdn.jsdelivr.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",

@@ -92,6 +92,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd ~/tooli-chatbot
             git pull origin main
             # Solo el backend: evolution-api ya no se usa (MESSAGING_ADAPTER=meta) y su

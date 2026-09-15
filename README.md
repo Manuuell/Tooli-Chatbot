@@ -156,6 +156,7 @@ src/
 │                           Banner/Iceberg, identidad, métricas, sesiones
 └── public/
     ├── app/                Dashboard de asesores (privado, JWT)
+    │   └── js/               Módulos ES del panel: core/, ui/, screens/
     └── posgrados/          Landing pública de captación con código QR
 ```
 
@@ -166,6 +167,20 @@ src/
 Interfaz web privada en `/app`, con autenticación JWT y roles. Permite consultar turnos y recibos
 en nombre de un estudiante, ver métricas de uso del bot, administrar las sesiones de los usuarios y
 gestionar las cuentas de los asesores. Incluye inicio de sesión unificado hacia Chatwoot.
+
+El panel es JavaScript sin framework ni paso de compilación: módulos ES nativos bajo
+`src/public/app/js/` (`core/` utilidades, `ui/` componentes, `screens/` una por pantalla),
+cargados desde `app.js`. Se editan y se recargan, no hay build que correr.
+
+Para trabajar en él sin levantar Redis, Meta ni Google Sheets:
+
+```bash
+node tools/mock-panel-server.cjs        # http://localhost:4599/app/index.html
+MOCK_ANON=1 node tools/mock-panel-server.cjs   # para ver la pantalla de login
+```
+
+Sirve datos de ejemplo con la misma forma que la API real y aplica las mismas cabeceras de
+seguridad, para que lo que se ve en local sea lo que se ve en producción.
 
 ---
 

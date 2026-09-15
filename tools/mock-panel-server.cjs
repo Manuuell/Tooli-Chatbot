@@ -1,0 +1,187 @@
+/* Servidor de PRUEBA para revisar el panel en el navegador sin Redis, sin Meta
+   y sin Google Sheets. No forma parte del proyecto: se borra antes de comitear. */
+const express = require('express');
+const path = require('path');
+const app = express();
+app.use(express.json());
+// Mismas cabeceras que src/middleware/security.ts, para probar el panel bajo
+// el CSP real y no descubrir en producción que algo queda bloqueado.
+app.use((_q, res, next) => {
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https:",
+    "connect-src 'self' https://cdn.jsdelivr.net",
+    "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'",
+  ].join('; '));
+  next();
+});
+
+const ROL = process.env.MOCK_ROL || 'admin';
+const hoy = Date.now();
+const hace = (min) => hoy - min * 60000;
+
+const CONVS = [
+  { phone: '573001234567', session: { step: 'registro_email', data: { nombre: 'María José Restrepo' } }, banned: false, aiDisabled: false,
+    lastMessage: { ts: hace(4), direction: 'in', text: 'Hola, quiero info de la maestría en Ingeniería' }, unread: 2 },
+  { phone: '573009876543', session: { step: 'esperando_codigo', data: { nombre: 'Carlos Pérez' } }, banned: false, aiDisabled: false,
+    lastMessage: { ts: hace(38), direction: 'out', text: 'Tu turno de matrícula es el 12 de octubre' }, unread: 0 },
+  { phone: '573015550101', session: { step: 'evento_confirmacion', data: { nombre: 'Valentina Ortiz' } }, banned: false, aiDisabled: true,
+    lastMessage: { ts: hace(180), direction: 'in', text: '¿El evento es presencial?' }, unread: 1 },
+  { phone: '573021110022', session: { step: 'chatting_with_ai', data: {} }, banned: true, aiDisabled: false,
+    lastMessage: { ts: hace(1500), direction: 'in', text: 'aaaaa' }, unread: 0 },
+];
+const MENSAJES = {
+  '573001234567': [
+    { ts: hace(12), direction: 'in', text: 'Buenas tardes' },
+    { ts: hace(11), direction: 'in', text: 'Quiero info de la maestría en Ingeniería' },
+    { ts: hace(10), direction: 'out', text: 'Hola 👋 Con gusto. ¿Me confirmas tu *nombre completo*?' },
+    { ts: hace(4), direction: 'in', text: 'María José Restrepo' },
+  ],
+};
+
+const REGISTROS = [
+  ['2026-09-11T12:18:00Z', 'María José Restrepo', 'mjrestrepo@gmail.com', '573001234567', 'Maestría en Ingeniería', 'Posgrado'],
+  ['2026-09-10T09:02:00Z', 'Sofía Gómez', 'sofia@gmail.com', '573015550101', 'Ingeniería de Sistemas', 'Pregrado'],
+  ['2026-09-09T16:40:00Z', 'Carlos Pérez', 'cperez@gmail.com', '573009876543', 'Especialización en Finanzas', 'Posgrado'],
+  ['2026-09-08T11:11:00Z', 'Andrés Lugo', 'alugo@gmail.com', '573022220011', 'Doctorado en Ingeniería', 'Posgrado'],
+  ['2026-09-07T08:30:00Z', 'Laura Ríos', 'lrios@gmail.com', '573033330022', 'Administración de Empresas', 'Pregrado'],
+];
+
+const EVENTO = [
+  ['2026-09-10T10:00:00Z', '573001234567', 'María José Restrepo', 'mj@gmail.com', 'Sí', 'Maestría en Ingeniería', 'Sí', 'interesado'],
+  ['2026-09-10T11:00:00Z', '573009876543', 'Carlos Pérez', 'cp@gmail.com', 'Sí, con beca', 'Especialización en Finanzas', 'Sí', 'beca'],
+  ['2026-09-09T15:00:00Z', '573021110022', 'Pedro Nel', 'pn@gmail.com', 'No', 'Maestría en Marketing', 'No', 'pendiente'],
+];
+
+const AUDIT = {
+  admin: { login: 12, turno_consultado: 8, recibo_descargado: 3, sesion_reseteada: 2, mensaje_enviado: 21, recordatorio_creado: 4 },
+  luis: { login: 9, turno_consultado: 14, recibo_descargado: 6, usuario_baneado: 1, mensaje_enviado: 33 },
+  ana: { login: 7, turno_consultado: 2, mensaje_enviado: 12, ficha_actualizada: 9 },
+};
+
+const FICHAS = {
+  573001234567: { estado: 'contactado', asignadoA: 'luis', etiquetas: ['beca', 'maestría'],
+    notas: [{ id: 'n1', autor: 'luis', ts: hace(120), texto: 'Pidió info de financiación. Le envié el link.' }] },
+};
+
+const j = (res, data) => res.json(data);
+
+// MOCK_ANON=1 simula "sin sesión", para poder ver la pantalla de login.
+app.get('/api/auth/me', (_q, res) => process.env.MOCK_ANON
+  ? res.status(401).json({ error: 'no autenticado' })
+  : j(res, {
+  user: { username: ROL === 'admin' ? 'admin' : 'luis', fullName: ROL === 'admin' ? 'Ángel Acero' : 'Luis Pérez', role: ROL },
+  urls: { chatwoot: 'https://chat.example.com', grafana: 'https://grafana.example.com' },
+  capabilities: { chatwootSso: true },
+}));
+app.post('/api/auth/login', (req, res) => (req.body.password === 'demo'
+  ? j(res, { ok: true })
+  : res.status(401).json({ error: 'Usuario o contraseña incorrectos' })));
+app.post('/api/auth/logout', (_q, res) => j(res, { ok: true }));
+app.get('/api/auth/users', (_q, res) => j(res, { users: [
+  { username: 'admin', fullName: 'Ángel Acero', role: 'admin', area: 'all' },
+  { username: 'luis', fullName: 'Luis Pérez', role: 'asesor', area: 'admisiones' },
+  { username: 'ana', fullName: 'Ana Díaz', role: 'asesor', area: 'posgrados' },
+] }));
+
+app.get('/api/tools/bot-users', (_q, res) => j(res, { phones: CONVS.map(c => c.phone) }));
+app.post('/api/tools/bot-users/batch', (req, res) => {
+  const pedidos = req.body.phones || CONVS.map(c => c.phone);
+  j(res, { users: pedidos.map((phone) => {
+    const u = CONVS.find(c => c.phone === phone);
+    if (!u) return null;
+    const msgs = MENSAJES[phone] || [u.lastMessage];
+    return { ...u, recentMessages: [...msgs].reverse() };
+  }).filter(Boolean) });
+});
+app.get('/api/tools/bot-users/:phone', (req, res) => {
+  const u = CONVS.find(c => c.phone === req.params.phone) || CONVS[0];
+  j(res, { ...u, recentMessages: [...(MENSAJES[req.params.phone] || MENSAJES['573001234567'])].reverse() });
+});
+app.post('/api/tools/bot-users/:phone/reply', (req, res) => {
+  const msgs = MENSAJES[req.params.phone] || (MENSAJES[req.params.phone] = []);
+  msgs.push({ ts: Date.now(), direction: 'out', text: req.body.text });
+  j(res, { ok: true });
+});
+app.post('/api/tools/bot-users/:phone/ai-toggle', (req, res) => j(res, { ok: true, aiDisabled: !!req.body.disabled }));
+app.post('/api/tools/bot-users/:phone/:action', (_q, res) => j(res, { ok: true }));
+
+app.get('/api/tools/metrics/today', (_q, res) => j(res, { metrics: {
+  menu_shown: 143, registro_completado: 12, turno_consultado: 31, recibo_descargado: 18,
+  prospecto_completado: 9, notas_consultadas: 22, academico_menu_shown: 27 } }));
+app.get('/api/tools/metrics/range', (req, res) => {
+  const days = Number(req.query.days || 7);
+  const out = {};
+  for (let i = 0; i < days; i++) {
+    const fecha = new Date(hoy - (days - 1 - i) * 864e5).toISOString().slice(0, 10);
+    out[fecha] = { menu_shown: 90 + i * 11, registro_completado: 4 + (i % 5), turno_consultado: 12 + i,
+      recibo_descargado: 6 + (i % 4), notas_consultadas: 9 + i * 2, prospecto_completado: 3 + (i % 3),
+      academico_menu_shown: 7 + i, menu_pregrado_shown: 20 + i * 3 };
+  }
+  j(res, { days: out });
+});
+
+app.get('/api/tools/chatwoot/summary', (_q, res) => j(res, { open: 7, unassigned: 3, pending: 2, resolvedToday: 11 }));
+app.get('/api/tools/audit/me', (_q, res) => j(res, { entries: [
+  { ts: hace(30), action: 'turno_consultado', target: 'T00098765' },
+  { ts: hace(95), action: 'mensaje_enviado', target: '573001234567' },
+  { ts: hace(300), action: 'login', target: '' },
+] }));
+app.get('/api/tools/audit/summary', (_q, res) => j(res, { summary: AUDIT }));
+
+app.get('/api/tools/registros-posgrado', (_q, res) => j(res, { rows: REGISTROS }));
+app.get('/api/tools/registros-evento-posgrado', (_q, res) => j(res, { rows: EVENTO }));
+app.post('/api/tools/registros-evento-posgrado/:fila/seguimiento', (req, res) => {
+  const f = EVENTO[Number(req.params.fila) - 1]; if (f) f[7] = req.body.estado; j(res, { ok: true });
+});
+app.post('/api/tools/registros-evento-posgrado/:fila/invitar', (_q, res) => j(res, { ok: true }));
+
+app.get('/api/tools/crm/fichas', (_q, res) => j(res, { fichas: FICHAS }));
+app.get('/api/tools/crm/:phone', (req, res) => j(res, { ficha: FICHAS[req.params.phone] || null }));
+app.post('/api/tools/crm/:phone/:ruta', (req, res) => {
+  const f = FICHAS[req.params.phone] || (FICHAS[req.params.phone] = { estado: 'nuevo', etiquetas: [], notas: [] });
+  if (req.params.ruta === 'estado') f.estado = req.body.estado;
+  if (req.params.ruta === 'asignar') f.asignadoA = req.body.asignadoA;
+  if (req.params.ruta === 'etiqueta') f.etiquetas = req.body.etiquetas ?? f.etiquetas;
+  if (req.params.ruta === 'nota') f.notas.unshift({ id: 'n' + Date.now(), autor: 'admin', ts: Date.now(), texto: req.body.texto });
+  j(res, { ficha: f });
+});
+
+app.get('/api/tools/quick-replies', (_q, res) => j(res, { replies: [
+  { id: 'q1', titulo: 'Saludo', texto: 'Hola {nombre} 👋 ¿en qué te puedo ayudar?' },
+  { id: 'q2', titulo: 'Costos', texto: 'Te comparto los costos del programa: ...' },
+] }));
+app.post('/api/tools/quick-replies', (_q, res) => j(res, { ok: true }));
+
+app.get('/api/tools/recordatorios', (_q, res) => j(res, { reminders: [
+  { id: 'r1', telefono: '573001234567', mensaje: 'Recuerda tu cita de asesoría mañana', scheduledAt: hoy + 864e5, estado: 'programado', createdBy: 'luis' },
+  { id: 'r2', telefono: '573009876543', mensaje: 'Vence tu pago de matrícula', scheduledAt: hoy - 864e5, estado: 'enviado', createdBy: 'admin' },
+  { id: 'r3', telefono: '573021110022', mensaje: 'Invitación al evento', scheduledAt: hoy - 2 * 864e5, estado: 'fallido', error: 'Fuera de la ventana de 24h', createdBy: 'ana' },
+] }));
+app.post('/api/tools/recordatorios', (_q, res) => j(res, { ok: true, id: 'r' + Date.now() }));
+app.delete('/api/tools/recordatorios/:id', (_q, res) => j(res, { ok: true }));
+
+app.get('/api/tools/broadcast/templates', (_q, res) => j(res, { templates: [] }));
+app.post('/api/tools/broadcast/send', (_q, res) => j(res, { ok: true, enviados: 0 }));
+app.get('/api/tools/turno/:codigo', (req, res) => j(res, { turno: {
+  nombre: 'María José', apellido: 'Restrepo', programa: 'Maestría en Ingeniería',
+  turno: '12', fecha: '2026-10-12', hora: '09:00' } }));
+app.get('/api/auth/chatwoot-sso', (_q, res) => j(res, { url: 'https://chat.example.com/sso' }));
+app.get('/health/deep', (_q, res) => j(res, {
+  status: 'degraded',
+  timestamp: new Date().toISOString(),
+  checks: {
+    redis:    { status: 'ok',       latencyMs: 3,    timestamp: hoy },
+    meta:     { status: 'ok',       latencyMs: 210,  timestamp: hoy },
+    sheets:   { status: 'degraded', latencyMs: 1800, detail: 'Cuota casi agotada', timestamp: hoy },
+    iceberg:  { status: 'down',     detail: 'El portal no responde', timestamp: hoy },
+    chatwoot: { status: 'ok',       latencyMs: 96,   timestamp: hoy },
+  },
+}));
+
+app.use('/app', express.static(path.join(__dirname, 'src/public/app')));
+app.get('/', (_q, res) => res.redirect('/app/index.html'));
+app.listen(4599, () => console.log('mock panel en http://localhost:4599/app/index.html'));

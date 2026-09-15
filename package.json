@@ -6,7 +6,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node -e \"require('fs').cpSync('src/public','dist/public',{recursive:true})\"",
     "start": "node dist/index.js",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test:watch": "node --import tsx --test --watch \"src/**/*.test.ts\""
   },
   "dependencies": {
     "axios": "^1.7.2",

@@ -1039,13 +1039,15 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
 .recibo-success-title { margin-top: 8px; font-weight: 700; }
 .recibo-success-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; word-break: break-all; }
 .recibo-result { margin-top: 14px; }
-.recibo-result .value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
+/* El resultado de una consulta se lee completo: envuelve, nunca se trunca.
+   Un asesor le está leyendo esto al estudiante por teléfono. */
+.recibo-result .value { word-break: break-word; hyphens: none; }
 
 /* El resultado de turno/recibo debe envolver limpio en pantallas angostas:
    el label queda fijo, el value puede romper línea sin empujar hacia fuera. */
 .turno-result .row, .recibo-result .row { gap: 12px; align-items: flex-start; }
 .turno-result .row .label, .recibo-result .row .label { flex-shrink: 0; }
-.turno-result .row .value, .recibo-result .row .value { min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; overflow-wrap: normal; }
+.turno-result .row .value, .recibo-result .row .value { min-width: 0; text-align: right; word-break: break-word; hyphens: none; }
 
 @media (max-width: 720px) {
   .recibo-loading { gap: 12px; }
@@ -1057,7 +1059,7 @@ tbody tr[data-longpress]:active { background: #f1f5f9; transform: scale(0.995); 
   .tool-panel { padding: 20px 14px; }
   .tool-panel .btn { width: 100%; justify-content: center; }
   .turno-result .row, .recibo-result .row { flex-direction: column; gap: 2px; align-items: stretch; }
-  .turno-result .row .value, .recibo-result .row .value { text-align: left; white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
+  .turno-result .row .value, .recibo-result .row .value { text-align: left; }
 }
 
 /* ===================================================================

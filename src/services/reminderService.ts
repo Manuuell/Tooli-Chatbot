@@ -27,7 +27,12 @@
 
 import Redis from 'ioredis';
 import { config } from '../config';
-import { enviarRecordatorio, normalizarTelefono } from '../flows/recordatorios';
+import { enviarRecordatorio } from '../flows/recordatorios';
+// Las reglas de validación viven aparte para poder probarse sin levantar Redis
+// (este módulo abre la conexión al importarse). Ver reminderValidation.test.ts.
+import {
+  ReminderValidationError, validarTelefono, validarMensaje, validarFecha,
+} from './reminderValidation';
 
 const redis = new Redis(config.redis.url);
 
@@ -53,6 +58,8 @@ export interface Reminder {
   error?: string;
 }
 
+export { ReminderValidationError };
+
 export interface ScheduleInput {
   telefono: string;
   mensaje: string;
@@ -61,38 +68,14 @@ export interface ScheduleInput {
   createdBy: string;
 }
 
-export class ReminderValidationError extends Error {}
-
 function nuevoId(): string {
   return `rem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function parseFecha(valor: string | number): number {
-  const ms = typeof valor === 'number' ? valor : Date.parse(valor);
-  if (!Number.isFinite(ms)) {
-    throw new ReminderValidationError('scheduledAt no es una fecha válida (usa ISO 8601, ej. 2026-09-20T08:00:00-05:00)');
-  }
-  return ms;
-}
-
-/** Margen mínimo hacia el futuro: evita programar algo que ya venció. */
-const MARGEN_MINIMO_MS = 30_000;
-
 export async function scheduleReminder(input: ScheduleInput): Promise<Reminder> {
-  const telefono = normalizarTelefono(input.telefono ?? '');
-  if (telefono.length < 10 || telefono.length > 15) {
-    throw new ReminderValidationError('telefono inválido (debe tener 10–15 dígitos)');
-  }
-
-  const mensaje = (input.mensaje ?? '').trim();
-  if (mensaje.length < 1 || mensaje.length > 4096) {
-    throw new ReminderValidationError('mensaje debe tener entre 1 y 4096 caracteres');
-  }
-
-  const scheduledAt = parseFecha(input.scheduledAt);
-  if (scheduledAt < Date.now() + MARGEN_MINIMO_MS) {
-    throw new ReminderValidationError('scheduledAt debe estar al menos 30 segundos en el futuro');
-  }
+  const telefono = validarTelefono(input.telefono ?? '');
+  const mensaje = validarMensaje(input.mensaje ?? '');
+  const scheduledAt = validarFecha(input.scheduledAt);
 
   const reminder: Reminder = {
     id: nuevoId(),

@@ -148,8 +148,17 @@ function renderInboxRows(filter) {
         <div class="inbox-empty-icon">${hasSearch ? '🔍' : '💬'}</div>
         <div class="inbox-empty-title">${hasSearch ? 'Sin resultados' : 'Nada por aquí'}</div>
         <div class="inbox-empty-sub">${hasSearch ? 'Busca por nombre, número o por lo que dice el último mensaje.' : 'No hay conversaciones en esta categoría.'}</div>
-        ${hasSearch ? `<button type="button" class="btn btn-ghost" style="margin-top:8px;font-size:13px;" onclick="document.getElementById('inboxSearch').value='';document.getElementById('inboxSearch').dispatchEvent(new Event('input'))">Limpiar búsqueda</button>` : ''}
+        ${hasSearch ? '<button type="button" class="btn btn-ghost" id="inboxLimpiar" style="margin-top:8px;font-size:13px;">Limpiar búsqueda</button>' : ''}
       </div>`;
+    // Listener en vez de onclick inline: el CSP del panel prohíbe ejecutar
+    // JavaScript escrito dentro del HTML (ver src/middleware/security.ts).
+    $('#inboxLimpiar')?.addEventListener('click', () => {
+      const input = $('#inboxSearch');
+      if (!input) return;
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    });
     return;
   }
   rowsEl.innerHTML = list.map(c => `
